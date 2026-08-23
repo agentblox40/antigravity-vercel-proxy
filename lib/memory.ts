@@ -1,21 +1,5 @@
 import crypto from 'node:crypto';
 
-export interface OOCRule {
-  id: string;
-  rule: string;
-  enabled: boolean;
-  addedAt: number;
-  source: 'auto' | 'manual';
-}
-
-export interface LoreFact {
-  id: string;
-  key: string;
-  value: string;
-  enabled: boolean;
-  addedAt: number;
-}
-
 export interface ArchivedMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -32,8 +16,6 @@ export interface ChatSession {
   createdAt: number;
   updatedAt: number;
   systemPrompt?: string;
-  oocRules: OOCRule[];
-  loreFacts: LoreFact[];
   messages: ArchivedMessage[];
   messageCount: number;
 }
@@ -43,7 +25,6 @@ export interface CharacterSummary {
   characterName: string;
   chatCount: number;
   lastActive: number;
-  oocRuleCount: number;
 }
 
 // In-Memory Fallback Store
@@ -79,55 +60,6 @@ export function extractCharacterName(systemPrompt: string): string {
   }
 
   return 'Character-' + hashString(systemPrompt).slice(0, 6);
-}
-
-// Parse OOC Rules from incoming user text
-export function extractOOCRules(text: string): string[] {
-  if (!text) return [];
-  const rules: string[] = [];
-
-  const patterns = [
-    // Double parentheses / brackets: ((OOC: ...)) or [[OOC: ...]]
-    /\(\(\s*(?:OOC|System|Note|Directive|Instruction|Length|Format|Style)?\s*[:,\-]?\s*([\s\S]+?)\)\)/gi,
-    /\[\[\s*(?:OOC|System|Note|Directive|Instruction|Length|Format|Style)?\s*[:,\-]?\s*([\s\S]+?)\]\]/gi,
-    
-    // Single parentheses / brackets: (OOC: ...) or [OOC: ...] or [System Note: ...]
-    /\(\s*(?:OOC|System\s*Note|System|Note|Directive|Instruction|Author\'?s?\s*Note)\s*[:,\-]?\s*([\s\S]+?)\)/gi,
-    /\[\s*(?:OOC|System\s*Note|System|Note|Directive|Instruction|Author\'?s?\s*Note|Length|Format|Style)\s*[:,\-]?\s*([\s\S]+?)\]/gi,
-    
-    // Braces syntax: {length: short}, {style: ...}, {{OOC: ...}}
-    /\{\{\s*(?:OOC|System|Note|Directive|Instruction|Length|Format|Style)?\s*[:,\-]?\s*([\s\S]+?)\}\}/gi,
-    /\{\s*([a-zA-Z0-9_\-\s]{2,25}?)\s*:\s*([^\}]+?)\s*\}/gi,
-    
-    // XML / Tag format: <ooc>...</ooc>, <system>...</system>
-    /<(?:ooc|system|note|instruction)>([\s\S]+?)<\/(?:ooc|system|note|instruction)>/gi,
-    
-    // Line-level prefix: OOC: ..., System Note: ..., Note: ...
-    /(?:^|\n)\s*(?:OOC|System Note|Directive|Instruction)\s*:\s*(.+)/gi
-  ];
-
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      let cleaned = '';
-      if (match[2]) {
-        // From {key: value} format
-        cleaned = `${match[1].trim()}: ${match[2].trim()}`;
-      } else if (match[1]) {
-        cleaned = match[1].trim();
-      }
-
-      if (cleaned.length >= 2) {
-        // Strip leading colons or hyphens if matched loosely
-        cleaned = cleaned.replace(/^[:\-\s]+/, '').trim();
-        if (cleaned.length >= 2 && !rules.some(r => r.toLowerCase() === cleaned.toLowerCase())) {
-          rules.push(cleaned);
-        }
-      }
-    }
-  }
-
-  return rules;
 }
 
 // Derive Character & Chat Fingerprints
@@ -276,8 +208,6 @@ export async function getOrCreateChatSession(
     title,
     createdAt: now,
     updatedAt: now,
-    oocRules: [],
-    loreFacts: [],
     messages: [],
     messageCount: 0
   };
@@ -370,84 +300,14 @@ export async function listAllSessions(): Promise<ChatSession[]> {
   return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-// Ingest manual or explicit OOC rules into session
-export function ingestOOCIntoSession(session: ChatSession, newRules: string[]): boolean {
-  let changed = false;
-  for (const r of newRules) {
-    const exists = session.oocRules.some(existing => existing.rule.toLowerCase() === r.toLowerCase());
-    if (!exists) {
-      session.oocRules.push({
-        id: 'ooc_' + hashString(r).slice(0, 8),
-        rule: r,
-        enabled: true,
-        addedAt: Date.now(),
-        source: 'manual'
-      });
-      changed = true;
-    }
-  }
-  return changed;
-}
-
-// Augment System Prompt with Memory & Manual Lore Directives
-export function augmentSystemWithMemory(baseSystem: string, session: ChatSession): string {
-  const activeOOC = session.oocRules.filter(r => r.enabled);
-  const activeLore = session.loreFacts.filter(f => f.enabled);
-
-  if (activeOOC.length === 0 && activeLore.length === 0) {
-    return baseSystem;
-  }
-
-  let memoryBlock = '\n\n[PERSISTENT CHAT MEMORY & ACTIVE NOTES]\n';
-
-  if (activeOOC.length > 0) {
-    memoryBlock += 'Active Directives & Notes:\n';
-    for (const rule of activeOOC) {
-      memoryBlock += `• ${rule.rule}\n`;
-    }
-  }
-
-  if (activeLore.length > 0) {
-    memoryBlock += '\nPersistent Lore, Inventory & State:\n';
-    for (const fact of activeLore) {
-      memoryBlock += `• ${fact.key}: ${fact.value}\n`;
-    }
-  }
-
-  memoryBlock += '\n[MANDATORY CONTINUITY DIRECTIVE]\nMaintain consistency with the persistent lore and notes state defined above.';
-
-  return baseSystem + memoryBlock;
-}
-
-export function formatRuleForContinuity(rule: string): string {
-  return rule.trim();
-}
-
-// Generate in-context prompt anchor to reinforce active formatting, markdown syntax, and manual lore on every turn
-export function getActiveOOCAnchor(session: ChatSession): string {
-  const activeOOC = session ? session.oocRules.filter(r => r.enabled) : [];
-  const activeLore = session ? session.loreFacts.filter(f => f.enabled) : [];
-
+// Generate in-context prompt anchor to reinforce active formatting and immersion on every turn
+export function getActiveOOCAnchor(): string {
   let anchor = '\n\n[Active Formatting & Character Persona Directive]:\n';
   anchor += '• Adhere strictly to character markdown syntax:\n';
   anchor += '  - Wrap all character actions, scene narration, and physical movements in *asterisks* (e.g. *she pauses, looking away*).\n';
   anchor += '  - Wrap all spoken dialogue in "double quotes" (e.g. "What do you mean?").\n';
   anchor += '  - Wrap inner thoughts, telepathy, or internal monologues in `backticks` (e.g. `I hope he didn\'t notice...`).\n';
   anchor += '• Maintain full immersion in character persona, lore, and speech habits without breaking character.\n';
-
-  if (activeOOC.length > 0) {
-    anchor += '\nActive Directives & Notes:\n';
-    for (const rule of activeOOC) {
-      anchor += `• ${rule.rule}\n`;
-    }
-  }
-  if (activeLore.length > 0) {
-    anchor += '\nActive Lore & Context:\n';
-    for (const fact of activeLore) {
-      anchor += `• ${fact.key}: ${fact.value}\n`;
-    }
-  }
-
   anchor += 'Follow all character guidelines and markdown formatting precisely in your response.';
   return anchor;
 }

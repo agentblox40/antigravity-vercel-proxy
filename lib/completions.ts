@@ -9,10 +9,7 @@ import {
 import {
   deriveChatFingerprint,
   getOrCreateChatSession,
-  extractOOCRules,
-  ingestOOCIntoSession,
   saveChatSession,
-  augmentSystemWithMemory,
   getActiveOOCAnchor,
   recordTurnsIntoSession,
   stitchLosslessHistory,
@@ -110,11 +107,10 @@ export async function handleChatCompletions(req: NextRequest) {
         rawSystemText = session.systemPrompt;
       }
 
-      // Augment system instruction with manual notes and active lore
-      augmentedSystem = augmentSystemWithMemory(rawSystemText, session);
+      augmentedSystem = rawSystemText;
 
       // Generate in-context Depth 0 anchor for formatting & immersion
-      oocAnchor = getActiveOOCAnchor(session);
+      oocAnchor = getActiveOOCAnchor();
 
       // Stitch history if client truncated earlier messages
       body.messages = stitchLosslessHistory(session, messages);

@@ -152,7 +152,7 @@ const PRESETS = [
 ];
 
 export default function AntigravityControlCenter() {
-  const [activeTab, setActiveTab] = useState<'models' | 'logs' | 'memory' | 'playground' | 'controls' | 'accounts' | 'clients' | 'analytics' | 'updates'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'logs' | 'playground' | 'controls' | 'accounts' | 'clients' | 'updates'>('models');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
@@ -196,11 +196,10 @@ export default function AntigravityControlCenter() {
   const [totalTokensServed, setTotalTokensServed] = useState(32400);
   const [requestsCount, setRequestsCount] = useState(38);
 
-  // Persistent Memory & Logged Chats State
+  // Logged Chats & Transcripts State
   const [memoryStats, setMemoryStats] = useState<any>({
     totalCharacters: 0,
     totalSessions: 0,
-    totalOOCRules: 0,
     totalArchivedMessages: 0,
     storageMode: 'Checking...',
     redisConnected: false
@@ -212,9 +211,6 @@ export default function AntigravityControlCenter() {
   const [isLoadingMemory, setIsLoadingMemory] = useState(false);
   const [memorySearch, setMemorySearch] = useState('');
   const [selectedCharFilter, setSelectedCharFilter] = useState<string>('all');
-  const [newOOCInput, setNewOOCInput] = useState('');
-  const [newLoreKey, setNewLoreKey] = useState('');
-  const [newLoreVal, setNewLoreVal] = useState('');
 
   // Deployment & Update Logs Telemetry State
   const [deploymentData, setDeploymentData] = useState<any>(null);
@@ -595,99 +591,6 @@ export default function AntigravityControlCenter() {
     }
   };
 
-  // Memory Action Handlers
-  const handleAddOOCRule = async () => {
-    if (!newOOCInput.trim() || !selectedChatId) return;
-    try {
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ action: 'add_ooc', chatId: selectedChatId, rule: newOOCInput.trim() })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setSelectedSession(data.session);
-          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, oocCount: (data.session.oocRules || []).length, loreCount: (data.session.loreFacts || []).length } : s));
-        }
-        setNewOOCInput('');
-      }
-    } catch {}
-  };
-
-  const handleToggleOOCRule = async (ruleId: string) => {
-    if (!selectedChatId) return;
-    try {
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ action: 'toggle_ooc', chatId: selectedChatId, ruleId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setSelectedSession(data.session);
-        }
-      }
-    } catch {}
-  };
-
-  const handleDeleteOOCRule = async (ruleId: string) => {
-    if (!selectedChatId) return;
-    try {
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ action: 'delete_ooc', chatId: selectedChatId, ruleId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setSelectedSession(data.session);
-          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, oocCount: (data.session.oocRules || []).length } : s));
-        }
-      }
-    } catch {}
-  };
-
-  const handleAddLoreFact = async () => {
-    if (!newLoreKey.trim() || !newLoreVal.trim() || !selectedChatId) return;
-    try {
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ action: 'add_lore', chatId: selectedChatId, key: newLoreKey.trim(), value: newLoreVal.trim() })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setSelectedSession(data.session);
-          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, loreCount: (data.session.loreFacts || []).length } : s));
-        }
-        setNewLoreKey('');
-        setNewLoreVal('');
-      }
-    } catch {}
-  };
-
-  const handleDeleteLoreFact = async (factId: string) => {
-    if (!selectedChatId) return;
-    try {
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ action: 'delete_lore', chatId: selectedChatId, factId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.session) {
-          setSelectedSession(data.session);
-          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, loreCount: (data.session.loreFacts || []).length } : s));
-        }
-      }
-    } catch {}
-  };
-
   const handleDeleteChatSession = async (chatId: string) => {
     if (!confirm('Are you sure you want to delete this chat session memory?')) return;
     try {
@@ -869,19 +772,17 @@ export default function AntigravityControlCenter() {
             {[
               { id: 'models', label: 'Models Catalog', icon: <Icons.Cpu /> },
               { id: 'logs', label: 'Logged Chats', icon: <Icons.FileText /> },
-              { id: 'memory', label: 'Memory & Lore', icon: <Icons.Book /> },
               { id: 'playground', label: 'Roleplay Studio', icon: <Icons.Chat /> },
               { id: 'controls', label: 'Model Controls', icon: <Icons.Sliders /> },
               { id: 'accounts', label: 'Accounts & Quota', icon: <Icons.Server /> },
               { id: 'clients', label: 'Janitor / Tavern', icon: <Icons.Terminal /> },
-              { id: 'analytics', label: 'Analytics', icon: <Icons.Activity /> },
               { id: 'updates', label: 'Update Logs', icon: <Icons.Rocket /> }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id as any);
-                  if (tab.id === 'memory' || tab.id === 'logs') fetchMemoryOverview();
+                  if (tab.id === 'logs') fetchMemoryOverview();
                   if (tab.id === 'updates') fetchStatusAndModels();
                 }}
                 style={{
@@ -1462,341 +1363,7 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 3: PERSISTENT MEMORY & OOC LORE MANAGER */}
-        {activeTab === 'memory' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            
-            {/* Top Memory Header & Status */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: colors.cardShadow }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: colors.cardInner, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMain }}>
-                  <Icons.Book />
-                </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: colors.textMain }}>
-                      Persistent Memory & OOC Engine
-                    </h2>
-                    <span style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                      background: memoryStats.redisConnected ? (isDark ? '#064e3b' : '#dcfce7') : (isDark ? '#78350f' : '#fef3c7'),
-                      color: memoryStats.redisConnected ? (isDark ? '#34d399' : '#15803d') : (isDark ? '#fbbf24' : '#b45309'),
-                      border: `1px solid ${colors.border}`
-                    }}>
-                      {memoryStats.storageMode}
-                    </span>
-                  </div>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: colors.textMuted }}>
-                    Auto-captures <code>(OOC: ...)</code> directives, tracks character lore, and preserves 1M-token lossless chat history.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ textAlign: 'right', fontSize: 11, color: colors.textSub, lineHeight: 1.4 }}>
-                  <div><strong>{memoryStats.totalSessions}</strong> Active Chats</div>
-                  <div><strong>{memoryStats.totalOOCRules}</strong> Pinned OOC Rules</div>
-                </div>
-                <button
-                  onClick={() => fetchMemoryOverview()}
-                  disabled={isLoadingMemory}
-                  style={{
-                    background: colors.cardInner,
-                    border: `1px solid ${colors.border}`,
-                    color: colors.textMain,
-                    borderRadius: 6,
-                    padding: '7px 12px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}>
-                  <Icons.Refresh />
-                  {isLoadingMemory ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
-            </div>
-
-            {/* 2-Column Explorer */}
-            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
-              
-              {/* Left Column: Character & Chat Sessions List */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 16, height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow }}>
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text"
-                      placeholder="Search chats & characters..."
-                      value={memorySearch}
-                      onChange={e => setMemorySearch(e.target.value)}
-                      style={{
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        background: colors.inputBg,
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 6,
-                        padding: '7px 10px 7px 28px',
-                        fontSize: 12,
-                        color: colors.textMain,
-                        outline: 'none'
-                      }}
-                    />
-                    <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: colors.textSub, display: 'flex' }}>
-                      <Icons.Search />
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {filteredSessions.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '30px 10px', color: colors.textMuted, fontSize: 12 }}>
-                      {memorySessions.length === 0 ? 'No chat sessions recorded yet. Start chatting in Janitor AI to auto-register memory!' : 'No matching chats found.'}
-                    </div>
-                  ) : (
-                    filteredSessions.map(s => (
-                      <div
-                        key={s.id}
-                        onClick={() => fetchSingleSession(s.id)}
-                        style={{
-                          background: selectedChatId === s.id ? (isDark ? '#222226' : '#f4f4f5') : colors.cardInner,
-                          border: `1px solid ${selectedChatId === s.id ? (isDark ? '#ffffff' : '#000000') : colors.border}`,
-                          borderRadius: 8,
-                          padding: '10px 12px',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s'
-                        }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <span style={{ fontWeight: 700, fontSize: 13, color: colors.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 170 }}>
-                            {s.characterName || 'Character'}
-                          </span>
-                          <span style={{ fontSize: 10, color: colors.textSub, fontFamily: 'monospace' }}>
-                            {new Date(s.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 12, color: colors.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6 }}>
-                          {s.title}
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, fontSize: 10 }}>
-                          <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub }}>
-                            {s.oocCount} OOC
-                          </span>
-                          <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub }}>
-                            {s.loreCount} Lore
-                          </span>
-                          <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub }}>
-                            {s.messageCount} Turns
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Selected Chat Memory Inspector */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, height: 'calc(100vh - 220px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20, boxShadow: colors.cardShadow }}>
-                {selectedSession ? (
-                  <>
-                    {/* Chat Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${colors.border}`, paddingBottom: 14 }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, padding: '2px 6px', borderRadius: 4, color: colors.textMain }}>
-                            Character Memory
-                          </span>
-                          <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: colors.textMain }}>
-                            {selectedSession.characterName}
-                          </h2>
-                        </div>
-                        <div style={{ fontSize: 12, color: colors.textMuted }}>
-                          Session ID: <code style={{ fontFamily: 'monospace', color: colors.textSub }}>{selectedSession.id}</code>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          onClick={() => handleClearChatHistory(selectedSession.id)}
-                          title="Clear message turns while keeping OOC and Lore"
-                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMuted, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                          Clear Turns
-                        </button>
-                        <button
-                          onClick={() => handleDeleteChatSession(selectedSession.id)}
-                          title="Delete entire session"
-                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: '#ef4444', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Icons.Trash />
-                          Delete Session
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* SECTION 1: PINNED OOC RULES */}
-                    <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Icons.Pin />
-                          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: colors.textMain }}>
-                            Pinned Out-Of-Character (OOC) Rules ({(selectedSession.oocRules || []).length})
-                          </h3>
-                        </div>
-                        <span style={{ fontSize: 11, color: colors.textSub }}>Injected permanently into System Instruction</span>
-                      </div>
-
-                      {/* Add OOC Rule Input */}
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                        <input
-                          type="text"
-                          placeholder="Add permanent rule, e.g. 'Kars is 24, drives a black sports car'..."
-                          value={newOOCInput}
-                          onChange={e => setNewOOCInput(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleAddOOCRule()}
-                          style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: colors.textMain, outline: 'none' }}
-                        />
-                        <button
-                          onClick={handleAddOOCRule}
-                          style={{ background: colors.btnPrimaryBg, color: colors.btnPrimaryText, border: 'none', borderRadius: 6, padding: '0 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Icons.Plus /> Add
-                        </button>
-                      </div>
-
-                      {/* OOC Rules List */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {(selectedSession.oocRules || []).length === 0 ? (
-                          <div style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', padding: '6px 0' }}>
-                            No OOC rules recorded. Use <code>(OOC: ...)</code> in your chats or type one above to pin it permanently!
-                          </div>
-                        ) : (
-                          (selectedSession.oocRules || []).map((rule: any) => (
-                            <div
-                              key={rule.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: colors.cardBg,
-                                border: `1px solid ${colors.border}`,
-                                borderRadius: 6,
-                                padding: '8px 12px',
-                                opacity: rule.enabled ? 1 : 0.5
-                              }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={rule.enabled}
-                                  onChange={() => handleToggleOOCRule(rule.id)}
-                                  style={{ accentColor: isDark ? '#ffffff' : '#000000', cursor: 'pointer' }}
-                                />
-                                <span style={{ fontSize: 12, color: colors.textMain, fontWeight: 500 }}>
-                                  {rule.rule}
-                                </span>
-                                <span style={{ fontSize: 10, color: colors.textSub, background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                  {rule.source}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => handleDeleteOOCRule(rule.id)}
-                                style={{ background: 'none', border: 'none', color: colors.textSub, cursor: 'pointer', padding: 4, display: 'flex' }}>
-                                <Icons.Trash />
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-
-                    {/* SECTION 2: LORE & RELATIONSHIP STATE */}
-                    <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Icons.Sparkle />
-                          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: colors.textMain }}>
-                            World Lore & State Notes ({(selectedSession.loreFacts || []).length})
-                          </h3>
-                        </div>
-                        <span style={{ fontSize: 11, color: colors.textSub }}>Track relationship levels, inventory, locations</span>
-                      </div>
-
-                      {/* Add Lore Fact Inputs */}
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                        <input
-                          type="text"
-                          placeholder="Key (e.g. Location, Trust Level, Inventory)"
-                          value={newLoreKey}
-                          onChange={e => setNewLoreKey(e.target.value)}
-                          style={{ width: '35%', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: colors.textMain, outline: 'none' }}
-                        />
-                        <input
-                          type="text"
-                          placeholder="Value (e.g. Big Burger Booth, High, Silver Locket)"
-                          value={newLoreVal}
-                          onChange={e => setNewLoreVal(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleAddLoreFact()}
-                          style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: colors.textMain, outline: 'none' }}
-                        />
-                        <button
-                          onClick={handleAddLoreFact}
-                          style={{ background: colors.btnPrimaryBg, color: colors.btnPrimaryText, border: 'none', borderRadius: 6, padding: '0 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Icons.Plus /> Save
-                        </button>
-                      </div>
-
-                      {/* Lore Facts List */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {(selectedSession.loreFacts || []).length === 0 ? (
-                          <div style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', padding: '6px 0' }}>
-                            No custom lore facts saved yet. Add location, relationship status, or inventory facts above!
-                          </div>
-                        ) : (
-                          (selectedSession.loreFacts || []).map((fact: any) => (
-                            <div
-                              key={fact.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: colors.cardBg,
-                                border: `1px solid ${colors.border}`,
-                                borderRadius: 6,
-                                padding: '8px 12px'
-                              }}>
-                              <div style={{ fontSize: 12, color: colors.textMain }}>
-                                <strong style={{ color: colors.textMuted }}>{fact.key}:</strong> {fact.value}
-                              </div>
-                              <button
-                                onClick={() => handleDeleteLoreFact(fact.id)}
-                                style={{ background: 'none', border: 'none', color: colors.textSub, cursor: 'pointer', padding: 4, display: 'flex' }}>
-                                <Icons.Trash />
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.textMuted }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 10, background: colors.cardInner, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMain, margin: '0 auto 12px' }}>
-                      <Icons.Book />
-                    </div>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: colors.textMain, margin: '0 0 6px' }}>Select a Chat Session</h3>
-                    <p style={{ fontSize: 12, maxWidth: 360, margin: '0 auto', lineHeight: 1.5 }}>
-                      Choose a character session on the left to view active OOC rules or edit lore facts.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* TAB 4: ROLEPLAY STUDIO */}
+        {/* TAB 3: ROLEPLAY STUDIO */}
         {activeTab === 'playground' && (
           <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20 }}>
             
@@ -2168,30 +1735,7 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 8: ANALYTICS & VALUE */}
-        {activeTab === 'analytics' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Requests Processed</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{requestsCount}</div>
-            </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Tokens</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{totalTokensServed.toLocaleString()}</div>
-            </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active Logged Chats</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{memoryStats.totalSessions || 0}</div>
-            </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Cost</div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>$0.00</div>
-              <span style={{ fontSize: 11, color: colors.textSub }}>Google AI Pro Included</span>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 9: UPDATE LOGS & DEPLOYMENT TELEMETRY */}
+        {/* TAB 7: UPDATE LOGS & DEPLOYMENT TELEMETRY */}
         {activeTab === 'updates' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             

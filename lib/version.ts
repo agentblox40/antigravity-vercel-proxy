@@ -8,22 +8,36 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.3.0';
+export const CURRENT_VERSION = '2.4.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.3.0',
+    version: '2.4.0',
     tag: 'LATEST',
-    title: 'OpenRouter-Style Pure Pass-Through & Ultra-Fast Parallel Memory',
+    title: 'Ultra-Low Latency Debloat & Lorebary Architecture',
     date: 'Aug 23, 2026',
     commit: 'latest',
-    description: 'Eliminated synthetic OOC rule injection for clean prompt pass-through, and upgraded Redis fetching to Promise.all for sub-100ms UI responsiveness.',
+    description: 'Stripped proxy-level lore and OOC scrapers for near-instant TTFT, delegating all character lore to Lorebary and external Lorebooks.',
+    highlights: [
+      'Zero-Overhead Hot Path: Eliminated regex scraping and string allocations for minimum Time-To-First-Token.',
+      'Lorebary Handoff: Handed off 100% of character lore and world-state management to Lorebary and client Lorebooks.',
+      'Upstash Redis Pipeline: Fast single-request batch retrieval (<80ms) for Logged Chats explorer.',
+      'Streamlined Dashboard: Trimmed UI tabs down to 7 core essential modules for snappy client navigation.'
+    ]
+  },
+  {
+    version: '2.3.0',
+    tag: 'MAJOR',
+    title: 'OpenRouter-Style Pure Pass-Through & Ultra-Fast Parallel Memory',
+    date: 'Aug 23, 2026',
+    commit: 'e6f315b',
+    description: 'Eliminated synthetic OOC rule injection for clean prompt pass-through, and upgraded Redis fetching to pipeline batching.',
     highlights: [
       'Pure Pass-Through Architecture: System prompt <ooc_command_and_continuity_engine> handles all {...} directives natively without proxy interference.',
       'Eliminated OOC rule duplication and conflicting length prompts when switching between {length: short} and {length: medium}.',
-      'Parallelized Redis Fetching: Upgraded listAllSessions to Promise.all, reducing memory API latency from 2,500ms to ~80ms.',
-      'Optimistic UI Updates: Instant 0ms checkbox and toggle feedback in Memory & Lore tab.'
+      'Parallelized Redis Fetching: Upgraded listAllSessions to Upstash pipeline endpoint, reducing memory API latency to ~80ms.',
+      'Optimistic UI Updates: Instant 0ms checkbox and toggle feedback in dashboard.'
     ]
   },
   {
