@@ -340,7 +340,7 @@ export function augmentSystemWithMemory(baseSystem: string, session: ChatSession
   return baseSystem + memoryBlock;
 }
 
-// Sync session message history with active incoming prompt (handles edits, rewinds, and regenerations)
+// Sync session message history with active incoming prompt (handles message deletions, rewinds, and regenerations)
 export function syncSessionWithIncomingMessages(
   session: ChatSession,
   incomingMessages: any[]
@@ -362,19 +362,29 @@ export function syncSessionWithIncomingMessages(
     return;
   }
 
-  // Check if incoming is a regeneration of the latest user turn
+  // Check if incoming is a deletion / rewind / regeneration of previous turns
   const lastIncoming = nonSystem[nonSystem.length - 1];
   if (lastIncoming && lastIncoming.role === 'user') {
     const lastUserText = (typeof lastIncoming.content === 'string' ? lastIncoming.content : '').trim();
     const len = current.length;
 
-    // If current ends with [User, Assistant] and User matches lastUserText -> preparing for regeneration
+    // Case 1: Simple 1-message regeneration (last bot message deleted/swiped)
     if (len >= 2 && current[len - 2].role === 'user' && current[len - 2].content.trim() === lastUserText) {
-      // User is regenerating the last bot message: Pop the previous bot response so the incoming generator will overwrite it cleanly
-      current.pop();
+      current.pop(); // Remove the deleted/swiped bot response so the new response takes its place
+      return;
+    }
+
+    // Case 2: Multi-turn deletion / rewind (user deleted 2+ messages or rewound chat to an earlier point)
+    for (let i = current.length - 1; i >= 0; i--) {
+      if (current[i].role === 'user' && current[i].content.trim() === lastUserText) {
+        // Truncate all discarded messages after this point so deleted history is removed
+        session.messages = current.slice(0, i);
+        break;
+      }
     }
   }
 }
+
 
 // Stitch lossless long-term history
 export function stitchLosslessHistory(
