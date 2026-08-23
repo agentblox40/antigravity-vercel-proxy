@@ -86,19 +86,40 @@ export function extractOOCRules(text: string): string[] {
   const rules: string[] = [];
 
   const patterns = [
-    /\(\(\s*(?:OOC|ooc|Ooc)\s*[:,\-]?\s*([\s\S]+?)\)\)/g,
-    /\(\s*(?:OOC|ooc|Ooc)\s*[:,\-]?\s*([\s\S]+?)\)/g,
-    /\[\s*(?:OOC|ooc|Ooc)\s*[:,\-]?\s*([\s\S]+?)\]/g,
-    /\[\s*(?:System\s*Note|SYSTEM\s*NOTE|SystemNote)\s*[:,\-]?\s*([\s\S]+?)\]/g,
-    /\{\{\s*(?:OOC|ooc)\s*[:,\-]?\s*([\s\S]+?)\}\}/g
+    // Double parentheses / brackets: ((OOC: ...)) or [[OOC: ...]]
+    /\(\(\s*(?:OOC|System|Note|Directive|Instruction|Length|Format|Style)?\s*[:,\-]?\s*([\s\S]+?)\)\)/gi,
+    /\[\[\s*(?:OOC|System|Note|Directive|Instruction|Length|Format|Style)?\s*[:,\-]?\s*([\s\S]+?)\]\]/gi,
+    
+    // Single parentheses / brackets: (OOC: ...) or [OOC: ...] or [System Note: ...]
+    /\(\s*(?:OOC|System\s*Note|System|Note|Directive|Instruction|Author\'?s?\s*Note)\s*[:,\-]?\s*([\s\S]+?)\)/gi,
+    /\[\s*(?:OOC|System\s*Note|System|Note|Directive|Instruction|Author\'?s?\s*Note|Length|Format|Style)\s*[:,\-]?\s*([\s\S]+?)\]/gi,
+    
+    // Braces syntax: {length: short}, {style: ...}, {{OOC: ...}}
+    /\{\{\s*(?:OOC|System|Note|Directive|Instruction|Length|Format|Style)?\s*[:,\-]?\s*([\s\S]+?)\}\}/gi,
+    /\{\s*([a-zA-Z0-9_\-\s]{2,25}?)\s*:\s*([^\}]+?)\s*\}/gi,
+    
+    // XML / Tag format: <ooc>...</ooc>, <system>...</system>
+    /<(?:ooc|system|note|instruction)>([\s\S]+?)<\/(?:ooc|system|note|instruction)>/gi,
+    
+    // Line-level prefix: OOC: ..., System Note: ..., Note: ...
+    /(?:^|\n)\s*(?:OOC|System Note|Directive|Instruction)\s*:\s*(.+)/gi
   ];
 
   for (const pattern of patterns) {
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
-      if (match[1]) {
-        const cleaned = match[1].trim();
-        if (cleaned.length >= 3 && !rules.includes(cleaned)) {
+      let cleaned = '';
+      if (match[2]) {
+        // From {key: value} format
+        cleaned = `${match[1].trim()}: ${match[2].trim()}`;
+      } else if (match[1]) {
+        cleaned = match[1].trim();
+      }
+
+      if (cleaned.length >= 2) {
+        // Strip leading colons or hyphens if matched loosely
+        cleaned = cleaned.replace(/^[:\-\s]+/, '').trim();
+        if (cleaned.length >= 2 && !rules.some(r => r.toLowerCase() === cleaned.toLowerCase())) {
           rules.push(cleaned);
         }
       }
@@ -107,6 +128,7 @@ export function extractOOCRules(text: string): string[] {
 
   return rules;
 }
+
 
 // Derive Character & Chat Fingerprints
 export function deriveChatFingerprint(
@@ -340,6 +362,20 @@ export function augmentSystemWithMemory(baseSystem: string, session: ChatSession
   return baseSystem + memoryBlock;
 }
 
+export function formatRuleForContinuity(rule: string): string {
+  const lower = rule.toLowerCase().trim();
+  if (lower.startsWith('length:') || lower.includes('length') || lower.includes('paragraphs') || lower.includes('short')) {
+    if (lower.includes('short') || lower.includes('brief') || lower.includes('concise') || lower.includes('1 paragraph') || lower.includes('1-2 paragraphs') || lower.includes('tiny')) {
+      return `Response Length: STRICT SHORT FORMAT (Limit entire output to 1-2 concise paragraphs maximum. Do not generate long text.)`;
+    } else if (lower.includes('medium')) {
+      return `Response Length: Medium (Keep response balanced, around 2-4 paragraphs).`;
+    } else if (lower.includes('long') || lower.includes('detailed') || lower.includes('verbose')) {
+      return `Response Length: Detailed and descriptive (Multi-paragraph immersive output).`;
+    }
+  }
+  return rule;
+}
+
 // Generate in-context prompt anchor to reinforce active OOC on every turn (prevents Gemini reversion)
 export function getActiveOOCAnchor(session: ChatSession): string {
   const activeOOC = session.oocRules.filter(r => r.enabled);
@@ -352,7 +388,7 @@ export function getActiveOOCAnchor(session: ChatSession): string {
   let anchor = '\n\n[Active Continuity & OOC Directives - Mandatory Continuous Adherence]:\n';
   if (activeOOC.length > 0) {
     for (const rule of activeOOC) {
-      anchor += `• ${rule.rule}\n`;
+      anchor += `• ${formatRuleForContinuity(rule.rule)}\n`;
     }
   }
   if (activeLore.length > 0) {
@@ -360,9 +396,10 @@ export function getActiveOOCAnchor(session: ChatSession): string {
       anchor += `• ${fact.key}: ${fact.value}\n`;
     }
   }
-  anchor += 'Strictly obey and maintain the active rules and state above across this and all responses.';
+  anchor += 'Strictly obey and maintain the active rules and output constraints above across this and all responses.';
   return anchor;
 }
+
 
 
 // Sync session message history with active incoming prompt (handles message deletions, rewinds, and regenerations)
