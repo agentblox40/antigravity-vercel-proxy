@@ -123,6 +123,24 @@ const Icons = {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
     </svg>
+  ),
+  Rocket: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+    </svg>
+  ),
+  GitBranch: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>
+    </svg>
+  ),
+  ExternalLink: () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>
+    </svg>
   )
 };
 
@@ -134,7 +152,7 @@ const PRESETS = [
 ];
 
 export default function AntigravityControlCenter() {
-  const [activeTab, setActiveTab] = useState<'models' | 'logs' | 'memory' | 'playground' | 'controls' | 'accounts' | 'clients' | 'analytics'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'logs' | 'memory' | 'playground' | 'controls' | 'accounts' | 'clients' | 'analytics' | 'updates'>('models');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
@@ -198,7 +216,13 @@ export default function AntigravityControlCenter() {
   const [newLoreKey, setNewLoreKey] = useState('');
   const [newLoreVal, setNewLoreVal] = useState('');
 
+  // Deployment & Update Logs Telemetry State
+  const [deploymentData, setDeploymentData] = useState<any>(null);
+  const [isCheckingDeploy, setIsCheckingDeploy] = useState<boolean>(false);
+  const [deployCheckStatus, setDeployCheckStatus] = useState<string>('');
+
   const chatEndRef = useRef<HTMLDivElement>(null);
+
 
   // Theme Detection & Management
   useEffect(() => {
@@ -273,6 +297,7 @@ export default function AntigravityControlCenter() {
         setIsAuthenticated(true);
         setAccounts(data.accounts || []);
         if (Array.isArray(data.supportedModels)) setAvailableModels(data.supportedModels);
+        if (data.deployment) setDeploymentData(data.deployment);
         setLatencyMs(Date.now() - start);
 
         if (clearUrlParam && window.history.replaceState) {
@@ -367,6 +392,9 @@ export default function AntigravityControlCenter() {
         if (Array.isArray(data.supportedModels) && data.supportedModels.length > 0) {
           setAvailableModels(data.supportedModels);
         }
+        if (data.deployment) {
+          setDeploymentData(data.deployment);
+        }
         setLatencyMs(Date.now() - start);
       }
     } catch {}
@@ -374,6 +402,38 @@ export default function AntigravityControlCenter() {
       setIsSyncingModels(false);
     }
   };
+
+  const handleCheckLatestDeployment = async () => {
+    if (!apiKey) return;
+    setIsCheckingDeploy(true);
+    setDeployCheckStatus('Connecting to live gateway...');
+    const start = Date.now();
+    try {
+      const res = await fetch('/api/status', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.deployment) {
+          setDeploymentData(data.deployment);
+        }
+        if (Array.isArray(data.supportedModels)) {
+          setAvailableModels(data.supportedModels);
+        }
+        const rtt = Date.now() - start;
+        setLatencyMs(rtt);
+        setDeployCheckStatus(`Verified live on Vercel (${rtt}ms RTT). Commit: ${data.deployment?.commitSha || 'latest'}`);
+      } else {
+        setDeployCheckStatus(`Status check failed: HTTP ${res.status}`);
+      }
+    } catch {
+      setDeployCheckStatus('Error reaching Vercel server.');
+    } finally {
+      setIsCheckingDeploy(false);
+    }
+  };
+
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -780,13 +840,15 @@ export default function AntigravityControlCenter() {
               { id: 'controls', label: 'Model Controls', icon: <Icons.Sliders /> },
               { id: 'accounts', label: 'Accounts & Quota', icon: <Icons.Server /> },
               { id: 'clients', label: 'Janitor / Tavern', icon: <Icons.Terminal /> },
-              { id: 'analytics', label: 'Analytics', icon: <Icons.Activity /> }
+              { id: 'analytics', label: 'Analytics', icon: <Icons.Activity /> },
+              { id: 'updates', label: 'Update Logs', icon: <Icons.Rocket /> }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id as any);
                   if (tab.id === 'memory' || tab.id === 'logs') fetchMemoryOverview();
+                  if (tab.id === 'updates') fetchStatusAndModels();
                 }}
                 style={{
                   background: activeTab === tab.id ? (isDark ? '#222226' : '#ffffff') : 'transparent',
@@ -2045,6 +2107,221 @@ export default function AntigravityControlCenter() {
             </div>
           </div>
         )}
+
+        {/* TAB 9: UPDATE LOGS & DEPLOYMENT TELEMETRY */}
+        {activeTab === 'updates' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            
+            {/* Header with live checker */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 14 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 10px rgba(34, 197, 94, 0.7)' }}></span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Live Production Deployment
+                  </span>
+                </div>
+                <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 4px', letterSpacing: '-0.02em', color: colors.textMain }}>
+                  Deployment Telemetry & Update Logs
+                </h1>
+                <p style={{ margin: 0, fontSize: 13, color: colors.textMuted }}>
+                  Track live build commits, deployment timestamps, serverless runtime state, and full release history.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={handleCheckLatestDeployment}
+                  disabled={isCheckingDeploy}
+                  style={{
+                    background: colors.btnPrimaryBg,
+                    color: colors.btnPrimaryText,
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: isCheckingDeploy ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    boxShadow: colors.cardShadow
+                  }}>
+                  <Icons.Refresh />
+                  {isCheckingDeploy ? 'Checking Live Vercel...' : 'Verify Live Deployment'}
+                </button>
+              </div>
+            </div>
+
+            {deployCheckStatus && (
+              <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: colors.textMain, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icons.Sparkle />
+                <span>{deployCheckStatus}</span>
+              </div>
+            )}
+
+            {/* Telemetry Cards 3-Column Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              {/* Card 1: Version & Environment */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.textSub, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active Version</span>
+                  <span style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.25)', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
+                    🟢 DEPLOYED
+                  </span>
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace', marginBottom: 6 }}>
+                  v{deploymentData?.version || '2.1.0'}
+                </div>
+                <div style={{ fontSize: 12, color: colors.textMuted, lineHeight: 1.6 }}>
+                  <div>Target: <span style={{ color: colors.textMain, fontWeight: 600 }}>Next.js 15.5 App Router</span></div>
+                  <div>Environment: <span style={{ color: colors.textMain, fontWeight: 600 }}>Vercel Serverless ({deploymentData?.deploymentEnv || 'production'})</span></div>
+                </div>
+              </div>
+
+              {/* Card 2: Git Commit & Branch */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.textSub, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Latest Git Commit</span>
+                  <span style={{ background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, color: colors.textMain, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
+                    main
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <code style={{ fontSize: 18, fontWeight: 800, color: colors.textMain, background: colors.cardInner, padding: '2px 8px', borderRadius: 6, border: `1px solid ${colors.border}`, fontFamily: 'monospace' }}>
+                    {deploymentData?.commitSha || '7bb7c61'}
+                  </code>
+                  <a
+                    href={`https://github.com/agentblox40/antigravity-vercel-proxy/commit/${deploymentData?.commitFullSha || '7bb7c61'}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: 11, color: colors.textMuted, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, border: `1px solid ${colors.border}`, padding: '4px 8px', borderRadius: 6, background: colors.cardInner }}>
+                    <span>GitHub</span>
+                    <Icons.ExternalLink />
+                  </a>
+                </div>
+                <div style={{ fontSize: 12, color: colors.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={deploymentData?.commitMessage}>
+                  {deploymentData?.commitMessage || 'Support {length: short} bracket syntax and boost response length directives'}
+                </div>
+              </div>
+
+              {/* Card 3: Cloud Telemetry & Health */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.textSub, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Live Infrastructure</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: colors.textMuted, fontFamily: 'monospace' }}>
+                    {latencyMs !== null ? `${latencyMs}ms RTT` : 'Online'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: colors.textMuted }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Memory Engine:</span>
+                    <span style={{ color: memoryStats.redisConnected ? '#22c55e' : colors.textMain, fontWeight: 600 }}>
+                      {memoryStats.storageMode || 'Upstash Redis'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Account Pool:</span>
+                    <span style={{ color: colors.textMain, fontWeight: 600 }}>{accounts.length} Active ({accounts.filter(a => a.status === 'Ready').length} Ready)</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Live Models:</span>
+                    <span style={{ color: colors.textMain, fontWeight: 600 }}>{availableModels.length} Discovered</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Chronological Release History & Changelog */}
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 24, boxShadow: colors.cardShadow }}>
+              <h2 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 16px', color: colors.textMain }}>
+                Release History & Feature Timeline
+              </h2>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {(deploymentData?.changelog || []).map((entry: any, idx: number) => {
+                  const tagColors: Record<string, { bg: string; text: string; border: string }> = {
+                    LATEST: { bg: 'rgba(34, 197, 94, 0.1)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' },
+                    MAJOR: { bg: isDark ? '#27272a' : '#f4f4f5', text: colors.textMain, border: colors.border },
+                    PATCH: { bg: isDark ? '#1f1f23' : '#f9f9fb', text: colors.textMuted, border: colors.borderMuted },
+                    CORE: { bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' }
+                  };
+                  const t = tagColors[entry.tag] || tagColors.PATCH;
+
+                  return (
+                    <div
+                      key={entry.version}
+                      style={{
+                        background: colors.cardInner,
+                        border: `1px solid ${idx === 0 ? colors.border : colors.borderMuted}`,
+                        borderRadius: 10,
+                        padding: 18,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10
+                      }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>
+                            v{entry.version}
+                          </span>
+                          <span style={{ background: t.bg, color: t.text, border: `1px solid ${t.border}`, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.04em' }}>
+                            {entry.tag}
+                          </span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: colors.textMain }}>
+                            {entry.title}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: colors.textSub }}>{entry.date}</span>
+                          <a
+                            href={`https://github.com/agentblox40/antigravity-vercel-proxy/commit/${entry.commit}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color: colors.textMuted,
+                              textDecoration: 'none',
+                              background: colors.inputBg,
+                              border: `1px solid ${colors.border}`,
+                              padding: '2px 7px',
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}>
+                            <Icons.GitBranch />
+                            {entry.commit}
+                          </a>
+                        </div>
+                      </div>
+
+                      <p style={{ margin: 0, fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
+                        {entry.description}
+                      </p>
+
+                      {entry.highlights && entry.highlights.length > 0 && (
+                        <div style={{ background: colors.inputBg, border: `1px solid ${colors.borderMuted}`, borderRadius: 6, padding: '10px 14px' }}>
+                          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: colors.textMain, lineHeight: 1.7 }}>
+                            {entry.highlights.map((hl: string, hIdx: number) => (
+                              <li key={hIdx} style={{ color: colors.textMuted }}>
+                                <span style={{ color: colors.textMain }}>{hl}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        )}
+
 
       </main>
 

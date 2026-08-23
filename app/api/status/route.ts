@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccounts, getAntigravityLiveModels } from '@/lib/antigravity';
+import { getDeploymentTelemetry, CURRENT_VERSION } from '@/lib/version';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
   const accounts = getAccounts();
   const now = Date.now();
   const models = await getAntigravityLiveModels();
+  const deployment = getDeploymentTelemetry();
 
   const accountStatus = accounts.map((acc, idx) => ({
     id: acc.id,
@@ -56,7 +58,8 @@ export async function GET(req: NextRequest) {
       totalAccounts: accounts.length,
       modelsCount: models.length,
       supportedModels: models,
-      version: '2.0.0',
+      version: CURRENT_VERSION,
+      deployment,
     },
     {
       headers: {
@@ -65,3 +68,4 @@ export async function GET(req: NextRequest) {
     }
   );
 }
+
