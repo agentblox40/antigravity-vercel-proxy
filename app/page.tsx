@@ -249,6 +249,31 @@ export default function AntigravityControlCenter() {
     return () => mediaQuery.removeEventListener('change', handleMediaChange);
   }, [theme]);
 
+  // 1-second live countdown ticker for account cooldowns
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAccounts(prev => {
+        if (!prev || prev.length === 0) return prev;
+        let changed = false;
+        const next = prev.map(acc => {
+          if (acc.cooldownRemainingSec && acc.cooldownRemainingSec > 0) {
+            changed = true;
+            const remaining = acc.cooldownRemainingSec - 1;
+            return {
+              ...acc,
+              cooldownRemainingSec: Math.max(0, remaining),
+              status: remaining <= 0 ? 'Ready' : 'Cooldown'
+            };
+          }
+          return acc;
+        });
+        return changed ? next : prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
     setTheme(newTheme);
     localStorage.setItem('proxy_ui_theme', newTheme);
@@ -940,6 +965,36 @@ export default function AntigravityControlCenter() {
 
       {/* Main Container */}
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
+
+        {/* Global Cooldown Live Ticker Banner */}
+        {accounts.some(a => a.cooldownRemainingSec > 0) && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.09)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 10,
+            padding: '12px 18px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px #ef4444' }}></span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#ef4444' }}>
+                Account Quota Cooldown Active
+              </span>
+              <span style={{ fontSize: 12, color: colors.textMuted }}>
+                {accounts.filter(a => a.cooldownRemainingSec > 0).map(a => `${a.name}: ${a.cooldownRemainingSec}s`).join(' | ')}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#ef4444', fontFamily: 'monospace' }}>
+              <Icons.Refresh />
+              <span>Auto-refreshing in {Math.min(...accounts.filter(a => a.cooldownRemainingSec > 0).map(a => a.cooldownRemainingSec))}s</span>
+            </div>
+          </div>
+        )}
 
         {/* TAB 1: MODELS CATALOG */}
         {activeTab === 'models' && (
@@ -2022,17 +2077,36 @@ export default function AntigravityControlCenter() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
               {accounts.map((acc, idx) => (
-                <div key={acc.id} style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 18, boxShadow: colors.cardShadow }}>
+                <div key={acc.id} style={{ background: colors.cardBg, border: `1px solid ${acc.cooldownRemainingSec > 0 ? 'rgba(239, 68, 68, 0.3)' : colors.border}`, borderRadius: 12, padding: 18, boxShadow: colors.cardShadow, transition: 'all 0.2s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: colors.textMain }}>{acc.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 4, background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, color: colors.textMain }}>
-                      {acc.status}
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                      background: acc.cooldownRemainingSec > 0 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                      border: `1px solid ${acc.cooldownRemainingSec > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                      color: acc.cooldownRemainingSec > 0 ? '#ef4444' : '#22c55e',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: acc.cooldownRemainingSec > 0 ? '#ef4444' : '#22c55e', boxShadow: acc.cooldownRemainingSec > 0 ? '0 0 6px rgba(239, 68, 68, 0.8)' : 'none' }}></span>
+                      {acc.cooldownRemainingSec > 0 ? `Cooldown (${acc.cooldownRemainingSec}s)` : 'Ready'}
                     </span>
                   </div>
                   <div style={{ fontSize: 12, color: colors.textSub, lineHeight: 1.8 }}>
                     <div>Project ID: <code style={{ color: colors.textMain, fontWeight: 600 }}>{acc.projectId}</code></div>
                     <div>Account Slot: <code style={{ color: colors.textMuted }}>ACCOUNT_{idx + 1}</code></div>
                     <div>Failures / 429s: <span style={{ color: colors.textMain, fontWeight: 600 }}>{acc.failCount}</span></div>
+                    {acc.cooldownRemainingSec > 0 && (
+                      <div style={{ marginTop: 6, background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '6px 10px', borderRadius: 6, color: '#ef4444', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Icons.Refresh />
+                        <span>Refreshing capacity in <strong>{acc.cooldownRemainingSec}s</strong></span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

@@ -365,12 +365,34 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
+  const now = Date.now();
+  let minCooldownSec = 20;
+  if (accounts.length > 0) {
+    const remainingTimes = accounts.map(a => Math.max(1, Math.ceil((a.cooldownUntil - now) / 1000)));
+    minCooldownSec = Math.min(...remainingTimes);
+    if (minCooldownSec <= 0 || !isFinite(minCooldownSec)) minCooldownSec = 15;
+  }
+
+  const refreshTimeStr = new Date(now + minCooldownSec * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const errorMessage = `[Proxy Rate Limit]: Google upstream rate limit active. Refreshing in ${minCooldownSec}s (Ready at ${refreshTimeStr}). Please wait ${minCooldownSec}s or add an account in the dashboard.`;
+
   return NextResponse.json(
-    { error: { message: lastError ? lastError.message : 'All configured accounts failed or rate limited.' } },
     {
-      status: 500,
+      error: {
+        message: errorMessage,
+        type: 'upstream_rate_limit',
+        code: 429,
+        retry_after: minCooldownSec,
+        refresh_in_seconds: minCooldownSec,
+        ready_at: refreshTimeStr,
+        details: lastError ? lastError.message : undefined
+      }
+    },
+    {
+      status: 429,
       headers: {
         'Access-Control-Allow-Origin': '*',
+        'Retry-After': String(minCooldownSec),
       },
     }
   );
