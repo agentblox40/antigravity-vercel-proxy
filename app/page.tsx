@@ -193,7 +193,7 @@ export default function AntigravityControlCenter() {
       
       const urlParams = new URLSearchParams(window.location.search);
       const urlKey = urlParams.get('key') || urlParams.get('auth');
-      const storedKey = localStorage.getItem('proxy_master_key') || localStorage.getItem('proxy_test_key') || '';
+      const storedKey = localStorage.getItem('proxy_master_key') || '';
 
       const keyToTest = urlKey || storedKey;
 
@@ -453,7 +453,7 @@ export default function AntigravityControlCenter() {
             <div>
               <input
                 type="password"
-                placeholder="Enter API Key (e.g. KARS-2010915)..."
+                placeholder="Enter your API Key..."
                 value={loginKeyInput}
                 onChange={e => setLoginKeyInput(e.target.value)}
                 autoFocus
@@ -1088,7 +1088,7 @@ export default function AntigravityControlCenter() {
               <div style={{ background: colors.cardInner, padding: 14, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16, fontSize: 12, lineHeight: 1.8 }}>
                 <div><span style={{ color: colors.textSub }}>API Format: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>OpenAI / Custom OpenAI</code></div>
                 <div><span style={{ color: colors.textSub }}>Reverse Proxy URL: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
-                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey}</code></div>
+                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
                 <div><span style={{ color: colors.textSub }}>Recommended Model: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.7-flash-high</code></div>
               </div>
 
@@ -1107,7 +1107,7 @@ export default function AntigravityControlCenter() {
               <div style={{ background: colors.cardInner, padding: 14, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16, fontSize: 12, lineHeight: 1.8 }}>
                 <div><span style={{ color: colors.textSub }}>API: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>Chat Completion (OpenAI)</code></div>
                 <div><span style={{ color: colors.textSub }}>Custom Endpoint: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
-                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey}</code></div>
+                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
                 <div><span style={{ color: colors.textSub }}>Streaming: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>Enabled (SSE)</code></div>
               </div>
 
