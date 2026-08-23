@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
             upstreamRes = res;
             break;
           } else if (res.status === 429) {
-            continue; // try next upstream url or next account
+            continue;
           } else {
             const errText = await res.text();
             console.warn(`Upstream ${upstreamUrl} returned ${res.status}: ${errText}`);
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
       account.failCount = 0;
 
-      // Streaming response
+      // Streaming response with <think> tag & reasoning_content handling
       if (stream) {
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
@@ -116,37 +116,108 @@ export async function POST(req: NextRequest) {
               controller.close();
               return;
             }
+
+            let inThinking = false;
+            let hasThoughtStarted = false;
+            let hasThoughtEnded = false;
+            let buffer = '';
+
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
-              const textChunk = decoder.decode(value);
-              const lines = textChunk.split('\n');
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   try {
                     const parsed = JSON.parse(line.slice(6));
                     const cand = parsed.response?.candidates?.[0];
-                    const contentPart = cand?.content?.parts?.[0]?.text || '';
-                    if (contentPart) {
-                      const openAiChunk = {
-                        id: chatcmplId,
-                        object: 'chat.completion.chunk',
-                        created: Math.floor(Date.now() / 1000),
-                        model: modelId,
-                        choices: [
-                          {
-                            index: 0,
-                            delta: { content: contentPart },
-                            finish_reason: cand.finishReason || null,
-                          },
-                        ],
-                      };
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAiChunk)}\n\n`));
+                    const parts = cand?.content?.parts || [];
+
+                    for (const part of parts) {
+                      const isThought = part.thought === true;
+                      const text = part.text || '';
+                      if (!text) continue;
+
+                      if (isThought) {
+                        if (!hasThoughtStarted) {
+                          hasThoughtStarted = true;
+                          inThinking = true;
+                          controller.enqueue(
+                            encoder.encode(
+                              `data: ${JSON.stringify({
+                                id: chatcmplId,
+                                object: 'chat.completion.chunk',
+                                created: Math.floor(Date.now() / 1000),
+                                model: modelId,
+                                choices: [{ index: 0, delta: { content: '<think>\n', reasoning_content: '' }, finish_reason: null }],
+                              })}\n\n`
+                            )
+                          );
+                        }
+
+                        controller.enqueue(
+                          encoder.encode(
+                            `data: ${JSON.stringify({
+                              id: chatcmplId,
+                              object: 'chat.completion.chunk',
+                              created: Math.floor(Date.now() / 1000),
+                              model: modelId,
+                              choices: [{ index: 0, delta: { content: text, reasoning_content: text }, finish_reason: null }],
+                            })}\n\n`
+                          )
+                        );
+                      } else {
+                        if (inThinking && !hasThoughtEnded) {
+                          inThinking = false;
+                          hasThoughtEnded = true;
+                          controller.enqueue(
+                            encoder.encode(
+                              `data: ${JSON.stringify({
+                                id: chatcmplId,
+                                object: 'chat.completion.chunk',
+                                created: Math.floor(Date.now() / 1000),
+                                model: modelId,
+                                choices: [{ index: 0, delta: { content: '\n</think>\n\n' }, finish_reason: null }],
+                              })}\n\n`
+                            )
+                          );
+                        }
+
+                        controller.enqueue(
+                          encoder.encode(
+                            `data: ${JSON.stringify({
+                              id: chatcmplId,
+                              object: 'chat.completion.chunk',
+                              created: Math.floor(Date.now() / 1000),
+                              model: modelId,
+                              choices: [{ index: 0, delta: { content: text }, finish_reason: cand.finishReason || null }],
+                            })}\n\n`
+                          )
+                        );
+                      }
                     }
                   } catch {}
                 }
               }
             }
+
+            if (inThinking && !hasThoughtEnded) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    id: chatcmplId,
+                    object: 'chat.completion.chunk',
+                    created: Math.floor(Date.now() / 1000),
+                    model: modelId,
+                    choices: [{ index: 0, delta: { content: '\n</think>\n\n' }, finish_reason: 'stop' }],
+                  })}\n\n`
+                )
+              );
+            }
+
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
           },
@@ -162,18 +233,31 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Non-streaming response
+      // Non-streaming response with <think> tag & reasoning_content handling
       const fullText = await upstreamRes.text();
-      let fullContent = '';
+      let thoughtText = '';
+      let contentText = '';
       const lines = fullText.split('\n');
+
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           try {
             const parsed = JSON.parse(line.slice(6));
-            const part = parsed.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (part) fullContent += part;
+            const parts = parsed.response?.candidates?.[0]?.content?.parts || [];
+            for (const part of parts) {
+              if (part.thought === true) {
+                thoughtText += part.text || '';
+              } else {
+                contentText += part.text || '';
+              }
+            }
           } catch {}
         }
+      }
+
+      let finalContent = contentText;
+      if (thoughtText.trim()) {
+        finalContent = `<think>\n${thoughtText.trim()}\n</think>\n\n${contentText.trimStart()}`;
       }
 
       return NextResponse.json(
@@ -185,7 +269,11 @@ export async function POST(req: NextRequest) {
           choices: [
             {
               index: 0,
-              message: { role: 'assistant', content: fullContent },
+              message: {
+                role: 'assistant',
+                content: finalContent,
+                reasoning_content: thoughtText.trim() || undefined,
+              },
               finish_reason: 'stop',
             },
           ],
