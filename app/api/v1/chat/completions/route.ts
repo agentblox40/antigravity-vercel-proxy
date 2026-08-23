@@ -1,0 +1,191 @@
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
+import {
+  getAccounts,
+  pickAccount,
+  getAccessToken,
+  transformOpenAIToAntigravity,
+} from '@/lib/antigravity';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+function checkAuth(req: NextRequest): boolean {
+  const proxyKey = process.env.PROXY_API_KEY;
+  if (!proxyKey) return true;
+  const authHeader = req.headers.get('authorization') || '';
+  const customKey = req.headers.get('api-key') || req.headers.get('x-api-key') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : customKey;
+  return token === proxyKey;
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, api-key, x-api-key',
+    },
+  });
+}
+
+export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) {
+    return NextResponse.json(
+      { error: { message: 'Invalid or missing Proxy API Key.', type: 'invalid_request_error', code: 'unauthorized' } },
+      { status: 401 }
+    );
+  }
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: { message: 'Invalid JSON request body.' } }, { status: 400 });
+  }
+
+  const stream = body.stream === true;
+  const modelId = body.model || 'gemini-3.7-flash';
+  const accounts = getAccounts();
+
+  let lastError: any = null;
+  for (let attempt = 0; attempt < Math.max(1, accounts.length); attempt++) {
+    const account = pickAccount();
+    try {
+      const accessToken = await getAccessToken(account);
+      const envelope = transformOpenAIToAntigravity(body, modelId, account.projectId);
+
+      const upstreamRes = await fetch(
+        'https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
+            'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64',
+          },
+          body: JSON.stringify(envelope),
+        }
+      );
+
+      if (upstreamRes.status === 429) {
+        account.failCount++;
+        account.cooldownUntil = Date.now() + 30000;
+        console.warn(`[429 Rate Limit] on ${account.name}, failing over to sibling account...`);
+        continue;
+      }
+
+      if (!upstreamRes.ok) {
+        const err = await upstreamRes.text();
+        throw new Error(`Google Antigravity returned ${upstreamRes.status}: ${err}`);
+      }
+
+      account.failCount = 0;
+
+      // Handle Streaming SSE
+      if (stream) {
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const chatcmplId = `chatcmpl-${crypto.randomUUID().slice(0, 8)}`;
+
+        const customStream = new ReadableStream({
+          async start(controller) {
+            const reader = upstreamRes.body?.getReader();
+            if (!reader) {
+              controller.close();
+              return;
+            }
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const textChunk = decoder.decode(value);
+              const lines = textChunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const parsed = JSON.parse(line.slice(6));
+                    const cand = parsed.response?.candidates?.[0];
+                    const contentPart = cand?.content?.parts?.[0]?.text || '';
+                    if (contentPart) {
+                      const openAiChunk = {
+                        id: chatcmplId,
+                        object: 'chat.completion.chunk',
+                        created: Math.floor(Date.now() / 1000),
+                        model: modelId,
+                        choices: [
+                          {
+                            index: 0,
+                            delta: { content: contentPart },
+                            finish_reason: cand.finishReason || null,
+                          },
+                        ],
+                      };
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify(openAiChunk)}\n\n`));
+                    }
+                  } catch {}
+                }
+              }
+            }
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        });
+
+        return new NextResponse(customStream, {
+          headers: {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      }
+
+      // Handle Non-Streaming
+      const fullText = await upstreamRes.text();
+      let fullContent = '';
+      const lines = fullText.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const parsed = JSON.parse(line.slice(6));
+            const part = parsed.response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (part) fullContent += part;
+          } catch {}
+        }
+      }
+
+      return NextResponse.json(
+        {
+          id: `chatcmpl-${crypto.randomUUID().slice(0, 8)}`,
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: modelId,
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: fullContent },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        },
+        {
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      );
+    } catch (err: any) {
+      lastError = err;
+      console.error(`Attempt failed on ${account.name}:`, err.message);
+    }
+  }
+
+  return NextResponse.json(
+    { error: { message: lastError ? lastError.message : 'All configured accounts failed.' } },
+    { status: 500 }
+  );
+}
