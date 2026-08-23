@@ -13,6 +13,7 @@ import {
   ingestOOCIntoSession,
   saveChatSession,
   augmentSystemWithMemory,
+  getActiveOOCAnchor,
   recordTurnsIntoSession,
   stitchLosslessHistory,
 } from './memory';
@@ -89,6 +90,7 @@ export async function handleChatCompletions(req: NextRequest) {
   // Memory & OOC Processing
   let session: any = null;
   let augmentedSystem: string | undefined = undefined;
+  let oocAnchor = '';
   const disableMemory = req.headers.get('x-disable-memory') === 'true' || body.disable_memory === true;
 
   if (!disableMemory) {
@@ -115,6 +117,9 @@ export async function handleChatCompletions(req: NextRequest) {
       // Augment system instruction with pinned OOC and active lore
       augmentedSystem = augmentSystemWithMemory(rawSystemText, session);
 
+      // Generate in-context Depth 0 OOC anchor to reinforce active OOC on every turn
+      oocAnchor = getActiveOOCAnchor(session);
+
       // Stitch history if client truncated earlier messages
       body.messages = stitchLosslessHistory(session, messages);
     } catch (memErr) {
@@ -127,7 +132,7 @@ export async function handleChatCompletions(req: NextRequest) {
     const account = pickAccount();
     try {
       const accessToken = await getAccessToken(account);
-      const envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, augmentedSystem);
+      const envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, augmentedSystem, oocAnchor);
 
       let upstreamRes: Response | null = null;
       for (const upstreamUrl of UPSTREAM_URLS) {

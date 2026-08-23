@@ -232,7 +232,13 @@ export function pickAccount(): AccountConfig {
   return best;
 }
 
-export function transformOpenAIToAntigravity(body: any, modelId: string, projectId: string, augmentedSystem?: string) {
+export function transformOpenAIToAntigravity(
+  body: any,
+  modelId: string,
+  projectId: string,
+  augmentedSystem?: string,
+  oocAnchor?: string
+) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   let userSystemText = augmentedSystem || '';
   const contents: any[] = [];
@@ -278,6 +284,19 @@ export function transformOpenAIToAntigravity(body: any, modelId: string, project
     merged.unshift({ role: 'user', parts: [{ text: '...' }] });
   }
 
+  // If active OOC anchor is present, inject at the last user turn (Depth 0 prompt anchor)
+  if (oocAnchor && merged.length > 0) {
+    for (let i = merged.length - 1; i >= 0; i--) {
+      if (merged[i].role === 'user') {
+        const text = merged[i].parts[0]?.text || '';
+        if (!text.includes('[Active Continuity & OOC Directives')) {
+          merged[i].parts[0].text = text + oocAnchor;
+        }
+        break;
+      }
+    }
+  }
+
   const maxTokens = typeof body.max_tokens === 'number' && body.max_tokens > 0 
     ? body.max_tokens 
     : (typeof body.max_completion_tokens === 'number' && body.max_completion_tokens > 0 ? body.max_completion_tokens : 16384);
@@ -312,9 +331,10 @@ export function transformOpenAIToAntigravity(body: any, modelId: string, project
     generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };
   }
 
-  const systemInstructionText = userSystemText 
-    ? `${ANTIGRAVITY_DEFAULT_SYSTEM}\n\n[USER INSTRUCTIONS / CHARACTER DEFINITION]\n${userSystemText}`
-    : ANTIGRAVITY_DEFAULT_SYSTEM;
+  const systemInstructionParts: { text: string }[] = [{ text: ANTIGRAVITY_DEFAULT_SYSTEM }];
+  if (userSystemText) {
+    systemInstructionParts.push({ text: userSystemText });
+  }
 
   let wireModel = 'gemini-3.7-flash-tiered';
   if (modelClean.startsWith('gemini-3.7-flash')) wireModel = 'gemini-3.7-flash-tiered';
@@ -326,10 +346,11 @@ export function transformOpenAIToAntigravity(body: any, modelId: string, project
   const reqObj: any = {
     sessionId: `-${Date.now()}`,
     contents: merged,
-    systemInstruction: { role: 'system', parts: [{ text: systemInstructionText }] },
+    systemInstruction: { role: 'system', parts: systemInstructionParts },
     generationConfig,
     safetySettings: UNRESTRICTED_SAFETY_SETTINGS
   };
+
 
   return {
     project: projectId,

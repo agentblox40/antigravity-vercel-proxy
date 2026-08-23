@@ -340,6 +340,31 @@ export function augmentSystemWithMemory(baseSystem: string, session: ChatSession
   return baseSystem + memoryBlock;
 }
 
+// Generate in-context prompt anchor to reinforce active OOC on every turn (prevents Gemini reversion)
+export function getActiveOOCAnchor(session: ChatSession): string {
+  const activeOOC = session.oocRules.filter(r => r.enabled);
+  const activeLore = session.loreFacts.filter(f => f.enabled);
+
+  if (activeOOC.length === 0 && activeLore.length === 0) {
+    return '';
+  }
+
+  let anchor = '\n\n[Active Continuity & OOC Directives - Mandatory Continuous Adherence]:\n';
+  if (activeOOC.length > 0) {
+    for (const rule of activeOOC) {
+      anchor += `• ${rule.rule}\n`;
+    }
+  }
+  if (activeLore.length > 0) {
+    for (const fact of activeLore) {
+      anchor += `• ${fact.key}: ${fact.value}\n`;
+    }
+  }
+  anchor += 'Strictly obey and maintain the active rules and state above across this and all responses.';
+  return anchor;
+}
+
+
 // Sync session message history with active incoming prompt (handles message deletions, rewinds, and regenerations)
 export function syncSessionWithIncomingMessages(
   session: ChatSession,
