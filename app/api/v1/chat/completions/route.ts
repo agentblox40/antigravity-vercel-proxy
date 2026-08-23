@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
       account.failCount = 0;
 
-      // Streaming response with <think> tag & reasoning_content handling
+      // Streaming response with clean reasoning_content routing for Janitor AI
       if (stream) {
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
@@ -117,9 +117,6 @@ export async function POST(req: NextRequest) {
               return;
             }
 
-            let inThinking = false;
-            let hasThoughtStarted = false;
-            let hasThoughtEnded = false;
             let buffer = '';
 
             while (true) {
@@ -142,22 +139,7 @@ export async function POST(req: NextRequest) {
                       if (!text) continue;
 
                       if (isThought) {
-                        if (!hasThoughtStarted) {
-                          hasThoughtStarted = true;
-                          inThinking = true;
-                          controller.enqueue(
-                            encoder.encode(
-                              `data: ${JSON.stringify({
-                                id: chatcmplId,
-                                object: 'chat.completion.chunk',
-                                created: Math.floor(Date.now() / 1000),
-                                model: modelId,
-                                choices: [{ index: 0, delta: { content: '<think>\n', reasoning_content: '' }, finish_reason: null }],
-                              })}\n\n`
-                            )
-                          );
-                        }
-
+                        // Send thought tokens strictly to reasoning_content so Janitor AI puts them in the "thoughts" accordion
                         controller.enqueue(
                           encoder.encode(
                             `data: ${JSON.stringify({
@@ -165,27 +147,18 @@ export async function POST(req: NextRequest) {
                               object: 'chat.completion.chunk',
                               created: Math.floor(Date.now() / 1000),
                               model: modelId,
-                              choices: [{ index: 0, delta: { content: text, reasoning_content: text }, finish_reason: null }],
+                              choices: [
+                                {
+                                  index: 0,
+                                  delta: { reasoning_content: text },
+                                  finish_reason: null,
+                                },
+                              ],
                             })}\n\n`
                           )
                         );
                       } else {
-                        if (inThinking && !hasThoughtEnded) {
-                          inThinking = false;
-                          hasThoughtEnded = true;
-                          controller.enqueue(
-                            encoder.encode(
-                              `data: ${JSON.stringify({
-                                id: chatcmplId,
-                                object: 'chat.completion.chunk',
-                                created: Math.floor(Date.now() / 1000),
-                                model: modelId,
-                                choices: [{ index: 0, delta: { content: '\n</think>\n\n' }, finish_reason: null }],
-                              })}\n\n`
-                            )
-                          );
-                        }
-
+                        // Send normal content tokens strictly to content
                         controller.enqueue(
                           encoder.encode(
                             `data: ${JSON.stringify({
@@ -193,7 +166,13 @@ export async function POST(req: NextRequest) {
                               object: 'chat.completion.chunk',
                               created: Math.floor(Date.now() / 1000),
                               model: modelId,
-                              choices: [{ index: 0, delta: { content: text }, finish_reason: cand.finishReason || null }],
+                              choices: [
+                                {
+                                  index: 0,
+                                  delta: { content: text },
+                                  finish_reason: cand.finishReason || null,
+                                },
+                              ],
                             })}\n\n`
                           )
                         );
@@ -202,20 +181,6 @@ export async function POST(req: NextRequest) {
                   } catch {}
                 }
               }
-            }
-
-            if (inThinking && !hasThoughtEnded) {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    id: chatcmplId,
-                    object: 'chat.completion.chunk',
-                    created: Math.floor(Date.now() / 1000),
-                    model: modelId,
-                    choices: [{ index: 0, delta: { content: '\n</think>\n\n' }, finish_reason: 'stop' }],
-                  })}\n\n`
-                )
-              );
             }
 
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -233,7 +198,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Non-streaming response with <think> tag & reasoning_content handling
+      // Non-streaming response with clean reasoning_content
       const fullText = await upstreamRes.text();
       let thoughtText = '';
       let contentText = '';
@@ -255,11 +220,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      let finalContent = contentText;
-      if (thoughtText.trim()) {
-        finalContent = `<think>\n${thoughtText.trim()}\n</think>\n\n${contentText.trimStart()}`;
-      }
-
       return NextResponse.json(
         {
           id: `chatcmpl-${crypto.randomUUID().slice(0, 8)}`,
@@ -271,7 +231,7 @@ export async function POST(req: NextRequest) {
               index: 0,
               message: {
                 role: 'assistant',
-                content: finalContent,
+                content: contentText,
                 reasoning_content: thoughtText.trim() || undefined,
               },
               finish_reason: 'stop',
