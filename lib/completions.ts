@@ -134,11 +134,53 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
-  let lastError: any = null;
-  const accountsToTry = Math.max(2, accounts.length * 2);
+  const now = Date.now();
+  const availableAccounts = accounts.filter(a => a.cooldownUntil <= now);
 
-  for (let attempt = 0; attempt < accountsToTry; attempt++) {
-    const account = pickAccount();
+  // If all accounts are currently in cooldown, return immediate 429 WITHOUT prematurely hitting Google (which resets the timer)
+  if (availableAccounts.length === 0 && accounts.length > 0) {
+    const remainingTimes = accounts.map(a => Math.max(1, Math.ceil((a.cooldownUntil - now) / 1000)));
+    const minCooldownSec = Math.min(...remainingTimes);
+    const refreshTimeStr = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }).format(new Date(now + minCooldownSec * 1000)) + ' IST';
+
+    const accountBreakdown = accounts.map(a => `${a.name}: Cooldown (${Math.max(1, Math.ceil((a.cooldownUntil - now) / 1000))}s)`).join(' | ');
+
+    return NextResponse.json(
+      {
+        error: {
+          message: `[Proxy Rate Limit]: All Google accounts in pool are cooling down. [${accountBreakdown}]. Refreshing in ${minCooldownSec}s (Ready at ${refreshTimeStr}). Please wait ${minCooldownSec}s before retrying.`,
+          type: 'upstream_rate_limit',
+          code: 429,
+          retry_after: minCooldownSec,
+          refresh_in_seconds: minCooldownSec,
+          ready_at: refreshTimeStr,
+          accounts_status: accounts.map(a => ({
+            name: a.name,
+            status: 'Cooldown',
+            cooldown_remaining_sec: Math.max(1, Math.ceil((a.cooldownUntil - now) / 1000))
+          }))
+        }
+      },
+      {
+        status: 429,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Retry-After': String(minCooldownSec),
+        },
+      }
+    );
+  }
+
+  const attemptLogs: { account: string; status: number; error: string }[] = [];
+  const accountsToTry = availableAccounts.length > 0 ? availableAccounts : accounts;
+
+  for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
       let envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, augmentedSystem, oocAnchor);
@@ -177,15 +219,15 @@ export async function handleChatCompletions(req: NextRequest) {
             upstreamRes = res;
             break;
           } else if (res.status === 429) {
-            lastError = new Error(`Google CloudCode rate limited (${account.name}) on ${upstreamUrl}`);
+            attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}` });
             continue;
           } else {
             const errText = await res.text();
-            lastError = new Error(`Google Upstream Error (${res.status}): ${errText.slice(0, 200)}`);
+            attemptLogs.push({ account: account.name, status: res.status, error: errText.slice(0, 200) });
             console.warn(`Upstream ${upstreamUrl} returned ${res.status}: ${errText}`);
           }
         } catch (e: any) {
-          lastError = e;
+          attemptLogs.push({ account: account.name, status: 500, error: e.message || 'Connection error' });
           console.warn(`Error connecting to ${upstreamUrl}:`, e);
         }
       }
@@ -211,15 +253,15 @@ export async function handleChatCompletions(req: NextRequest) {
 
         const customStream = new ReadableStream({
           async start(controller) {
-            const reader = upstreamRes!.body?.getReader();
-            if (!reader) {
-              controller.close();
-              return;
-            }
-
-            let buffer = '';
-
             try {
+              const reader = upstreamRes!.body?.getReader();
+              if (!reader) {
+                controller.close();
+                return;
+              }
+
+              let buffer = '';
+
               while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -241,7 +283,6 @@ export async function handleChatCompletions(req: NextRequest) {
 
                         if (isThought) {
                           fullThoughtContent += text;
-                          // Send thought tokens strictly to reasoning_content so Janitor AI puts them in the "thoughts" accordion
                           controller.enqueue(
                             encoder.encode(
                               `data: ${JSON.stringify({
@@ -261,7 +302,6 @@ export async function handleChatCompletions(req: NextRequest) {
                           );
                         } else {
                           fullAssistantContent += text;
-                          // Send normal content tokens strictly to content
                           controller.enqueue(
                             encoder.encode(
                               `data: ${JSON.stringify({
@@ -273,7 +313,7 @@ export async function handleChatCompletions(req: NextRequest) {
                                   {
                                     index: 0,
                                     delta: { content: text },
-                                    finish_reason: cand.finishReason || null,
+                                    finish_reason: null,
                                   },
                                 ],
                               })}\n\n`
@@ -285,52 +325,69 @@ export async function handleChatCompletions(req: NextRequest) {
                   }
                 }
               }
-            } finally {
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    id: chatcmplId,
+                    object: 'chat.completion.chunk',
+                    created: Math.floor(Date.now() / 1000),
+                    model: modelId,
+                    choices: [
+                      {
+                        index: 0,
+                        delta: {},
+                        finish_reason: 'stop',
+                      },
+                    ],
+                  })}\n\n`
+                )
+              );
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
 
-              // Asynchronously record turn into session archive
-              if (session && (fullAssistantContent || latestUserText)) {
+              // Record asynchronously into memory
+              if (session) {
                 recordTurnsIntoSession(session, latestUserText, fullAssistantContent, fullThoughtContent).catch(() => {});
               }
+            } catch (err) {
+              controller.error(err);
             }
           },
         });
 
         return new NextResponse(customStream, {
           headers: {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache, no-transform',
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
             Connection: 'keep-alive',
             'Access-Control-Allow-Origin': '*',
           },
         });
       }
 
-      // Non-streaming response with clean reasoning_content
-      const fullText = await upstreamRes.text();
-      let thoughtText = '';
+      // Non-streaming JSON response
+      const rawText = await upstreamRes.text();
       let contentText = '';
-      const lines = fullText.split('\n');
+      let thoughtText = '';
 
+      const lines = rawText.split('\n');
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           try {
             const parsed = JSON.parse(line.slice(6));
-            const parts = parsed.response?.candidates?.[0]?.content?.parts || [];
+            const cand = parsed.response?.candidates?.[0];
+            const parts = cand?.content?.parts || [];
             for (const part of parts) {
-              if (part.thought === true) {
-                thoughtText += part.text || '';
-              } else {
-                contentText += part.text || '';
-              }
+              if (part.thought) thoughtText += part.text || '';
+              else contentText += part.text || '';
             }
           } catch {}
         }
       }
 
-      // Asynchronously record turn into session archive
-      if (session && (contentText || latestUserText)) {
+      // Record asynchronously into memory
+      if (session) {
         recordTurnsIntoSession(session, latestUserText, contentText, thoughtText).catch(() => {});
       }
 
@@ -360,32 +417,41 @@ export async function handleChatCompletions(req: NextRequest) {
         }
       );
     } catch (err: any) {
-      lastError = err;
+      attemptLogs.push({ account: account.name, status: 500, error: err.message || 'Execution error' });
       console.error(`Attempt failed on ${account.name}:`, err.message);
     }
   }
 
-  const now = Date.now();
-  let minCooldownSec = 20;
-  if (accounts.length > 0) {
-    const remainingTimes = accounts.map(a => Math.max(1, Math.ceil((a.cooldownUntil - now) / 1000)));
-    minCooldownSec = Math.min(...remainingTimes);
-    if (minCooldownSec <= 0 || !isFinite(minCooldownSec)) minCooldownSec = 15;
-  }
+  const endNow = Date.now();
+  const remainingTimes = accounts.map(a => Math.max(1, Math.ceil((a.cooldownUntil - endNow) / 1000)));
+  const minCooldownSec = Math.min(...remainingTimes);
+  const refreshTimeStr = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }).format(new Date(endNow + minCooldownSec * 1000)) + ' IST';
 
-  const refreshTimeStr = new Date(now + minCooldownSec * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const errorMessage = `[Proxy Rate Limit]: Google upstream rate limit active. Refreshing in ${minCooldownSec}s (Ready at ${refreshTimeStr}). Please wait ${minCooldownSec}s or add an account in the dashboard.`;
+  const accountsSummary = accounts.map(a => {
+    const sec = Math.max(1, Math.ceil((a.cooldownUntil - endNow) / 1000));
+    return `${a.name}: Cooldown (${sec}s)`;
+  }).join(' | ');
 
   return NextResponse.json(
     {
       error: {
-        message: errorMessage,
+        message: `[Proxy Rate Limit]: All Google accounts in pool rate-limited. [${accountsSummary}]. Earliest account ready in ${minCooldownSec}s at ${refreshTimeStr}.`,
         type: 'upstream_rate_limit',
         code: 429,
         retry_after: minCooldownSec,
         refresh_in_seconds: minCooldownSec,
         ready_at: refreshTimeStr,
-        details: lastError ? lastError.message : undefined
+        attempt_history: attemptLogs,
+        accounts_status: accounts.map(a => ({
+          name: a.name,
+          cooldown_remaining_sec: Math.max(1, Math.ceil((a.cooldownUntil - endNow) / 1000))
+        }))
       }
     },
     {
