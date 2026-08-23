@@ -331,10 +331,13 @@ export function transformOpenAIToAntigravity(
     generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };
   }
 
-  const systemInstructionParts: { text: string }[] = [{ text: ANTIGRAVITY_DEFAULT_SYSTEM }];
+  const systemInstructionParts: { text: string }[] = [];
   if (userSystemText) {
     systemInstructionParts.push({ text: userSystemText });
+  } else {
+    systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
+
 
   let wireModel = 'gemini-3.7-flash-tiered';
   if (modelClean.startsWith('gemini-3.7-flash')) wireModel = 'gemini-3.7-flash-tiered';

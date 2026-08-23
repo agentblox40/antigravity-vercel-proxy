@@ -31,6 +31,7 @@ export interface ChatSession {
   title: string;
   createdAt: number;
   updatedAt: number;
+  systemPrompt?: string;
   oocRules: OOCRule[];
   loreFacts: LoreFact[];
   messages: ArchivedMessage[];
@@ -129,7 +130,6 @@ export function extractOOCRules(text: string): string[] {
   return rules;
 }
 
-
 // Derive Character & Chat Fingerprints
 export function deriveChatFingerprint(
   messages: any[],
@@ -178,23 +178,38 @@ export function deriveChatFingerprint(
   };
 }
 
-// Upstash Redis REST helper
+// Upstash Redis REST helper (uses POST with JSON body for infinite payload sizes)
 async function callRedis(command: string, ...args: (string | number)[]): Promise<any> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
 
   try {
-    const res = await fetch(`${url.replace(/\/$/, '')}/${command}/${args.map(encodeURIComponent).join('/')}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const cleanUrl = url.replace(/\/$/, '');
+    const res = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify([command, ...args])
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Fallback to GET URL format if server requires path command
+      const pathRes = await fetch(`${cleanUrl}/${command}/${args.map(encodeURIComponent).join('/')}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!pathRes.ok) return null;
+      const pathData = await pathRes.json();
+      return pathData.result;
+    }
     const data = await res.json();
     return data.result;
   } catch {
     return null;
   }
 }
+
 
 export function isRedisConfigured(): boolean {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
@@ -456,13 +471,17 @@ export function stitchLosslessHistory(
   // Synchronize session state with incoming branch
   syncSessionWithIncomingMessages(session, incomingMessages);
 
-  // If stored archive has more history than incoming (client truncated older turns), prepend older messages
-  if (session.messages && session.messages.length > incomingMessages.length) {
+  // Extract all system messages from incoming (preserves 13k token character card and system directives)
+  const systemMsgs = (incomingMessages || []).filter(m => m && m.role === 'system');
+  const incomingNonSystem = (incomingMessages || []).filter(m => m && m.role !== 'system');
+
+  // If stored archive has more history than incoming non-system turns, stitch the full archive while preserving system messages
+  if (session.messages && session.messages.length > incomingNonSystem.length) {
     const archiveFormatted = session.messages.map(m => ({
       role: m.role === 'assistant' ? 'assistant' : m.role,
       content: m.content
     }));
-    return archiveFormatted;
+    return [...systemMsgs, ...archiveFormatted];
   }
   return incomingMessages;
 }

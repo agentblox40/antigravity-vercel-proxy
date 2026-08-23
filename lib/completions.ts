@@ -114,6 +114,13 @@ export async function handleChatCompletions(req: NextRequest) {
         }
       }
 
+      // Persist full character system prompt into session
+      if (rawSystemText) {
+        session.systemPrompt = rawSystemText;
+      } else if (!rawSystemText && session.systemPrompt) {
+        rawSystemText = session.systemPrompt;
+      }
+
       // Augment system instruction with pinned OOC and active lore
       augmentedSystem = augmentSystemWithMemory(rawSystemText, session);
 

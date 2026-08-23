@@ -8,13 +8,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.1.0';
+export const CURRENT_VERSION = '2.2.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.1.0',
+    version: '2.2.0',
     tag: 'LATEST',
+    title: '13K+ System Prompt Preservation & Zero-Loss Stitching',
+    date: 'Aug 23, 2026',
+    commit: 'latest',
+    description: 'Fixed system prompt drop during history stitching and eliminated coding assistant persona conflict.',
+    highlights: [
+      'Preserved leading system messages across stitchLosslessHistory so 13k token character cards are never dropped.',
+      'Stored full character system prompts in persistent session state to recover from client truncation.',
+      'Upgraded Upstash Redis calls to HTTP POST to eliminate URL length limits on large payloads.',
+      'Prioritized character system prompts directly in systemInstruction to prevent assistant persona conflicts.'
+    ]
+  },
+  {
+    version: '2.1.0',
+    tag: 'MAJOR',
     title: 'Universal Syntax Parsing & Response Length Booster',
     date: 'Aug 23, 2026',
     commit: '7bb7c61',
