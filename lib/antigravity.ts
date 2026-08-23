@@ -254,7 +254,7 @@ export function transformOpenAIToAntigravity(
     if (!text && role !== 'system') continue;
 
     if (role === 'system') {
-      if (!augmentedSystem) {
+      if (!userSystemText.includes(text)) {
         userSystemText = userSystemText ? `${userSystemText}\n\n${text}` : text;
       }
     } else if (role === 'user') {
@@ -289,13 +289,20 @@ export function transformOpenAIToAntigravity(
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
   }
 
-  // If active OOC anchor is present, inject at the last user turn (Depth 0 prompt anchor)
-  if (oocAnchor && merged.length > 0) {
+  // Format & Immersion Anchor at Depth 0 (the immediate active user turn)
+  const formattingAnchor = oocAnchor || `\n\n[Active Formatting & Character Persona Directive]:
+• Adhere strictly to character markdown syntax:
+  - Wrap all character actions, scene narration, and physical movements in *asterisks* (e.g. *she looks away nervously*).
+  - Wrap all spoken dialogue in "double quotes" (e.g. "What do you mean?").
+  - Wrap inner thoughts, telepathy, or internal monologues in \`backticks\` (e.g. \`He definitely saw me...\`).
+• Maintain full immersion in character persona, lore, speech habits, and scenario without breaking character.`;
+
+  if (merged.length > 0) {
     for (let i = merged.length - 1; i >= 0; i--) {
       if (merged[i].role === 'user') {
         const text = merged[i].parts[0]?.text || '';
-        if (!text.includes('[Active Continuity & OOC Directives')) {
-          merged[i].parts[0].text = text + oocAnchor;
+        if (!text.includes('[Active Formatting & Character Persona Directive') && !text.includes('[Active Continuity & OOC Directives')) {
+          merged[i].parts[0].text = text + formattingAnchor;
         }
         break;
       }
@@ -342,6 +349,11 @@ export function transformOpenAIToAntigravity(
   } else {
     systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
+
+  // Explicit formatting & immersion rule in system instruction
+  systemInstructionParts.push({
+    text: 'Formatting Directives: Always wrap actions/narration in *asterisks*, spoken dialogue in "double quotes", and internal thoughts in `backticks`. Maintain complete persona immersion.'
+  });
 
 
   let wireModel = 'gemini-3.7-flash-tiered';

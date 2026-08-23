@@ -391,27 +391,32 @@ export function formatRuleForContinuity(rule: string): string {
   return rule;
 }
 
-// Generate in-context prompt anchor to reinforce active OOC on every turn (prevents Gemini reversion)
+// Generate in-context prompt anchor to reinforce active formatting, markdown syntax, and OOC on every turn (prevents Gemini reversion)
 export function getActiveOOCAnchor(session: ChatSession): string {
-  const activeOOC = session.oocRules.filter(r => r.enabled);
-  const activeLore = session.loreFacts.filter(f => f.enabled);
+  const activeOOC = session ? session.oocRules.filter(r => r.enabled) : [];
+  const activeLore = session ? session.loreFacts.filter(f => f.enabled) : [];
 
-  if (activeOOC.length === 0 && activeLore.length === 0) {
-    return '';
-  }
+  let anchor = '\n\n[Active Formatting & Character Persona Directive]:\n';
+  anchor += '• Adhere strictly to character markdown syntax:\n';
+  anchor += '  - Wrap all character actions, scene narration, and physical movements in *asterisks* (e.g. *she pauses, looking away*).\n';
+  anchor += '  - Wrap all spoken dialogue in "double quotes" (e.g. "What do you mean?").\n';
+  anchor += '  - Wrap inner thoughts, telepathy, or internal monologues in `backticks` (e.g. `I hope he didn\'t notice...`).\n';
+  anchor += '• Maintain full immersion in character persona, lore, and speech habits without breaking character.\n';
 
-  let anchor = '\n\n[Active Continuity & OOC Directives - Mandatory Continuous Adherence]:\n';
   if (activeOOC.length > 0) {
+    anchor += '\nActive Out-Of-Character (OOC) Rules:\n';
     for (const rule of activeOOC) {
       anchor += `• ${formatRuleForContinuity(rule.rule)}\n`;
     }
   }
   if (activeLore.length > 0) {
+    anchor += '\nActive Lore & Context:\n';
     for (const fact of activeLore) {
       anchor += `• ${fact.key}: ${fact.value}\n`;
     }
   }
-  anchor += 'Strictly obey and maintain the active rules and output constraints above across this and all responses.';
+
+  anchor += 'Follow all character guidelines and markdown formatting precisely in your response.';
   return anchor;
 }
 
