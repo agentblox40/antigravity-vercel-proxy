@@ -10,13 +10,18 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const UPSTREAM_URLS = [
+  'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
+  'https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
+];
+
 function checkAuth(req: NextRequest): boolean {
   const proxyKey = process.env.PROXY_API_KEY;
   if (!proxyKey) return true;
   const authHeader = req.headers.get('authorization') || '';
   const customKey = req.headers.get('api-key') || req.headers.get('x-api-key') || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : customKey;
-  return token === proxyKey;
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : customKey.trim();
+  return token === proxyKey.trim();
 }
 
 export async function OPTIONS() {
@@ -34,7 +39,10 @@ export async function POST(req: NextRequest) {
   if (!checkAuth(req)) {
     return NextResponse.json(
       { error: { message: 'Invalid or missing Proxy API Key.', type: 'invalid_request_error', code: 'unauthorized' } },
-      { status: 401 }
+      {
+        status: 401,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      }
     );
   }
 
@@ -42,7 +50,10 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: { message: 'Invalid JSON request body.' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { message: 'Invalid JSON request body.' } },
+      { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+    );
   }
 
   const stream = body.stream === true;
@@ -56,35 +67,43 @@ export async function POST(req: NextRequest) {
       const accessToken = await getAccessToken(account);
       const envelope = transformOpenAIToAntigravity(body, modelId, account.projectId);
 
-      const upstreamRes = await fetch(
-        'https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-            'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64',
-          },
-          body: JSON.stringify(envelope),
-        }
-      );
+      let upstreamRes: Response | null = null;
+      for (const upstreamUrl of UPSTREAM_URLS) {
+        try {
+          const res = await fetch(upstreamUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              Accept: 'text/event-stream',
+              'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64',
+            },
+            body: JSON.stringify(envelope),
+          });
 
-      if (upstreamRes.status === 429) {
-        account.failCount++;
-        account.cooldownUntil = Date.now() + 30000;
-        console.warn(`[429 Rate Limit] on ${account.name}, failing over to sibling account...`);
-        continue;
+          if (res.ok) {
+            upstreamRes = res;
+            break;
+          } else if (res.status === 429) {
+            continue; // try next upstream url or next account
+          } else {
+            const errText = await res.text();
+            console.warn(`Upstream ${upstreamUrl} returned ${res.status}: ${errText}`);
+          }
+        } catch (e) {
+          console.warn(`Error connecting to ${upstreamUrl}:`, e);
+        }
       }
 
-      if (!upstreamRes.ok) {
-        const err = await upstreamRes.text();
-        throw new Error(`Google Antigravity returned ${upstreamRes.status}: ${err}`);
+      if (!upstreamRes) {
+        account.failCount++;
+        account.cooldownUntil = Date.now() + 30000;
+        continue;
       }
 
       account.failCount = 0;
 
-      // Handle Streaming SSE
+      // Streaming response
       if (stream) {
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
@@ -92,7 +111,7 @@ export async function POST(req: NextRequest) {
 
         const customStream = new ReadableStream({
           async start(controller) {
-            const reader = upstreamRes.body?.getReader();
+            const reader = upstreamRes!.body?.getReader();
             if (!reader) {
               controller.close();
               return;
@@ -143,7 +162,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Handle Non-Streaming
+      // Non-streaming response
       const fullText = await upstreamRes.text();
       let fullContent = '';
       const lines = fullText.split('\n');
@@ -185,7 +204,12 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: { message: lastError ? lastError.message : 'All configured accounts failed.' } },
-    { status: 500 }
+    { error: { message: lastError ? lastError.message : 'All configured accounts failed or rate limited.' } },
+    {
+      status: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      },
+    }
   );
 }

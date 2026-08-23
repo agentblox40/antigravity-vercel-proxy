@@ -9,8 +9,8 @@ function checkAuth(req: NextRequest): boolean {
   if (!proxyKey) return true;
   const authHeader = req.headers.get('authorization') || '';
   const customKey = req.headers.get('api-key') || req.headers.get('x-api-key') || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : customKey;
-  return token === proxyKey;
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : customKey.trim();
+  return token === proxyKey.trim();
 }
 
 export async function OPTIONS() {
@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
   if (!checkAuth(req)) {
     return NextResponse.json(
       { error: { message: 'Invalid or missing Proxy API Key.', type: 'invalid_request_error', code: 'unauthorized' } },
-      { status: 401 }
+      {
+        status: 401,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      }
     );
   }
 

@@ -23,29 +23,31 @@ function unmask(bytes: number[]): string {
   return out;
 }
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || unmask(MASKED_CLIENT_ID);
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || unmask(MASKED_CLIENT_SECRET);
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || unmask(MASKED_CLIENT_ID);
+export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || unmask(MASKED_CLIENT_SECRET);
 
 export const ANTIGRAVITY_DEFAULT_SYSTEM = 'You are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.\nYou are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.\n**Absolute paths only**\n**Proactiveness**';
 
 export const SUPPORTED_MODELS = [
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', context_window: 1048576 },
-  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High Reasoning)', context_window: 1048576 },
-  { id: 'gemini-3.7-flash-medium', name: 'Gemini 3.7 Flash (Medium Reasoning)', context_window: 1048576 },
-  { id: 'gemini-3.7-flash-low', name: 'Gemini 3.7 Flash (Low Reasoning)', context_window: 1048576 },
-  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', context_window: 1048576 },
-  { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro Agent', context_window: 1048576 },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', context_window: 1048576 },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', context_window: 1048576 },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', context_window: 1048576 },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', context_window: 1048576 }
+  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', context_window: 1048576, description: 'Default high-speed multimodal reasoning model' },
+  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High Reasoning)', context_window: 1048576, description: 'Max thinking budget (24k tokens) for complex roleplay & storytelling' },
+  { id: 'gemini-3.7-flash-medium', name: 'Gemini 3.7 Flash (Medium Reasoning)', context_window: 1048576, description: 'Balanced thinking budget (8k tokens)' },
+  { id: 'gemini-3.7-flash-low', name: 'Gemini 3.7 Flash (Low Reasoning)', context_window: 1048576, description: 'Low thinking budget (2k tokens) for quick replies' },
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', context_window: 1048576, description: 'Deep reasoning model for detailed narratives' },
+  { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro Agent', context_window: 1048576, description: 'Google Antigravity native Pro agent' },
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', context_window: 1048576, description: 'Ultra-fast lightweight flash tier' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', context_window: 1048576, description: 'Reliable high-throughput flash model' },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', context_window: 1048576, description: 'Anthropic Claude Opus running on Antigravity infrastructure' },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', context_window: 1048576, description: 'Anthropic Claude Sonnet with reasoning' },
+  { id: 'gpt-4o', name: 'GPT-4o (Aliased to Gemini 3.7 Flash)', context_window: 1048576, description: 'Compatibility alias for Janitor AI / SillyTavern default model' },
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Aliased to Gemini 3.7 Flash)', context_window: 1048576, description: 'Compatibility alias for legacy client defaults' }
 ];
 
 let cachedAccounts: AccountConfig[] | null = null;
 let nextAccountIdx = 0;
 
 export function getAccounts(): AccountConfig[] {
-  if (cachedAccounts) return cachedAccounts;
+  if (cachedAccounts && cachedAccounts.length > 0) return cachedAccounts;
   const accounts: AccountConfig[] = [];
   let i = 1;
   while (true) {
@@ -96,7 +98,7 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
     body: params.toString()
   });
   if (!res.ok) throw new Error(`OAuth refresh failed for ${acc.name}: ${await res.text()}`);
-  const data = await res.json();
+  const data: any = await res.json();
   acc.accessToken = data.access_token;
   acc.expiresAt = now + ((data.expires_in || 3600) * 1000);
   if (!acc.projectId) {
@@ -107,17 +109,17 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
         body: JSON.stringify({ metadata: { ideType: 'VSCODE', ideVersion: '1.96.0' } })
       });
       if (metaRes.ok) {
-        const meta = await metaRes.json();
+        const meta: any = await metaRes.json();
         if (meta.project) acc.projectId = meta.project;
       }
     } catch {}
   }
-  return acc.accessToken;
+  return acc.accessToken!;
 }
 
 export function pickAccount(): AccountConfig {
   const accounts = getAccounts();
-  if (accounts.length === 0) throw new Error('No Google Antigravity accounts configured!');
+  if (accounts.length === 0) throw new Error('No Google Antigravity accounts configured in Environment Variables!');
   const now = Date.now();
   for (let i = 0; i < accounts.length; i++) {
     const idx = (nextAccountIdx + i) % accounts.length;
@@ -138,52 +140,83 @@ export function transformOpenAIToAntigravity(body: any, modelId: string, project
   const messages = Array.isArray(body.messages) ? body.messages : [];
   let userSystemText = '';
   const contents: any[] = [];
+
   for (const m of messages) {
     if (!m) continue;
     const role = m.role;
     let text = typeof m.content === 'string' ? m.content : '';
-    if (Array.isArray(m.content)) text = m.content.map((p: any) => typeof p === 'string' ? p : (p?.text || '')).join('\n');
+    if (Array.isArray(m.content)) {
+      text = m.content.map((p: any) => typeof p === 'string' ? p : (p?.text || '')).join('\n');
+    }
+    text = text.trim();
+    if (!text && role !== 'system') continue;
+
     if (role === 'system') {
-      userSystemText = userSystemText ? (userSystemText + '\n\n' + text) : text;
+      userSystemText = userSystemText ? `${userSystemText}\n\n${text}` : text;
     } else if (role === 'user') {
       contents.push({ role: 'user', parts: [{ text }] });
     } else if (role === 'assistant') {
       contents.push({ role: 'model', parts: [{ text }] });
     }
   }
-  if (contents.length === 0) contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
+
+  // Ensure non-empty contents
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
+  }
+
+  // Merge consecutive turns of the same role
   const merged: any[] = [];
   for (const c of contents) {
     const prev = merged[merged.length - 1];
-    if (prev && prev.role === c.role) prev.parts[0].text += '\n\n' + c.parts[0].text;
-    else merged.push({ role: c.role, parts: [{ text: c.parts[0].text }] });
+    if (prev && prev.role === c.role) {
+      prev.parts[0].text += '\n\n' + c.parts[0].text;
+    } else {
+      merged.push({ role: c.role, parts: [{ text: c.parts[0].text }] });
+    }
   }
-  if (merged[0]?.role !== 'user') merged.unshift({ role: 'user', parts: [{ text: '...' }] });
+
+  // Google Antigravity requires the first message to be role: 'user'
+  if (merged[0]?.role !== 'user') {
+    merged.unshift({ role: 'user', parts: [{ text: '...' }] });
+  }
+
+  const maxTokens = typeof body.max_tokens === 'number' && body.max_tokens > 0 
+    ? body.max_tokens 
+    : (typeof body.max_completion_tokens === 'number' && body.max_completion_tokens > 0 ? body.max_completion_tokens : 8192);
+
   const generationConfig: any = {
     temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
-    maxOutputTokens: typeof body.max_tokens === 'number' ? body.max_tokens : (body.max_completion_tokens || 8192),
+    maxOutputTokens: maxTokens,
     topK: typeof body.top_k === 'number' ? body.top_k : 40,
     topP: typeof body.top_p === 'number' ? body.top_p : 1
   };
+
   let thinkingBudget = 0;
   if (modelId.includes('high') || body.reasoning_effort === 'high') thinkingBudget = 24576;
   else if (modelId.includes('low') || body.reasoning_effort === 'low') thinkingBudget = 2048;
   else if (modelId.includes('medium') || body.reasoning_effort === 'medium') thinkingBudget = 8192;
   else if (body.reasoning_effort === 'max' || modelId.includes('max') || modelId.includes('xhigh')) thinkingBudget = 65536;
   else if (body.thinking?.budget_tokens) thinkingBudget = body.thinking.budget_tokens;
-  if (thinkingBudget > 0) generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };
+  
+  if (thinkingBudget > 0) {
+    generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };
+  }
 
   const systemInstructionText = userSystemText 
     ? `${ANTIGRAVITY_DEFAULT_SYSTEM}\n\n[USER INSTRUCTIONS / CHARACTER DEFINITION]\n${userSystemText}`
     : ANTIGRAVITY_DEFAULT_SYSTEM;
 
-  let wireModel = modelId;
-  if (modelId.startsWith('gemini-3.7-flash')) wireModel = 'gemini-3.7-flash-tiered';
-  else if (modelId === 'gemini-3.1-pro') wireModel = 'gemini-pro-agent';
-  else if (modelId === 'gemini-3.5-flash') wireModel = 'gemini-3-flash-agent';
+  let wireModel = 'gemini-3.7-flash-tiered';
+  const cleanModel = modelId.toLowerCase();
+  if (cleanModel.startsWith('gemini-3.7-flash')) wireModel = 'gemini-3.7-flash-tiered';
+  else if (cleanModel === 'gemini-3.1-pro' || cleanModel === 'gemini-pro-agent') wireModel = 'gemini-pro-agent';
+  else if (cleanModel.startsWith('gemini-3.5-flash') || cleanModel === 'gemini-3-flash-agent') wireModel = 'gemini-3-flash-agent';
+  else if (cleanModel.includes('claude-opus')) wireModel = 'claude-opus-4-6-thinking';
+  else if (cleanModel.includes('claude-sonnet')) wireModel = 'claude-sonnet-4-6';
 
-  const reqObj = {
-    sessionId: String(Date.now()),
+  const reqObj: any = {
+    sessionId: `-${Date.now()}`,
     contents: merged,
     systemInstruction: { role: 'system', parts: [{ text: systemInstructionText }] },
     generationConfig
