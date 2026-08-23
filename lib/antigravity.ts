@@ -147,10 +147,10 @@ export function getAccounts(): AccountConfig[] {
   const accounts: AccountConfig[] = [];
   let i = 1;
   while (true) {
-    const token = process.env[`ACCOUNT_${i}_REFRESH_TOKEN`];
+    const token = (process.env[`ACCOUNT_${i}_REFRESH_TOKEN`] || '').trim();
     if (!token) break;
-    const name = process.env[`ACCOUNT_${i}_NAME`] || `Account ${i}`;
-    const projectId = process.env[`ACCOUNT_${i}_PROJECT_ID`] || '';
+    const name = (process.env[`ACCOUNT_${i}_NAME`] || `Account ${i}`).trim();
+    const projectId = (process.env[`ACCOUNT_${i}_PROJECT_ID`] || '').trim();
     accounts.push({
       id: `acc-${i}`,
       name,
@@ -167,7 +167,7 @@ export function getAccounts(): AccountConfig[] {
     accounts.push({
       id: 'acc-default',
       name: 'Default Account',
-      refreshToken: process.env.ANTIGRAVITY_REFRESH_TOKEN,
+      refreshToken: process.env.ANTIGRAVITY_REFRESH_TOKEN.trim(),
       projectId: process.env.ANTIGRAVITY_PROJECT_ID || '',
       accessToken: null,
       expiresAt: 0,

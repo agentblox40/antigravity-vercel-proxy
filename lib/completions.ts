@@ -135,16 +135,18 @@ export async function handleChatCompletions(req: NextRequest) {
   }
 
   let lastError: any = null;
-  for (let attempt = 0; attempt < Math.max(1, accounts.length); attempt++) {
+  const accountsToTry = Math.max(2, accounts.length * 2);
+
+  for (let attempt = 0; attempt < accountsToTry; attempt++) {
     const account = pickAccount();
     try {
       const accessToken = await getAccessToken(account);
-      const envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, augmentedSystem, oocAnchor);
+      let envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, augmentedSystem, oocAnchor);
 
       let upstreamRes: Response | null = null;
       for (const upstreamUrl of UPSTREAM_URLS) {
         try {
-          const res = await fetch(upstreamUrl, {
+          let res = await fetch(upstreamUrl, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -155,27 +157,48 @@ export async function handleChatCompletions(req: NextRequest) {
             body: JSON.stringify(envelope),
           });
 
+          // If model has no capacity (503) or is unsupported (404/400), fallback to gemini-3.7-flash-tiered
+          if ((res.status === 503 || res.status === 404 || res.status === 400) && envelope.model !== 'gemini-3.7-flash-tiered') {
+            console.warn(`Upstream returned ${res.status} for ${envelope.model}. Auto-falling back to gemini-3.7-flash-tiered...`);
+            envelope = transformOpenAIToAntigravity(body, 'gemini-3.7-flash', account.projectId, augmentedSystem, oocAnchor);
+            res = await fetch(upstreamUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                Accept: 'text/event-stream',
+                'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64',
+              },
+              body: JSON.stringify(envelope),
+            });
+          }
+
           if (res.ok) {
             upstreamRes = res;
             break;
           } else if (res.status === 429) {
+            lastError = new Error(`Google CloudCode rate limited (${account.name}) on ${upstreamUrl}`);
             continue;
           } else {
             const errText = await res.text();
+            lastError = new Error(`Google Upstream Error (${res.status}): ${errText.slice(0, 200)}`);
             console.warn(`Upstream ${upstreamUrl} returned ${res.status}: ${errText}`);
           }
-        } catch (e) {
+        } catch (e: any) {
+          lastError = e;
           console.warn(`Error connecting to ${upstreamUrl}:`, e);
         }
       }
 
       if (!upstreamRes) {
         account.failCount++;
-        account.cooldownUntil = Date.now() + 30000;
+        account.cooldownUntil = Date.now() + 20000;
         continue;
       }
 
       account.failCount = 0;
+      account.cooldownUntil = 0;
+
 
       // Streaming response with clean reasoning_content routing for Janitor AI
       if (stream) {
