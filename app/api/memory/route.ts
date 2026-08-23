@@ -89,6 +89,7 @@ export async function GET(req: NextRequest) {
           title: s.title || 'Chat Session',
           createdAt: s.createdAt,
           updatedAt: s.updatedAt,
+          messages: msgs,
           messageCount: msgs.length,
           estimatedTokens: Math.floor(totalChars / 4),
           lastMessagePreview: lastMsg ? `${lastMsg.role === 'user' ? 'User' : s.characterName}: ${lastMsg.content.slice(0, 75).replace(/[\r\n]+/g, ' ')}...` : 'Empty session'

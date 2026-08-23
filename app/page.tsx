@@ -342,20 +342,27 @@ export default function AntigravityControlCenter() {
 
   const fetchMemoryOverview = async (currentKey = apiKey) => {
     if (!currentKey) return;
-    setIsLoadingMemory(true);
+    if (memorySessions.length === 0) {
+      setIsLoadingMemory(true);
+    }
     try {
       const res = await fetch('/api/memory', {
         headers: { 'Authorization': `Bearer ${currentKey}` }
       });
       if (res.ok) {
         const data = await res.json();
+        const incomingSessions = data.sessions || [];
         setMemoryCharacters(data.characters || []);
-        setMemorySessions(data.sessions || []);
+        setMemorySessions(incomingSessions);
         setMemoryStats(data.stats || {});
 
-        // If no chat selected, select the first one if available
-        if (!selectedChatId && data.sessions && data.sessions.length > 0) {
-          fetchSingleSession(data.sessions[0].id, currentKey);
+        // Immediately select the first session from local memory with 0ms delay
+        if (!selectedChatId && incomingSessions.length > 0) {
+          setSelectedChatId(incomingSessions[0].id);
+          setSelectedSession(incomingSessions[0]);
+        } else if (selectedChatId) {
+          const active = incomingSessions.find((s: any) => s.id === selectedChatId);
+          if (active) setSelectedSession(active);
         }
       }
     } catch {}
@@ -365,15 +372,29 @@ export default function AntigravityControlCenter() {
   };
 
   const fetchSingleSession = async (chatId: string, currentKey = apiKey) => {
-    if (!currentKey || !chatId) return;
+    if (!chatId) return;
+    setSelectedChatId(chatId);
+
+    // Instant 0ms render from cached state
+    const local = memorySessions.find(s => s.id === chatId);
+    if (local) {
+      setSelectedSession(local);
+      if (local.messages && local.messages.length > 0) {
+        return;
+      }
+    }
+
+    if (!currentKey) return;
     try {
       const res = await fetch(`/api/memory?chatId=${encodeURIComponent(chatId)}`, {
         headers: { 'Authorization': `Bearer ${currentKey}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedChatId(chatId);
-        setSelectedSession(data.session);
+        if (data.session) {
+          setSelectedSession(data.session);
+          setMemorySessions(prev => prev.map(s => s.id === chatId ? { ...s, ...data.session } : s));
+        }
       }
     } catch {}
   };
