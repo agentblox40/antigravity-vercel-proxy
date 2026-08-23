@@ -103,17 +103,6 @@ export async function handleChatCompletions(req: NextRequest) {
 
       session = await getOrCreateChatSession(chatId, characterId, characterName, sessionTitle);
 
-      // Extract and ingest any OOC rules from latest user prompt
-      if (latestUserText) {
-        const detectedRules = extractOOCRules(latestUserText);
-        if (detectedRules.length > 0) {
-          const changed = ingestOOCIntoSession(session, detectedRules);
-          if (changed) {
-            await saveChatSession(session);
-          }
-        }
-      }
-
       // Persist full character system prompt into session
       if (rawSystemText) {
         session.systemPrompt = rawSystemText;
@@ -121,10 +110,10 @@ export async function handleChatCompletions(req: NextRequest) {
         rawSystemText = session.systemPrompt;
       }
 
-      // Augment system instruction with pinned OOC and active lore
+      // Augment system instruction with manual notes and active lore
       augmentedSystem = augmentSystemWithMemory(rawSystemText, session);
 
-      // Generate in-context Depth 0 OOC anchor to reinforce active OOC on every turn
+      // Generate in-context Depth 0 anchor for formatting & immersion
       oocAnchor = getActiveOOCAnchor(session);
 
       // Stitch history if client truncated earlier messages

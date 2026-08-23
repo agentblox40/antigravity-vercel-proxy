@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { checkAuth } from '@/lib/completions';
 import {
   listAllSessions,
+  getSessionById,
   getOrCreateChatSession,
   saveChatSession,
   deleteChatSession,
@@ -37,10 +38,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const chatId = searchParams.get('chatId');
 
-  const sessions = await listAllSessions();
-
   if (chatId) {
-    const session = sessions.find(s => s.id === chatId);
+    const session = await getSessionById(chatId);
     if (!session) {
       return NextResponse.json(
         { error: { message: 'Session not found.' } },
@@ -55,6 +54,8 @@ export async function GET(req: NextRequest) {
       { headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }
+
+  const sessions = await listAllSessions();
 
   // Group by character
   const charMap = new Map<string, { characterId: string; characterName: string; chatCount: number; lastActive: number; oocRuleCount: number }>();
@@ -141,8 +142,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const sessions = await listAllSessions();
-  let session = sessions.find(s => s.id === chatId);
+  let session = await getSessionById(chatId);
 
   if (!session) {
     session = await getOrCreateChatSession(chatId, body.characterId || 'char_default', body.characterName || 'Character', 'New Chat');

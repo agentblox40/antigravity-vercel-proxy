@@ -606,9 +606,11 @@ export default function AntigravityControlCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedSession(data.session);
+        if (data.session) {
+          setSelectedSession(data.session);
+          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, oocCount: (data.session.oocRules || []).length, loreCount: (data.session.loreFacts || []).length } : s));
+        }
         setNewOOCInput('');
-        fetchMemoryOverview();
       }
     } catch {}
   };
@@ -623,8 +625,9 @@ export default function AntigravityControlCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedSession(data.session);
-        fetchMemoryOverview();
+        if (data.session) {
+          setSelectedSession(data.session);
+        }
       }
     } catch {}
   };
@@ -639,8 +642,10 @@ export default function AntigravityControlCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedSession(data.session);
-        fetchMemoryOverview();
+        if (data.session) {
+          setSelectedSession(data.session);
+          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, oocCount: (data.session.oocRules || []).length } : s));
+        }
       }
     } catch {}
   };
@@ -655,10 +660,12 @@ export default function AntigravityControlCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedSession(data.session);
+        if (data.session) {
+          setSelectedSession(data.session);
+          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, loreCount: (data.session.loreFacts || []).length } : s));
+        }
         setNewLoreKey('');
         setNewLoreVal('');
-        fetchMemoryOverview();
       }
     } catch {}
   };
@@ -673,8 +680,10 @@ export default function AntigravityControlCenter() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSelectedSession(data.session);
-        fetchMemoryOverview();
+        if (data.session) {
+          setSelectedSession(data.session);
+          setMemorySessions(prev => prev.map(s => s.id === data.session.id ? { ...s, loreCount: (data.session.loreFacts || []).length } : s));
+        }
       }
     } catch {}
   };

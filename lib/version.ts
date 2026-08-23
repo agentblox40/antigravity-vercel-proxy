@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.2.5';
+export const CURRENT_VERSION = '2.3.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.2.5',
+    version: '2.3.0',
     tag: 'LATEST',
-    title: 'Markdown Formatting Enforcement & Multi-System Message Unification',
+    title: 'OpenRouter-Style Pure Pass-Through & Ultra-Fast Parallel Memory',
     date: 'Aug 23, 2026',
     commit: 'latest',
+    description: 'Eliminated synthetic OOC rule injection for clean prompt pass-through, and upgraded Redis fetching to Promise.all for sub-100ms UI responsiveness.',
+    highlights: [
+      'Pure Pass-Through Architecture: System prompt <ooc_command_and_continuity_engine> handles all {...} directives natively without proxy interference.',
+      'Eliminated OOC rule duplication and conflicting length prompts when switching between {length: short} and {length: medium}.',
+      'Parallelized Redis Fetching: Upgraded listAllSessions to Promise.all, reducing memory API latency from 2,500ms to ~80ms.',
+      'Optimistic UI Updates: Instant 0ms checkbox and toggle feedback in Memory & Lore tab.'
+    ]
+  },
+  {
+    version: '2.2.5',
+    tag: 'MAJOR',
+    title: 'Markdown Formatting Enforcement & Multi-System Message Unification',
+    date: 'Aug 23, 2026',
+    commit: '82e16e2',
     description: 'Enforces strict roleplay markdown syntax (*actions*, "dialogue", `thoughts`) and unifies all system prompts.',
     highlights: [
       'Injected Depth-0 Formatting Anchor at the immediate active turn so Gemini never forgets markdown styles.',

@@ -302,17 +302,32 @@ export async function deleteChatSession(chatId: string): Promise<boolean> {
   return true;
 }
 
-// List all sessions
+// Direct single-session lookup (O(1) retrieval)
+export async function getSessionById(chatId: string): Promise<ChatSession | null> {
+  if (isRedisConfigured()) {
+    try {
+      const raw = await callRedis('GET', `antigravity:session:${chatId}`);
+      if (raw) {
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+      }
+    } catch {}
+  }
+  return memoryStore.get(chatId) || null;
+}
+
+// List all sessions (Ultra-fast parallel retrieval via Promise.all)
 export async function listAllSessions(): Promise<ChatSession[]> {
   const sessions: ChatSession[] = [];
 
   if (isRedisConfigured()) {
     try {
       const ids: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
-      for (const id of ids) {
-        const raw = await callRedis('GET', `antigravity:session:${id}`);
-        if (raw) {
-          sessions.push(typeof raw === 'string' ? JSON.parse(raw) : raw);
+      if (ids && ids.length > 0) {
+        const rawList = await Promise.all(ids.map(id => callRedis('GET', `antigravity:session:${id}`)));
+        for (const raw of rawList) {
+          if (raw) {
+            sessions.push(typeof raw === 'string' ? JSON.parse(raw) : raw);
+          }
         }
       }
     } catch {}
@@ -328,7 +343,7 @@ export async function listAllSessions(): Promise<ChatSession[]> {
   return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-// Ingest new OOC rules into session
+// Ingest manual or explicit OOC rules into session
 export function ingestOOCIntoSession(session: ChatSession, newRules: string[]): boolean {
   let changed = false;
   for (const r of newRules) {
@@ -339,7 +354,7 @@ export function ingestOOCIntoSession(session: ChatSession, newRules: string[]): 
         rule: r,
         enabled: true,
         addedAt: Date.now(),
-        source: 'auto'
+        source: 'manual'
       });
       changed = true;
     }
@@ -347,7 +362,7 @@ export function ingestOOCIntoSession(session: ChatSession, newRules: string[]): 
   return changed;
 }
 
-// Augment System Prompt with Memory & OOC Directives
+// Augment System Prompt with Memory & Manual Lore Directives
 export function augmentSystemWithMemory(baseSystem: string, session: ChatSession): string {
   const activeOOC = session.oocRules.filter(r => r.enabled);
   const activeLore = session.loreFacts.filter(f => f.enabled);
@@ -356,10 +371,10 @@ export function augmentSystemWithMemory(baseSystem: string, session: ChatSession
     return baseSystem;
   }
 
-  let memoryBlock = '\n\n[PERSISTENT CHAT MEMORY & ACTIVE OOC RULES]\n';
+  let memoryBlock = '\n\n[PERSISTENT CHAT MEMORY & ACTIVE NOTES]\n';
 
   if (activeOOC.length > 0) {
-    memoryBlock += 'Active Out-Of-Character (OOC) Directives:\n';
+    memoryBlock += 'Active Directives & Notes:\n';
     for (const rule of activeOOC) {
       memoryBlock += `• ${rule.rule}\n`;
     }
@@ -372,26 +387,16 @@ export function augmentSystemWithMemory(baseSystem: string, session: ChatSession
     }
   }
 
-  memoryBlock += '\n[MANDATORY CONTINUITY DIRECTIVE]\nAlways adhere strictly to the persistent OOC rules and lore state defined above.';
+  memoryBlock += '\n[MANDATORY CONTINUITY DIRECTIVE]\nMaintain consistency with the persistent lore and notes state defined above.';
 
   return baseSystem + memoryBlock;
 }
 
 export function formatRuleForContinuity(rule: string): string {
-  const lower = rule.toLowerCase().trim();
-  if (lower.startsWith('length:') || lower.includes('length') || lower.includes('paragraphs') || lower.includes('short')) {
-    if (lower.includes('short') || lower.includes('brief') || lower.includes('concise') || lower.includes('1 paragraph') || lower.includes('1-2 paragraphs') || lower.includes('tiny')) {
-      return `Response Length: STRICT SHORT FORMAT (Limit entire output to 1-2 concise paragraphs maximum. Do not generate long text.)`;
-    } else if (lower.includes('medium')) {
-      return `Response Length: Medium (Keep response balanced, around 2-4 paragraphs).`;
-    } else if (lower.includes('long') || lower.includes('detailed') || lower.includes('verbose')) {
-      return `Response Length: Detailed and descriptive (Multi-paragraph immersive output).`;
-    }
-  }
-  return rule;
+  return rule.trim();
 }
 
-// Generate in-context prompt anchor to reinforce active formatting, markdown syntax, and OOC on every turn (prevents Gemini reversion)
+// Generate in-context prompt anchor to reinforce active formatting, markdown syntax, and manual lore on every turn
 export function getActiveOOCAnchor(session: ChatSession): string {
   const activeOOC = session ? session.oocRules.filter(r => r.enabled) : [];
   const activeLore = session ? session.loreFacts.filter(f => f.enabled) : [];
@@ -404,9 +409,9 @@ export function getActiveOOCAnchor(session: ChatSession): string {
   anchor += '• Maintain full immersion in character persona, lore, and speech habits without breaking character.\n';
 
   if (activeOOC.length > 0) {
-    anchor += '\nActive Out-Of-Character (OOC) Rules:\n';
+    anchor += '\nActive Directives & Notes:\n';
     for (const rule of activeOOC) {
-      anchor += `• ${formatRuleForContinuity(rule.rule)}\n`;
+      anchor += `• ${rule.rule}\n`;
     }
   }
   if (activeLore.length > 0) {
