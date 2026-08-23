@@ -454,9 +454,9 @@ export function syncSessionWithIncomingMessages(
     // Case 2: Multi-turn deletion / rewind (user deleted 2+ messages or rewound chat to an earlier point)
     for (let i = current.length - 1; i >= 0; i--) {
       if (current[i].role === 'user' && current[i].content.trim() === lastUserText) {
-        // Truncate all discarded messages after this point so deleted history is removed
-        session.messages = current.slice(0, i);
-        break;
+        // Keep history up to this user turn (inclusive)
+        session.messages = current.slice(0, i + 1);
+        return;
       }
     }
   }
@@ -475,10 +475,31 @@ export function stitchLosslessHistory(
   const systemMsgs = (incomingMessages || []).filter(m => m && m.role === 'system');
   const incomingNonSystem = (incomingMessages || []).filter(m => m && m.role !== 'system');
 
+  if (incomingNonSystem.length === 0) return incomingMessages;
+
+  const latestIncoming = incomingNonSystem[incomingNonSystem.length - 1];
+
   // If stored archive has more history than incoming non-system turns, stitch the full archive while preserving system messages
   if (session.messages && session.messages.length > incomingNonSystem.length) {
-    const archiveFormatted = session.messages.map(m => ({
-      role: m.role === 'assistant' ? 'assistant' : m.role,
+    let archive = [...session.messages];
+
+    // Ensure the archive always ends with a user turn if the incoming turn was a user turn
+    if (latestIncoming.role === 'user') {
+      while (archive.length > 0 && archive[archive.length - 1].role !== 'user') {
+        archive.pop();
+      }
+      if (archive.length === 0 || archive[archive.length - 1].content.trim() !== (latestIncoming.content || '').trim()) {
+        archive.push({
+          id: 'msg_user_' + Date.now(),
+          role: 'user',
+          content: latestIncoming.content,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    const archiveFormatted = archive.map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content
     }));
     return [...systemMsgs, ...archiveFormatted];

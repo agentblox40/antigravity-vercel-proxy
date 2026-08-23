@@ -280,8 +280,13 @@ export function transformOpenAIToAntigravity(
   }
 
   // Google Antigravity requires first turn to be 'user'
-  if (merged[0]?.role !== 'user') {
+  if (merged.length === 0 || merged[0]?.role !== 'user') {
     merged.unshift({ role: 'user', parts: [{ text: '...' }] });
+  }
+
+  // Google Antigravity requires last turn to be 'user' (never model/assistant)
+  if (merged[merged.length - 1]?.role === 'model') {
+    merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
   }
 
   // If active OOC anchor is present, inject at the last user turn (Depth 0 prompt anchor)

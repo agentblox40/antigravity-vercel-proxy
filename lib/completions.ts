@@ -234,7 +234,10 @@ export async function handleChatCompletions(req: NextRequest) {
 
       if (!upstreamRes) {
         account.failCount++;
-        account.cooldownUntil = Date.now() + 20000;
+        const hasRateLimit = attemptLogs.some(l => l.account === account.name && (l.status === 429 || l.status === 503));
+        if (hasRateLimit) {
+          account.cooldownUntil = Date.now() + 20000;
+        }
         continue;
       }
 
