@@ -232,9 +232,9 @@ export function pickAccount(): AccountConfig {
   return best;
 }
 
-export function transformOpenAIToAntigravity(body: any, modelId: string, projectId: string) {
+export function transformOpenAIToAntigravity(body: any, modelId: string, projectId: string, augmentedSystem?: string) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
-  let userSystemText = '';
+  let userSystemText = augmentedSystem || '';
   const contents: any[] = [];
 
   for (const m of messages) {
@@ -248,7 +248,9 @@ export function transformOpenAIToAntigravity(body: any, modelId: string, project
     if (!text && role !== 'system') continue;
 
     if (role === 'system') {
-      userSystemText = userSystemText ? `${userSystemText}\n\n${text}` : text;
+      if (!augmentedSystem) {
+        userSystemText = userSystemText ? `${userSystemText}\n\n${text}` : text;
+      }
     } else if (role === 'user') {
       contents.push({ role: 'user', parts: [{ text }] });
     } else if (role === 'assistant') {

@@ -49,6 +49,16 @@ const Icons = {
       <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
     </svg>
   ),
+  Book: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/>
+    </svg>
+  ),
+  FileText: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
+    </svg>
+  ),
   Copy: () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
@@ -93,6 +103,26 @@ const Icons = {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
     </svg>
+  ),
+  Trash: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+    </svg>
+  ),
+  Plus: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  ),
+  Pin: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+    </svg>
+  ),
+  Download: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+    </svg>
   )
 };
 
@@ -104,7 +134,7 @@ const PRESETS = [
 ];
 
 export default function AntigravityControlCenter() {
-  const [activeTab, setActiveTab] = useState<'models' | 'playground' | 'controls' | 'accounts' | 'clients' | 'analytics'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'logs' | 'memory' | 'playground' | 'controls' | 'accounts' | 'clients' | 'analytics'>('models');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
@@ -147,6 +177,26 @@ export default function AntigravityControlCenter() {
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [totalTokensServed, setTotalTokensServed] = useState(32400);
   const [requestsCount, setRequestsCount] = useState(38);
+
+  // Persistent Memory & Logged Chats State
+  const [memoryStats, setMemoryStats] = useState<any>({
+    totalCharacters: 0,
+    totalSessions: 0,
+    totalOOCRules: 0,
+    totalArchivedMessages: 0,
+    storageMode: 'Checking...',
+    redisConnected: false
+  });
+  const [memoryCharacters, setMemoryCharacters] = useState<any[]>([]);
+  const [memorySessions, setMemorySessions] = useState<any[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<any | null>(null);
+  const [isLoadingMemory, setIsLoadingMemory] = useState(false);
+  const [memorySearch, setMemorySearch] = useState('');
+  const [selectedCharFilter, setSelectedCharFilter] = useState<string>('all');
+  const [newOOCInput, setNewOOCInput] = useState('');
+  const [newLoreKey, setNewLoreKey] = useState('');
+  const [newLoreVal, setNewLoreVal] = useState('');
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -229,6 +279,9 @@ export default function AntigravityControlCenter() {
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
         }
+
+        // Fetch memory overview
+        fetchMemoryOverview(trimmed);
       } else {
         setLoginError('Invalid Key. Access Denied.');
         setIsAuthenticated(false);
@@ -239,6 +292,44 @@ export default function AntigravityControlCenter() {
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const fetchMemoryOverview = async (currentKey = apiKey) => {
+    if (!currentKey) return;
+    setIsLoadingMemory(true);
+    try {
+      const res = await fetch('/api/memory', {
+        headers: { 'Authorization': `Bearer ${currentKey}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMemoryCharacters(data.characters || []);
+        setMemorySessions(data.sessions || []);
+        setMemoryStats(data.stats || {});
+
+        // If no chat selected, select the first one if available
+        if (!selectedChatId && data.sessions && data.sessions.length > 0) {
+          fetchSingleSession(data.sessions[0].id, currentKey);
+        }
+      }
+    } catch {}
+    finally {
+      setIsLoadingMemory(false);
+    }
+  };
+
+  const fetchSingleSession = async (chatId: string, currentKey = apiKey) => {
+    if (!currentKey || !chatId) return;
+    try {
+      const res = await fetch(`/api/memory?chatId=${encodeURIComponent(chatId)}`, {
+        headers: { 'Authorization': `Bearer ${currentKey}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedChatId(chatId);
+        setSelectedSession(data.session);
+      }
+    } catch {}
   };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -288,6 +379,40 @@ export default function AntigravityControlCenter() {
     navigator.clipboard.writeText(text);
     setCopiedField(label);
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const copyTranscriptMarkdown = (session: any) => {
+    if (!session || !session.messages) return;
+    let md = `# Roleplay Transcript: ${session.characterName} - ${session.title}\n`;
+    md += `*Session ID: ${session.id} | Turns: ${session.messages.length}*\n\n---\n\n`;
+
+    if (session.oocRules && session.oocRules.length > 0) {
+      md += `### Active Pinned OOC Rules:\n`;
+      for (const r of session.oocRules) {
+        if (r.enabled) md += `- ${r.rule}\n`;
+      }
+      md += `\n---\n\n`;
+    }
+
+    for (const m of session.messages) {
+      const speaker = m.role === 'user' ? 'User' : session.characterName;
+      md += `### **${speaker}**\n${m.content}\n\n`;
+    }
+
+    copyToClipboard(md, `transcript_${session.id}`);
+  };
+
+  const downloadTranscriptJson = (session: any) => {
+    if (!session) return;
+    const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transcript_${session.characterName || 'chat'}_${session.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleSendMessage = async () => {
@@ -373,6 +498,9 @@ export default function AntigravityControlCenter() {
       setTotalTokensServed(prev => prev + Math.floor((userText.length + accumulatedContent.length + accumulatedThought.length) / 3));
       setRequestsCount(prev => prev + 1);
       setLatencyMs(Date.now() - start);
+
+      // Refresh memory if active
+      setTimeout(() => fetchMemoryOverview(), 1000);
     } catch (err: any) {
       setMessages([...newHistory, { role: 'assistant', content: `Error: ${err.message}` }]);
     } finally {
@@ -380,6 +508,123 @@ export default function AntigravityControlCenter() {
       setCurrentThought('');
       setCurrentDelta('');
     }
+  };
+
+  // Memory Action Handlers
+  const handleAddOOCRule = async () => {
+    if (!newOOCInput.trim() || !selectedChatId) return;
+    try {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ action: 'add_ooc', chatId: selectedChatId, rule: newOOCInput.trim() })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedSession(data.session);
+        setNewOOCInput('');
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
+  const handleToggleOOCRule = async (ruleId: string) => {
+    if (!selectedChatId) return;
+    try {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ action: 'toggle_ooc', chatId: selectedChatId, ruleId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedSession(data.session);
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
+  const handleDeleteOOCRule = async (ruleId: string) => {
+    if (!selectedChatId) return;
+    try {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ action: 'delete_ooc', chatId: selectedChatId, ruleId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedSession(data.session);
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
+  const handleAddLoreFact = async () => {
+    if (!newLoreKey.trim() || !newLoreVal.trim() || !selectedChatId) return;
+    try {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ action: 'add_lore', chatId: selectedChatId, key: newLoreKey.trim(), value: newLoreVal.trim() })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedSession(data.session);
+        setNewLoreKey('');
+        setNewLoreVal('');
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
+  const handleDeleteLoreFact = async (factId: string) => {
+    if (!selectedChatId) return;
+    try {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ action: 'delete_lore', chatId: selectedChatId, factId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedSession(data.session);
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
+  const handleDeleteChatSession = async (chatId: string) => {
+    if (!confirm('Are you sure you want to delete this chat session memory?')) return;
+    try {
+      const res = await fetch(`/api/memory?chatId=${encodeURIComponent(chatId)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+      if (res.ok) {
+        if (selectedChatId === chatId) {
+          setSelectedChatId(null);
+          setSelectedSession(null);
+        }
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
+  const handleClearChatHistory = async (chatId: string) => {
+    if (!confirm('Clear message history for this chat? (Pinned OOC rules and lore facts will be kept)')) return;
+    try {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ action: 'clear_history', chatId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedSession(data.session);
+        fetchMemoryOverview();
+      }
+    } catch {}
   };
 
   const isDark = effectiveTheme === 'dark';
@@ -409,8 +654,17 @@ export default function AntigravityControlCenter() {
     (m.desc && m.desc.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const filteredSessions = memorySessions.filter(s => {
+    const matchesSearch = (s.title && s.title.toLowerCase().includes(memorySearch.toLowerCase())) ||
+      (s.characterName && s.characterName.toLowerCase().includes(memorySearch.toLowerCase())) ||
+      (s.id && s.id.toLowerCase().includes(memorySearch.toLowerCase())) ||
+      (s.lastMessagePreview && s.lastMessagePreview.toLowerCase().includes(memorySearch.toLowerCase()));
+    
+    const matchesChar = selectedCharFilter === 'all' || s.characterId === selectedCharFilter;
+    return matchesSearch && matchesChar;
+  });
+
   const baseUrl = origin ? `${origin}/v1` : 'https://your-app.vercel.app/v1';
-  const chatUrl = origin ? `${origin}/v1/chat/completions` : 'https://your-app.vercel.app/v1/chat/completions';
 
   // Render Loading Splash while checking key
   if (isAuthenticated === null) {
@@ -449,11 +703,11 @@ export default function AntigravityControlCenter() {
             </p>
           </div>
 
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
               <input
                 type="password"
-                placeholder="Enter your API Key..."
+                placeholder="Enter PROXY_API_KEY..."
                 value={loginKeyInput}
                 onChange={e => setLoginKeyInput(e.target.value)}
                 autoFocus
@@ -461,17 +715,16 @@ export default function AntigravityControlCenter() {
                   width: '100%',
                   boxSizing: 'border-box',
                   background: colors.inputBg,
-                  border: `1px solid ${colors.border}`,
+                  border: `1px solid ${loginError ? '#ef4444' : colors.border}`,
                   borderRadius: 8,
-                  padding: '12px 14px',
+                  padding: '11px 14px',
                   color: colors.textMain,
                   fontSize: 13,
-                  outline: 'none',
-                  fontFamily: 'monospace'
+                  outline: 'none'
                 }}
               />
               {loginError && (
-                <div style={{ marginTop: 6, fontSize: 11, color: '#ef4444', fontWeight: 600 }}>
+                <div style={{ color: '#ef4444', fontSize: 11, marginTop: 6, fontWeight: 600 }}>
                   {loginError}
                 </div>
               )}
@@ -481,11 +734,12 @@ export default function AntigravityControlCenter() {
               type="submit"
               disabled={isVerifying}
               style={{
+                width: '100%',
                 background: colors.btnPrimaryBg,
                 color: colors.btnPrimaryText,
                 border: 'none',
                 borderRadius: 8,
-                padding: '12px 0',
+                padding: '11px 0',
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: isVerifying ? 'not-allowed' : 'pointer',
@@ -520,6 +774,8 @@ export default function AntigravityControlCenter() {
           <div style={{ display: 'flex', gap: 2, background: colors.cardInner, padding: 3, borderRadius: 8, border: `1px solid ${colors.border}` }}>
             {[
               { id: 'models', label: 'Models Catalog', icon: <Icons.Cpu /> },
+              { id: 'logs', label: 'Logged Chats', icon: <Icons.FileText /> },
+              { id: 'memory', label: 'Memory & Lore', icon: <Icons.Book /> },
               { id: 'playground', label: 'Roleplay Studio', icon: <Icons.Chat /> },
               { id: 'controls', label: 'Model Controls', icon: <Icons.Sliders /> },
               { id: 'accounts', label: 'Accounts & Quota', icon: <Icons.Server /> },
@@ -528,7 +784,10 @@ export default function AntigravityControlCenter() {
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  if (tab.id === 'memory' || tab.id === 'logs') fetchMemoryOverview();
+                }}
                 style={{
                   background: activeTab === tab.id ? (isDark ? '#222226' : '#ffffff') : 'transparent',
                   color: activeTab === tab.id ? colors.textMain : colors.textMuted,
@@ -620,7 +879,7 @@ export default function AntigravityControlCenter() {
       {/* Main Container */}
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
 
-        {/* TAB 1: MODELS CATALOG (MONOCHROME MATTE CARDS) */}
+        {/* TAB 1: MODELS CATALOG */}
         {activeTab === 'models' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
@@ -768,7 +1027,650 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 2: ROLEPLAY STUDIO */}
+        {/* TAB 2: LOGGED CHATS ARCHIVE & TRANSCRIPT READER */}
+        {activeTab === 'logs' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            
+            {/* Top Logged Chats Header */}
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: colors.cardShadow }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: colors.textMain, letterSpacing: '-0.01em' }}>
+                    Logged Roleplay Chats ({memorySessions.length})
+                  </h1>
+                  <span style={{ fontSize: 11, background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, padding: '2px 8px', borderRadius: 4, color: colors.textSub, fontWeight: 600 }}>
+                    {memoryStats.storageMode || 'Active'}
+                  </span>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: colors.textMuted }}>
+                  Lossless conversation transcripts automatically recorded from Janitor AI, SillyTavern, and Roleplay Studio.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="Search logs & dialogues..."
+                    value={memorySearch}
+                    onChange={e => setMemorySearch(e.target.value)}
+                    style={{
+                      background: colors.inputBg,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 8,
+                      padding: '8px 12px 8px 30px',
+                      fontSize: 12,
+                      color: colors.textMain,
+                      width: 220,
+                      outline: 'none'
+                    }}
+                  />
+                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: colors.textSub, display: 'flex' }}>
+                    <Icons.Search />
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => fetchMemoryOverview()}
+                  disabled={isLoadingMemory}
+                  style={{
+                    background: colors.cardInner,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textMain,
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  <Icons.Refresh />
+                  {isLoadingMemory ? 'Syncing...' : 'Refresh Logs'}
+                </button>
+              </div>
+            </div>
+
+            {/* Character Filter Pills */}
+            {memoryCharacters.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setSelectedCharFilter('all')}
+                  style={{
+                    background: selectedCharFilter === 'all' ? colors.btnPrimaryBg : colors.cardInner,
+                    color: selectedCharFilter === 'all' ? colors.btnPrimaryText : colors.textMuted,
+                    border: `1px solid ${colors.border}`,
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}>
+                  All Characters ({memorySessions.length})
+                </button>
+                {memoryCharacters.map(c => (
+                  <button
+                    key={c.characterId}
+                    onClick={() => setSelectedCharFilter(c.characterId)}
+                    style={{
+                      background: selectedCharFilter === c.characterId ? colors.btnPrimaryBg : colors.cardInner,
+                      color: selectedCharFilter === c.characterId ? colors.btnPrimaryText : colors.textMuted,
+                      border: `1px solid ${colors.border}`,
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}>
+                    {c.characterName} ({c.chatCount})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* 2-Pane Logged Chat Explorer */}
+            <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20 }}>
+              
+              {/* Left Pane: Sessions Directory */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14, height: 'calc(100vh - 240px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow }}>
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {filteredSessions.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 10px', color: colors.textMuted, fontSize: 12 }}>
+                      {memorySessions.length === 0 ? 'No logged chats yet. Start chatting in Janitor AI to record your first transcript!' : 'No matching chat logs found.'}
+                    </div>
+                  ) : (
+                    filteredSessions.map(s => (
+                      <div
+                        key={s.id}
+                        onClick={() => fetchSingleSession(s.id)}
+                        style={{
+                          background: selectedChatId === s.id ? (isDark ? '#222226' : '#f4f4f5') : colors.cardInner,
+                          border: `1px solid ${selectedChatId === s.id ? (isDark ? '#ffffff' : '#000000') : colors.border}`,
+                          borderRadius: 8,
+                          padding: '12px 14px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: colors.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>
+                            {s.characterName}
+                          </span>
+                          <span style={{ fontSize: 10, color: colors.textSub, fontFamily: 'monospace' }}>
+                            {new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        
+                        <div style={{ fontSize: 12, color: colors.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6 }}>
+                          {s.title}
+                        </div>
+
+                        {s.lastMessagePreview && (
+                          <div style={{ fontSize: 11, color: colors.textSub, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 8, borderLeft: `2px solid ${colors.border}`, paddingLeft: 6 }}>
+                            {s.lastMessagePreview}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10 }}>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub, fontWeight: 600 }}>
+                              {s.messageCount} turns
+                            </span>
+                            <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub, fontWeight: 600 }}>
+                              ~{s.estimatedTokens?.toLocaleString()} tokens
+                            </span>
+                          </div>
+                          {s.oocCount > 0 && (
+                            <span style={{ color: colors.textSub, fontWeight: 600 }}>
+                              📌 {s.oocCount} OOC
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Right Pane: Full Interactive Transcript Reader */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, height: 'calc(100vh - 240px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow, overflow: 'hidden' }}>
+                {selectedSession ? (
+                  <>
+                    {/* Transcript Toolbar Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${colors.border}`, paddingBottom: 14, marginBottom: 16 }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                          <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: colors.textMain }}>
+                            {selectedSession.characterName}
+                          </h2>
+                          <span style={{ fontSize: 11, color: colors.textSub, background: colors.cardInner, border: `1px solid ${colors.border}`, padding: '1px 6px', borderRadius: 4 }}>
+                            {selectedSession.title}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: colors.textSub, fontFamily: 'monospace' }}>
+                          ID: {selectedSession.id} • {(selectedSession.messages || []).length} turns • ~{Math.floor(((selectedSession.messages || []).reduce((acc: number, m: any) => acc + (m.content?.length || 0), 0)) / 4).toLocaleString()} tokens preserved
+                        </div>
+                      </div>
+
+                      {/* Export & Manage Actions */}
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => copyTranscriptMarkdown(selectedSession)}
+                          style={{
+                            background: copiedField === `transcript_${selectedSession.id}` ? (isDark ? '#ffffff' : '#000000') : colors.cardInner,
+                            color: copiedField === `transcript_${selectedSession.id}` ? (isDark ? '#000000' : '#ffffff') : colors.textMain,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                          {copiedField === `transcript_${selectedSession.id}` ? <><Icons.Check /> Copied</> : <><Icons.Copy /> Copy Markdown</>}
+                        </button>
+
+                        <button
+                          onClick={() => downloadTranscriptJson(selectedSession)}
+                          title="Export full JSON archive"
+                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMain, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icons.Download /> JSON
+                        </button>
+
+                        <button
+                          onClick={() => handleClearChatHistory(selectedSession.id)}
+                          title="Clear message history while preserving OOC rules"
+                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMuted, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          Clear
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteChatSession(selectedSession.id)}
+                          title="Delete entire chat log"
+                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: '#ef4444', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icons.Trash />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chat Messages Stream */}
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, paddingRight: 6 }}>
+                      {(selectedSession.messages || []).length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.textMuted, fontStyle: 'italic', fontSize: 13 }}>
+                          No turns recorded for this session yet.
+                        </div>
+                      ) : (
+                        (selectedSession.messages || []).map((m: any, idx: number) => {
+                          const isUser = m.role === 'user';
+                          return (
+                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignSelf: isUser ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, alignSelf: isUser ? 'flex-end' : 'flex-start' }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: isUser ? colors.textMain : colors.textSub, textTransform: 'capitalize' }}>
+                                  {isUser ? 'You' : selectedSession.characterName}
+                                </span>
+                                <span style={{ fontSize: 10, color: colors.textSub, fontFamily: 'monospace' }}>
+                                  {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+
+                              {/* Thought Reasoning Accordion if present */}
+                              {m.reasoning_content && (
+                                <div style={{ marginBottom: 6, background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px' }}>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Reasoning Process ({Math.floor(m.reasoning_content.length / 4)} tokens)
+                                  </div>
+                                  <div style={{ marginTop: 4, fontSize: 11, color: colors.textSub, whiteSpace: 'pre-wrap', lineHeight: 1.4, maxHeight: 120, overflowY: 'auto', fontFamily: 'monospace' }}>
+                                    {m.reasoning_content}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Message Body */}
+                              <div style={{
+                                background: isUser ? (isDark ? '#222226' : '#09090b') : colors.cardInner,
+                                color: isUser ? '#ffffff' : colors.textMain,
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: 10,
+                                padding: '12px 16px',
+                                fontSize: 13,
+                                lineHeight: 1.6,
+                                whiteSpace: 'pre-wrap'
+                              }}>
+                                {m.content}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Pinned Rules & Lore Footer Tag */}
+                    {(selectedSession.oocRules?.length > 0 || selectedSession.loreFacts?.length > 0) && (
+                      <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 10, marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', fontSize: 11 }}>
+                        <span style={{ color: colors.textSub, fontWeight: 600 }}>Active Directives:</span>
+                        {(selectedSession.oocRules || []).filter((r: any) => r.enabled).map((r: any) => (
+                          <span key={r.id} style={{ background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, color: colors.textMain, padding: '2px 6px', borderRadius: 4 }}>
+                            📌 {r.rule.slice(0, 30)}...
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '80px 20px', color: colors.textMuted }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: colors.cardInner, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMain, margin: '0 auto 12px' }}>
+                      <Icons.FileText />
+                    </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: colors.textMain, margin: '0 0 6px' }}>Select a Chat to View Transcript</h3>
+                    <p style={{ fontSize: 12, maxWidth: 360, margin: '0 auto', lineHeight: 1.5 }}>
+                      Choose any session on the left to read the full dialogue history, view reasoning steps, and export markdown transcripts.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 3: PERSISTENT MEMORY & OOC LORE MANAGER */}
+        {activeTab === 'memory' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            
+            {/* Top Memory Header & Status */}
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: colors.cardShadow }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: colors.cardInner, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMain }}>
+                  <Icons.Book />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: colors.textMain }}>
+                      Persistent Memory & OOC Engine
+                    </h2>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: memoryStats.redisConnected ? (isDark ? '#064e3b' : '#dcfce7') : (isDark ? '#78350f' : '#fef3c7'),
+                      color: memoryStats.redisConnected ? (isDark ? '#34d399' : '#15803d') : (isDark ? '#fbbf24' : '#b45309'),
+                      border: `1px solid ${colors.border}`
+                    }}>
+                      {memoryStats.storageMode}
+                    </span>
+                  </div>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: colors.textMuted }}>
+                    Auto-captures <code>(OOC: ...)</code> directives, tracks character lore, and preserves 1M-token lossless chat history.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ textAlign: 'right', fontSize: 11, color: colors.textSub, lineHeight: 1.4 }}>
+                  <div><strong>{memoryStats.totalSessions}</strong> Active Chats</div>
+                  <div><strong>{memoryStats.totalOOCRules}</strong> Pinned OOC Rules</div>
+                </div>
+                <button
+                  onClick={() => fetchMemoryOverview()}
+                  disabled={isLoadingMemory}
+                  style={{
+                    background: colors.cardInner,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textMain,
+                    borderRadius: 6,
+                    padding: '7px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  <Icons.Refresh />
+                  {isLoadingMemory ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {/* 2-Column Explorer */}
+            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20 }}>
+              
+              {/* Left Column: Character & Chat Sessions List */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 16, height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow }}>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      placeholder="Search chats & characters..."
+                      value={memorySearch}
+                      onChange={e => setMemorySearch(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        background: colors.inputBg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 6,
+                        padding: '7px 10px 7px 28px',
+                        fontSize: 12,
+                        color: colors.textMain,
+                        outline: 'none'
+                      }}
+                    />
+                    <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: colors.textSub, display: 'flex' }}>
+                      <Icons.Search />
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {filteredSessions.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px 10px', color: colors.textMuted, fontSize: 12 }}>
+                      {memorySessions.length === 0 ? 'No chat sessions recorded yet. Start chatting in Janitor AI to auto-register memory!' : 'No matching chats found.'}
+                    </div>
+                  ) : (
+                    filteredSessions.map(s => (
+                      <div
+                        key={s.id}
+                        onClick={() => fetchSingleSession(s.id)}
+                        style={{
+                          background: selectedChatId === s.id ? (isDark ? '#222226' : '#f4f4f5') : colors.cardInner,
+                          border: `1px solid ${selectedChatId === s.id ? (isDark ? '#ffffff' : '#000000') : colors.border}`,
+                          borderRadius: 8,
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: colors.textMain, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 170 }}>
+                            {s.characterName || 'Character'}
+                          </span>
+                          <span style={{ fontSize: 10, color: colors.textSub, fontFamily: 'monospace' }}>
+                            {new Date(s.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: colors.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6 }}>
+                          {s.title}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, fontSize: 10 }}>
+                          <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub }}>
+                            {s.oocCount} OOC
+                          </span>
+                          <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub }}>
+                            {s.loreCount} Lore
+                          </span>
+                          <span style={{ background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, border: `1px solid ${colors.badgeBorder}`, color: colors.textSub }}>
+                            {s.messageCount} Turns
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Selected Chat Memory Inspector */}
+              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, height: 'calc(100vh - 220px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20, boxShadow: colors.cardShadow }}>
+                {selectedSession ? (
+                  <>
+                    {/* Chat Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${colors.border}`, paddingBottom: 14 }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, padding: '2px 6px', borderRadius: 4, color: colors.textMain }}>
+                            Character Memory
+                          </span>
+                          <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: colors.textMain }}>
+                            {selectedSession.characterName}
+                          </h2>
+                        </div>
+                        <div style={{ fontSize: 12, color: colors.textMuted }}>
+                          Session ID: <code style={{ fontFamily: 'monospace', color: colors.textSub }}>{selectedSession.id}</code>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => handleClearChatHistory(selectedSession.id)}
+                          title="Clear message turns while keeping OOC and Lore"
+                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMuted, borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          Clear Turns
+                        </button>
+                        <button
+                          onClick={() => handleDeleteChatSession(selectedSession.id)}
+                          title="Delete entire session"
+                          style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: '#ef4444', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icons.Trash />
+                          Delete Session
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* SECTION 1: PINNED OOC RULES */}
+                    <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icons.Pin />
+                          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: colors.textMain }}>
+                            Pinned Out-Of-Character (OOC) Rules ({(selectedSession.oocRules || []).length})
+                          </h3>
+                        </div>
+                        <span style={{ fontSize: 11, color: colors.textSub }}>Injected permanently into System Instruction</span>
+                      </div>
+
+                      {/* Add OOC Rule Input */}
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                        <input
+                          type="text"
+                          placeholder="Add permanent rule, e.g. 'Kars is 24, drives a black sports car'..."
+                          value={newOOCInput}
+                          onChange={e => setNewOOCInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleAddOOCRule()}
+                          style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: colors.textMain, outline: 'none' }}
+                        />
+                        <button
+                          onClick={handleAddOOCRule}
+                          style={{ background: colors.btnPrimaryBg, color: colors.btnPrimaryText, border: 'none', borderRadius: 6, padding: '0 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icons.Plus /> Add
+                        </button>
+                      </div>
+
+                      {/* OOC Rules List */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(selectedSession.oocRules || []).length === 0 ? (
+                          <div style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', padding: '6px 0' }}>
+                            No OOC rules recorded. Use <code>(OOC: ...)</code> in your chats or type one above to pin it permanently!
+                          </div>
+                        ) : (
+                          (selectedSession.oocRules || []).map((rule: any) => (
+                            <div
+                              key={rule.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: colors.cardBg,
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: 6,
+                                padding: '8px 12px',
+                                opacity: rule.enabled ? 1 : 0.5
+                              }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={rule.enabled}
+                                  onChange={() => handleToggleOOCRule(rule.id)}
+                                  style={{ accentColor: isDark ? '#ffffff' : '#000000', cursor: 'pointer' }}
+                                />
+                                <span style={{ fontSize: 12, color: colors.textMain, fontWeight: 500 }}>
+                                  {rule.rule}
+                                </span>
+                                <span style={{ fontSize: 10, color: colors.textSub, background: colors.badgeBg, padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  {rule.source}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteOOCRule(rule.id)}
+                                style={{ background: 'none', border: 'none', color: colors.textSub, cursor: 'pointer', padding: 4, display: 'flex' }}>
+                                <Icons.Trash />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* SECTION 2: LORE & RELATIONSHIP STATE */}
+                    <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icons.Sparkle />
+                          <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: colors.textMain }}>
+                            World Lore & State Notes ({(selectedSession.loreFacts || []).length})
+                          </h3>
+                        </div>
+                        <span style={{ fontSize: 11, color: colors.textSub }}>Track relationship levels, inventory, locations</span>
+                      </div>
+
+                      {/* Add Lore Fact Inputs */}
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                        <input
+                          type="text"
+                          placeholder="Key (e.g. Location, Trust Level, Inventory)"
+                          value={newLoreKey}
+                          onChange={e => setNewLoreKey(e.target.value)}
+                          style={{ width: '35%', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: colors.textMain, outline: 'none' }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Value (e.g. Big Burger Booth, High, Silver Locket)"
+                          value={newLoreVal}
+                          onChange={e => setNewLoreVal(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleAddLoreFact()}
+                          style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: colors.textMain, outline: 'none' }}
+                        />
+                        <button
+                          onClick={handleAddLoreFact}
+                          style={{ background: colors.btnPrimaryBg, color: colors.btnPrimaryText, border: 'none', borderRadius: 6, padding: '0 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icons.Plus /> Save
+                        </button>
+                      </div>
+
+                      {/* Lore Facts List */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(selectedSession.loreFacts || []).length === 0 ? (
+                          <div style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', padding: '6px 0' }}>
+                            No custom lore facts saved yet. Add location, relationship status, or inventory facts above!
+                          </div>
+                        ) : (
+                          (selectedSession.loreFacts || []).map((fact: any) => (
+                            <div
+                              key={fact.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: colors.cardBg,
+                                border: `1px solid ${colors.border}`,
+                                borderRadius: 6,
+                                padding: '8px 12px'
+                              }}>
+                              <div style={{ fontSize: 12, color: colors.textMain }}>
+                                <strong style={{ color: colors.textMuted }}>{fact.key}:</strong> {fact.value}
+                              </div>
+                              <button
+                                onClick={() => handleDeleteLoreFact(fact.id)}
+                                style={{ background: 'none', border: 'none', color: colors.textSub, cursor: 'pointer', padding: 4, display: 'flex' }}>
+                                <Icons.Trash />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.textMuted }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: colors.cardInner, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMain, margin: '0 auto 12px' }}>
+                      <Icons.Book />
+                    </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: colors.textMain, margin: '0 0 6px' }}>Select a Chat Session</h3>
+                    <p style={{ fontSize: 12, maxWidth: 360, margin: '0 auto', lineHeight: 1.5 }}>
+                      Choose a character session on the left to view active OOC rules or edit lore facts.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 4: ROLEPLAY STUDIO */}
         {activeTab === 'playground' && (
           <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20 }}>
             
@@ -906,7 +1808,7 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 3: MODEL CONTROLS & REASONING ENGINE */}
+        {/* TAB 5: MODEL CONTROLS & REASONING ENGINE */}
         {activeTab === 'controls' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
             
@@ -1040,7 +1942,7 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 4: ACCOUNTS & QUOTA */}
+        {/* TAB 6: ACCOUNTS & QUOTA */}
         {activeTab === 'accounts' && (
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1076,7 +1978,7 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 5: CLIENT GUIDES (JANITOR AI & SILLYTAVERN) */}
+        {/* TAB 7: CLIENT GUIDES */}
         {activeTab === 'clients' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
             
@@ -1121,7 +2023,7 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 6: ANALYTICS & VALUE */}
+        {/* TAB 8: ANALYTICS & VALUE */}
         {activeTab === 'analytics' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
@@ -1131,6 +2033,10 @@ export default function AntigravityControlCenter() {
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
               <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Tokens</div>
               <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{totalTokensServed.toLocaleString()}</div>
+            </div>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active Logged Chats</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{memoryStats.totalSessions || 0}</div>
             </div>
             <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
               <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Cost</div>

@@ -282,13 +282,13 @@ To deploy or replicate this proxy, set the following in **Vercel Project Setting
 
 ---
 
-## 12. Future Architecture: Persistent Memory & OOC Engine
+## 12. Persistent Memory, Lore State Tracker & OOC Pinning Engine
 
-### The Problem
-Janitor AI truncates message history beyond 128k tokens and frequently forgets Out-Of-Character (OOC) instructions given earlier in the chat.
+### The Problem Solved
+Janitor AI and standard frontends enforce strict context truncation (~128k tokens) and frequently drop or forget Out-Of-Character (OOC) instructions as the chat history lengthens.
 
-### The Proposed Solution
-Integrate **Vercel KV / Upstash Redis** into the proxy to manage persistent memory:
+### The Production Engine Architecture
+The gateway implements a dual-mode persistent memory layer using native `fetch` over **Upstash Redis REST** (with an automatic zero-config In-Memory fallback):
 
 ```
 📁 Character ("Alisa")
@@ -298,9 +298,26 @@ Integrate **Vercel KV / Upstash Redis** into the proxy to manage persistent memo
        └── 📜 Lossless Message History (Injected into Google's 1,000,000 token context window)
 ```
 
+### Key Capabilities:
+1. **Deterministic 2-Tier Fingerprinting**:
+   - **Tier 1 (Character)**: Hashes the character persona / system prompt definition.
+   - **Tier 2 (Chat Session)**: Hashes `(Character ID + Initial Greeting & Opening Turn)`.
+   - Result: Separate chats with the same character automatically receive distinct isolated memory slots with zero client configuration.
+2. **Real-Time OOC Extraction & Pinning**:
+   - Automatically intercepts regex patterns: `(OOC: ...)`, `[OOC: ...]`, `((OOC: ...))`, `[System Note: ...]`.
+   - Ingests directives into the chat's database record and permanently pins them inside Google Antigravity's `systemInstruction`.
+3. **Lossless Long-Term History Stitching**:
+   - Stores the full conversation history in the database archive.
+   - If Janitor AI drops older messages due to its 128k slider, the gateway stitches the earlier archive back into Google Antigravity's **1,048,576 token context window**.
+4. **Matte Black Memory & Lore Dashboard Tab**:
+   - **Explorer**: Live list of all detected characters and active sessions with turn counts.
+   - **OOC Manager**: Add, toggle, or delete permanent OOC rules with 1 click.
+   - **Lore State Editor**: Key-value tracker for inventory, relationship status, and world facts.
+   - **Transcript Inspector & 1-Click Wipe**: Lossless turn inspector with token estimates and instant memory wipe options.
+
 ---
 
 ## 📦 Deployment Coordinates
 - **GitHub Repository**: [https://github.com/agentblox40/antigravity-vercel-proxy](https://github.com/agentblox40/antigravity-vercel-proxy)
 - **Live Vercel Gateway**: [https://antigravity-vercel-proxy-three.vercel.app/](https://antigravity-vercel-proxy-three.vercel.app/)
-- **Latest Production Commit**: `713626a`
+
