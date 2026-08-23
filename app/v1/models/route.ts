@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SUPPORTED_MODELS } from '@/lib/antigravity';
+import { getAntigravityLiveModels } from '@/lib/antigravity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,10 +35,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const models = await getAntigravityLiveModels();
+
   return NextResponse.json(
     {
       object: 'list',
-      data: SUPPORTED_MODELS.map((m) => ({
+      data: models.map((m) => ({
         id: m.id,
         object: 'model',
         created: 1710000000,
