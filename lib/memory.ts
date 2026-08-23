@@ -340,12 +340,51 @@ export function augmentSystemWithMemory(baseSystem: string, session: ChatSession
   return baseSystem + memoryBlock;
 }
 
+// Sync session message history with active incoming prompt (handles edits, rewinds, and regenerations)
+export function syncSessionWithIncomingMessages(
+  session: ChatSession,
+  incomingMessages: any[]
+): void {
+  const nonSystem = (incomingMessages || []).filter(m => m && m.role !== 'system');
+  if (nonSystem.length === 0) return;
+
+  session.messages = session.messages || [];
+  const current = session.messages;
+
+  // If session is brand new, initialize from incoming
+  if (current.length === 0) {
+    session.messages = nonSystem.map((m, idx) => ({
+      id: 'msg_' + hashString((m.content || '') + idx).slice(0, 8),
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p.text || '').join('\n') : ''),
+      timestamp: Date.now() - (nonSystem.length - idx) * 1000
+    }));
+    return;
+  }
+
+  // Check if incoming is a regeneration of the latest user turn
+  const lastIncoming = nonSystem[nonSystem.length - 1];
+  if (lastIncoming && lastIncoming.role === 'user') {
+    const lastUserText = (typeof lastIncoming.content === 'string' ? lastIncoming.content : '').trim();
+    const len = current.length;
+
+    // If current ends with [User, Assistant] and User matches lastUserText -> preparing for regeneration
+    if (len >= 2 && current[len - 2].role === 'user' && current[len - 2].content.trim() === lastUserText) {
+      // User is regenerating the last bot message: Pop the previous bot response so the incoming generator will overwrite it cleanly
+      current.pop();
+    }
+  }
+}
+
 // Stitch lossless long-term history
 export function stitchLosslessHistory(
   session: ChatSession,
   incomingMessages: any[]
 ): any[] {
-  // If stored archive has more history than incoming (client truncated), prepend older messages
+  // Synchronize session state with incoming branch
+  syncSessionWithIncomingMessages(session, incomingMessages);
+
+  // If stored archive has more history than incoming (client truncated older turns), prepend older messages
   if (session.messages && session.messages.length > incomingMessages.length) {
     const archiveFormatted = session.messages.map(m => ({
       role: m.role === 'assistant' ? 'assistant' : m.role,
@@ -356,7 +395,7 @@ export function stitchLosslessHistory(
   return incomingMessages;
 }
 
-// Record turns asynchronously into session history
+// Record turns asynchronously into session history (with smart regeneration overwriting)
 export async function recordTurnsIntoSession(
   session: ChatSession,
   userText: string,
@@ -364,26 +403,61 @@ export async function recordTurnsIntoSession(
   reasoningContent?: string
 ): Promise<void> {
   const now = Date.now();
-  if (userText) {
-    session.messages.push({
-      id: 'msg_' + hashString(userText + now).slice(0, 8),
-      role: 'user',
-      content: userText,
-      timestamp: now
-    });
+  session.messages = session.messages || [];
+  const msgs = session.messages;
+
+  const trimmedUser = (userText || '').trim();
+  const trimmedAssistant = (assistantText || '').trim();
+
+  if (!trimmedAssistant && !trimmedUser) return;
+
+  const len = msgs.length;
+
+  // Case 1: Regeneration (The last message in history is the user message that prompted this regeneration)
+  if (len >= 1 && msgs[len - 1].role === 'user' && msgs[len - 1].content.trim() === trimmedUser) {
+    // Append the regenerated assistant response
+    if (trimmedAssistant) {
+      msgs.push({
+        id: 'msg_' + hashString(trimmedAssistant + now).slice(0, 8),
+        role: 'assistant',
+        content: assistantText,
+        reasoning_content: reasoningContent,
+        timestamp: now
+      });
+    }
   }
-  if (assistantText) {
-    session.messages.push({
-      id: 'msg_' + hashString(assistantText + now).slice(0, 8),
-      role: 'assistant',
-      content: assistantText,
-      reasoning_content: reasoningContent,
-      timestamp: now + 1
-    });
+  // Case 2: Overwrite existing assistant response if last turn matches
+  else if (len >= 2 && msgs[len - 2].role === 'user' && msgs[len - 2].content.trim() === trimmedUser && msgs[len - 1].role === 'assistant') {
+    msgs[len - 1].content = assistantText;
+    msgs[len - 1].reasoning_content = reasoningContent;
+    msgs[len - 1].timestamp = now;
   }
-  // Cap at last 2000 messages to stay well within 1M token budget and avoid unbounded memory
-  if (session.messages.length > 2000) {
-    session.messages = session.messages.slice(-2000);
+  // Case 3: Standard new conversation turn
+  else {
+    if (trimmedUser) {
+      msgs.push({
+        id: 'msg_' + hashString(trimmedUser + now).slice(0, 8),
+        role: 'user',
+        content: userText,
+        timestamp: now
+      });
+    }
+    if (trimmedAssistant) {
+      msgs.push({
+        id: 'msg_' + hashString(trimmedAssistant + now).slice(0, 8),
+        role: 'assistant',
+        content: assistantText,
+        reasoning_content: reasoningContent,
+        timestamp: now + 1
+      });
+    }
   }
+
+  // Cap at last 2000 messages to stay safely within 1M token capacity
+  if (msgs.length > 2000) {
+    session.messages = msgs.slice(-2000);
+  }
+
   await saveChatSession(session);
 }
+
