@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.2.0';
+export const CURRENT_VERSION = '2.2.5';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.2.0',
+    version: '2.2.5',
     tag: 'LATEST',
-    title: '13K+ System Prompt Preservation & Zero-Loss Stitching',
+    title: 'Markdown Formatting Enforcement & Multi-System Message Unification',
     date: 'Aug 23, 2026',
     commit: 'latest',
+    description: 'Enforces strict roleplay markdown syntax (*actions*, "dialogue", `thoughts`) and unifies all system prompts.',
+    highlights: [
+      'Injected Depth-0 Formatting Anchor at the immediate active turn so Gemini never forgets markdown styles.',
+      'Unified all system messages across request arrays (character cards, custom prompts, jailbreaks).',
+      'Fixed trailing model turn errors on regeneration by guaranteeing conversations always terminate on a user turn.',
+      'Added non-resetting cooldown timer with live 1-second countdown and exact IST timestamps.'
+    ]
+  },
+  {
+    version: '2.2.0',
+    tag: 'MAJOR',
+    title: '13K+ System Prompt Preservation & Zero-Loss Stitching',
+    date: 'Aug 23, 2026',
+    commit: '82dd8a1',
     description: 'Fixed system prompt drop during history stitching and eliminated coding assistant persona conflict.',
     highlights: [
       'Preserved leading system messages across stitchLosslessHistory so 13k token character cards are never dropped.',
