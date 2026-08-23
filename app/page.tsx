@@ -2,6 +2,90 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
+// Minimalist SVG Icons (Zero Emojis)
+const Icons = {
+  Sparkle: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+    </svg>
+  ),
+  Cpu: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3"/><path d="M15 1v3"/><path d="M9 20v3"/><path d="M15 20v3"/><path d="M20 9h3"/><path d="M20 14h3"/><path d="M1 9h3"/><path d="M1 14h3"/>
+    </svg>
+  ),
+  Chat: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+    </svg>
+  ),
+  Sliders: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/>
+    </svg>
+  ),
+  Server: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>
+    </svg>
+  ),
+  Terminal: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>
+    </svg>
+  ),
+  Activity: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+    </svg>
+  ),
+  Copy: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+    </svg>
+  ),
+  Check: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  ),
+  Search: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+    </svg>
+  ),
+  Refresh: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+    </svg>
+  ),
+  Sun: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+    </svg>
+  ),
+  Moon: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+    </svg>
+  ),
+  Laptop: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/>
+    </svg>
+  ),
+  Send: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  ),
+  Shield: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+    </svg>
+  )
+};
+
 const PRESETS = [
   { name: 'Tavern Roleplay', sys: 'You are an immersive, descriptive roleplay character. Write vivid reactions, actions in asterisks, and speech in quotes.' },
   { name: 'Dark Fantasy RPG', sys: 'You are the Dungeon Master in a gritty dark fantasy world. Describe atmospheric details, sensory cues, and combat physics.' },
@@ -10,9 +94,9 @@ const PRESETS = [
 ];
 
 export default function AntigravityControlCenter() {
-  const [activeTab, setActiveTab] = useState<'playground' | 'models' | 'controls' | 'accounts' | 'clients' | 'analytics'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'playground' | 'controls' | 'accounts' | 'clients' | 'analytics'>('models');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
-  const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('light');
+  const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
   const [origin, setOrigin] = useState('');
   const [apiKey, setApiKey] = useState('KARS-2010915');
@@ -45,8 +129,8 @@ export default function AntigravityControlCenter() {
   // Status & Accounts State
   const [accounts, setAccounts] = useState<any[]>([]);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [totalTokensServed, setTotalTokensServed] = useState(28900);
-  const [requestsCount, setRequestsCount] = useState(32);
+  const [totalTokensServed, setTotalTokensServed] = useState(32400);
+  const [requestsCount, setRequestsCount] = useState(38);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -208,7 +292,7 @@ export default function AntigravityControlCenter() {
       setRequestsCount(prev => prev + 1);
       setLatencyMs(Date.now() - start);
     } catch (err: any) {
-      setMessages([...newHistory, { role: 'assistant', content: `⚠️ Error: ${err.message}` }]);
+      setMessages([...newHistory, { role: 'assistant', content: `Error: ${err.message}` }]);
     } finally {
       setIsStreaming(false);
       setCurrentThought('');
@@ -218,21 +302,24 @@ export default function AntigravityControlCenter() {
 
   const isDark = effectiveTheme === 'dark';
 
-  // Dynamic Theme Colors
+  // Monochrome Matte Black & Pure White Design System
   const colors = {
-    bg: isDark ? '#09090b' : '#f8fafc',
-    navBg: isDark ? '#0c0c0e' : '#ffffff',
-    cardBg: isDark ? '#121215' : '#ffffff',
-    cardInner: isDark ? '#18181b' : '#f1f5f9',
-    inputBg: isDark ? '#09090b' : '#ffffff',
-    border: isDark ? '#27272a' : '#e2e8f0',
-    borderMuted: isDark ? '#1f1f23' : '#f1f5f9',
-    textMain: isDark ? '#f4f4f5' : '#0f172a',
-    textMuted: isDark ? '#a1a1aa' : '#64748b',
-    textSub: isDark ? '#71717a' : '#94a3b8',
-    accent: '#0284c7',
-    accentHover: '#0369a1',
-    cardShadow: isDark ? '0 10px 30px -10px rgba(0,0,0,0.5)' : '0 4px 20px -2px rgba(0,0,0,0.05)',
+    bg: isDark ? '#000000' : '#ffffff',
+    navBg: isDark ? '#080808' : '#fafafa',
+    cardBg: isDark ? '#0d0d0f' : '#ffffff',
+    cardInner: isDark ? '#141417' : '#f4f4f5',
+    inputBg: isDark ? '#08080a' : '#ffffff',
+    border: isDark ? 'rgba(255, 255, 255, 0.09)' : '#e4e4e7',
+    borderMuted: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f1f1f4',
+    textMain: isDark ? '#ffffff' : '#09090b',
+    textMuted: isDark ? '#a1a1aa' : '#52525b',
+    textSub: isDark ? '#71717a' : '#71717a',
+    btnPrimaryBg: isDark ? '#ffffff' : '#09090b',
+    btnPrimaryText: isDark ? '#000000' : '#ffffff',
+    btnPrimaryHover: isDark ? '#e4e4e7' : '#27272a',
+    badgeBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+    badgeBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+    cardShadow: isDark ? '0 12px 32px -8px rgba(0,0,0,0.8)' : '0 2px 12px -2px rgba(0,0,0,0.06)',
   };
 
   const filteredModels = availableModels.filter(m => 
@@ -245,62 +332,66 @@ export default function AntigravityControlCenter() {
   const chatUrl = origin ? `${origin}/v1/chat/completions` : 'https://your-app.vercel.app/v1/chat/completions';
 
   return (
-    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.textMain, fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', transition: 'background-color 0.2s, color 0.2s' }}>
+    <div style={{ minHeight: '100vh', background: colors.bg, color: colors.textMain, fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', transition: 'background-color 0.15s, color 0.15s' }}>
       
       {/* Top Navigation Bar */}
-      <nav style={{ background: colors.navBg, borderBottom: `1px solid ${colors.border}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50, boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <nav style={{ background: colors.navBg, borderBottom: `1px solid ${colors.border}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></span>
-            <span style={{ fontWeight: 800, fontSize: 16, background: 'linear-gradient(135deg, #0284c7, #6366f1, #a855f7)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Antigravity Control Center
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: isDark ? '#ffffff' : '#000000', boxShadow: isDark ? '0 0 10px rgba(255,255,255,0.6)' : 'none' }}></span>
+            <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em', color: colors.textMain }}>
+              ANTIGRAVITY
             </span>
-            <span style={{ fontSize: 11, background: colors.cardInner, border: `1px solid ${colors.border}`, padding: '2px 8px', borderRadius: 6, color: colors.textMuted }}>v2.0</span>
+            <span style={{ fontSize: 11, background: colors.cardInner, border: `1px solid ${colors.border}`, padding: '1px 6px', borderRadius: 4, color: colors.textMuted, fontWeight: 600, letterSpacing: '0.04em' }}>GATEWAY</span>
           </div>
 
-          <div style={{ display: 'flex', gap: 4, background: colors.cardInner, padding: 4, borderRadius: 10, border: `1px solid ${colors.border}` }}>
+          <div style={{ display: 'flex', gap: 2, background: colors.cardInner, padding: 3, borderRadius: 8, border: `1px solid ${colors.border}` }}>
             {[
-              { id: 'models', label: '🧠 Models Catalog' },
-              { id: 'playground', label: '💬 Roleplay Studio' },
-              { id: 'controls', label: '🎛️ Model Controls' },
-              { id: 'accounts', label: '⚡ Accounts & Quota' },
-              { id: 'clients', label: '🎮 Janitor / Tavern' },
-              { id: 'analytics', label: '📊 Analytics' }
+              { id: 'models', label: 'Models Catalog', icon: <Icons.Cpu /> },
+              { id: 'playground', label: 'Roleplay Studio', icon: <Icons.Chat /> },
+              { id: 'controls', label: 'Model Controls', icon: <Icons.Sliders /> },
+              { id: 'accounts', label: 'Accounts & Quota', icon: <Icons.Server /> },
+              { id: 'clients', label: 'Janitor / Tavern', icon: <Icons.Terminal /> },
+              { id: 'analytics', label: 'Analytics', icon: <Icons.Activity /> }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 style={{
-                  background: activeTab === tab.id ? (isDark ? '#27272a' : '#ffffff') : 'transparent',
-                  color: activeTab === tab.id ? '#0284c7' : colors.textMuted,
-                  boxShadow: (activeTab === tab.id && !isDark) ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '6px 14px',
-                  fontSize: 13,
+                  background: activeTab === tab.id ? (isDark ? '#222226' : '#ffffff') : 'transparent',
+                  color: activeTab === tab.id ? colors.textMain : colors.textMuted,
+                  boxShadow: (activeTab === tab.id && !isDark) ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                  border: activeTab === tab.id ? `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}` : '1px solid transparent',
+                  borderRadius: 6,
+                  padding: '5px 12px',
+                  fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                   transition: 'all 0.15s'
                 }}>
+                {tab.icon}
                 {tab.label}
               </button>
             ))}
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {latencyMs !== null && (
-            <span style={{ fontSize: 12, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(16, 185, 129, 0.2)', fontWeight: 600 }}>
-              ⚡ {latencyMs}ms
+            <span style={{ fontSize: 11, color: colors.textMuted, background: colors.cardInner, padding: '3px 8px', borderRadius: 6, border: `1px solid ${colors.border}`, fontWeight: 600, fontFamily: 'monospace' }}>
+              {latencyMs}ms
             </span>
           )}
 
           {/* Theme Selector Toggle */}
-          <div style={{ display: 'flex', background: colors.cardInner, padding: 3, borderRadius: 8, border: `1px solid ${colors.border}` }}>
+          <div style={{ display: 'flex', background: colors.cardInner, padding: 2, borderRadius: 6, border: `1px solid ${colors.border}` }}>
             {[
-              { id: 'light', icon: '☀️' },
-              { id: 'dark', icon: '🌙' },
-              { id: 'system', icon: '💻' }
+              { id: 'light', icon: <Icons.Sun /> },
+              { id: 'dark', icon: <Icons.Moon /> },
+              { id: 'system', icon: <Icons.Laptop /> }
             ].map(t => (
               <button
                 key={t.id}
@@ -308,22 +399,25 @@ export default function AntigravityControlCenter() {
                 title={`Switch to ${t.id} mode`}
                 style={{
                   background: theme === t.id ? (isDark ? '#27272a' : '#ffffff') : 'transparent',
+                  color: theme === t.id ? colors.textMain : colors.textMuted,
                   border: 'none',
-                  borderRadius: 6,
-                  padding: '4px 8px',
-                  fontSize: 12,
+                  borderRadius: 4,
+                  padding: '4px 7px',
                   cursor: 'pointer',
-                  boxShadow: (theme === t.id && !isDark) ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: (theme === t.id && !isDark) ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'
                 }}>
                 {t.icon}
               </button>
             ))}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: colors.cardInner, padding: '4px 10px', borderRadius: 8, border: `1px solid ${colors.border}` }}>
-            <span style={{ fontSize: 12, color: colors.textSub }}>Key:</span>
-            <code style={{ fontSize: 12, color: '#0284c7', fontWeight: 600 }}>{showKey ? apiKey : '••••••••••••'}</code>
-            <button onClick={() => setShowKey(!showKey)} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: colors.cardInner, padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.border}` }}>
+            <span style={{ fontSize: 11, color: colors.textSub, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>KEY</span>
+            <code style={{ fontSize: 11, color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{showKey ? apiKey : '••••••••••••'}</code>
+            <button onClick={() => setShowKey(!showKey)} style={{ background: 'none', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px' }}>
               {showKey ? 'Hide' : 'Show'}
             </button>
           </div>
@@ -331,112 +425,124 @@ export default function AntigravityControlCenter() {
       </nav>
 
       {/* Main Container */}
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px' }}>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
 
-        {/* TAB 1: 🧠 MODELS CATALOG (NEW COMPREHENSIVE TAB) */}
+        {/* TAB 1: MODELS CATALOG (MONOCHROME MATTE CARDS) */}
         {activeTab === 'models' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
               <div>
-                <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 6px', color: colors.textMain }}>
-                  🧠 Antigravity Models Catalog ({availableModels.length})
+                <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: '-0.02em', color: colors.textMain }}>
+                  Models Catalog ({availableModels.length})
                 </h1>
-                <p style={{ margin: 0, fontSize: 14, color: colors.textMuted }}>
-                  Click <strong>Copy Model Name</strong> on any model below and paste it directly into Janitor AI or SillyTavern.
+                <p style={{ margin: 0, fontSize: 13, color: colors.textMuted }}>
+                  Click <strong>Copy</strong> on any model and paste its identifier directly into Janitor AI or SillyTavern.
                 </p>
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
-                <input
-                  type="text"
-                  placeholder="Search models (flash, reasoning, claude, pro)..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{
-                    background: colors.cardBg,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 8,
-                    padding: '8px 14px',
-                    fontSize: 13,
-                    color: colors.textMain,
-                    width: 260,
-                    outline: 'none'
-                  }}
-                />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="Search models..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    style={{
+                      background: colors.inputBg,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 8,
+                      padding: '8px 12px 8px 30px',
+                      fontSize: 13,
+                      color: colors.textMain,
+                      width: 220,
+                      outline: 'none'
+                    }}
+                  />
+                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: colors.textSub, display: 'flex' }}>
+                    <Icons.Search />
+                  </span>
+                </div>
+                
                 <button
                   onClick={fetchStatusAndModels}
                   disabled={isSyncingModels}
                   style={{
                     background: colors.cardInner,
                     border: `1px solid ${colors.border}`,
-                    color: '#0284c7',
+                    color: colors.textMain,
                     borderRadius: 8,
-                    padding: '8px 14px',
-                    fontSize: 13,
+                    padding: '8px 12px',
+                    fontSize: 12,
                     fontWeight: 600,
-                    cursor: isSyncingModels ? 'not-allowed' : 'pointer'
+                    cursor: isSyncingModels ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
                   }}>
-                  {isSyncingModels ? 'Syncing...' : '🔄 Auto-Sync Live'}
+                  <Icons.Refresh />
+                  {isSyncingModels ? 'Syncing...' : 'Sync Live'}
                 </button>
               </div>
             </div>
 
             {/* Model Cards Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
               {filteredModels.map(m => (
                 <div
                   key={m.id}
                   style={{
                     background: colors.cardBg,
                     border: `1px solid ${colors.border}`,
-                    borderRadius: 14,
-                    padding: 20,
+                    borderRadius: 12,
+                    padding: 18,
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    boxShadow: colors.cardShadow,
-                    transition: 'transform 0.15s, border-color 0.15s'
+                    boxShadow: colors.cardShadow
                   }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                       <span style={{
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: 700,
-                        padding: '3px 8px',
-                        borderRadius: 6,
-                        background: m.id.includes('high') || m.id.includes('max') ? 'rgba(99, 102, 241, 0.1)' : 'rgba(2, 132, 199, 0.1)',
-                        color: m.id.includes('high') || m.id.includes('max') ? '#6366f1' : '#0284c7'
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        padding: '2px 7px',
+                        borderRadius: 4,
+                        background: colors.badgeBg,
+                        border: `1px solid ${colors.badgeBorder}`,
+                        color: colors.textMain
                       }}>
-                        {m.badge || 'Available'}
+                        {m.badge || 'Live'}
                       </span>
-                      <span style={{ fontSize: 11, color: colors.textSub, fontWeight: 600 }}>
+                      <span style={{ fontSize: 11, color: colors.textSub, fontFamily: 'monospace' }}>
                         {m.context || '1M Context'}
                       </span>
                     </div>
 
-                    <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>
+                    <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: colors.textMain }}>
                       {m.name || m.id}
                     </h3>
-                    <p style={{ margin: '0 0 14px', fontSize: 13, color: colors.textMuted, lineHeight: 1.5 }}>
-                      {m.desc || `Google Antigravity upstream model ${m.id}`}
+                    <p style={{ margin: '0 0 14px', fontSize: 12, color: colors.textMuted, lineHeight: 1.5 }}>
+                      {m.desc || `Google Antigravity model ${m.id}`}
                     </p>
                   </div>
 
                   <div style={{ borderTop: `1px solid ${colors.borderMuted}`, paddingTop: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, fontSize: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, fontSize: 11 }}>
                       <span style={{ color: colors.textSub }}>Thinking Tokens:</span>
-                      <span style={{ fontWeight: 600, color: colors.textMain }}>{m.thinking || 'Auto'}</span>
+                      <span style={{ fontWeight: 600, color: colors.textMain, fontFamily: 'monospace' }}>{m.thinking || 'Auto'}</span>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
                       <code style={{
                         flex: 1,
                         background: colors.cardInner,
                         border: `1px solid ${colors.border}`,
-                        padding: '8px 10px',
-                        borderRadius: 8,
+                        padding: '6px 10px',
+                        borderRadius: 6,
                         fontSize: 12,
-                        color: '#0284c7',
+                        color: colors.textMain,
                         fontFamily: 'monospace',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -447,17 +553,19 @@ export default function AntigravityControlCenter() {
                       <button
                         onClick={() => copyToClipboard(m.id, m.id)}
                         style={{
-                          background: copiedField === m.id ? '#10b981' : '#0284c7',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: 8,
-                          padding: '0 14px',
-                          fontSize: 12,
+                          background: copiedField === m.id ? (isDark ? '#ffffff' : '#000000') : colors.cardInner,
+                          color: copiedField === m.id ? (isDark ? '#000000' : '#ffffff') : colors.textMain,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 6,
+                          padding: '0 12px',
+                          fontSize: 11,
                           fontWeight: 700,
                           cursor: 'pointer',
-                          transition: 'background-color 0.2s'
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
                         }}>
-                        {copiedField === m.id ? '✓ Copied' : 'Copy'}
+                        {copiedField === m.id ? <><Icons.Check /> Copied</> : <><Icons.Copy /> Copy</>}
                       </button>
                     </div>
                   </div>
@@ -467,22 +575,22 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 2: 💬 ROLEPLAY STUDIO */}
+        {/* TAB 2: ROLEPLAY STUDIO */}
         {activeTab === 'playground' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20 }}>
             
             {/* Left Sidebar: Character Definition & Presets */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 20, height: 'calc(100vh - 160px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: colors.textMain }}>🎭 Persona & Scenario</h3>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 18, height: 'calc(100vh - 150px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textMain }}>Scenario & Persona</h3>
               </div>
               
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
                 {PRESETS.map((p, i) => (
                   <button
                     key={i}
                     onClick={() => setSystemPrompt(p.sys)}
-                    style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: '#0284c7', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMain, padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                     {p.name}
                   </button>
                 ))}
@@ -491,18 +599,18 @@ export default function AntigravityControlCenter() {
               <textarea
                 value={systemPrompt}
                 onChange={e => setSystemPrompt(e.target.value)}
-                placeholder="Enter character persona, system instructions, or scenario definition..."
-                style={{ flex: 1, width: '100%', boxSizing: 'border-box', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 10, padding: 12, color: colors.textMain, fontSize: 13, resize: 'none', outline: 'none', lineHeight: 1.5, marginBottom: 16 }}
+                placeholder="Enter character persona or scenario instructions..."
+                style={{ flex: 1, width: '100%', boxSizing: 'border-box', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 12px', color: colors.textMain, fontSize: 12, resize: 'none', outline: 'none', lineHeight: 1.5, marginBottom: 14 }}
               />
 
-              <div style={{ borderTop: `1px solid ${colors.borderMuted}`, paddingTop: 14 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.textMuted, marginBottom: 6 }}>
-                  Active Model ({availableModels.length} available)
+              <div style={{ borderTop: `1px solid ${colors.borderMuted}`, paddingTop: 12 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Model Selection
                 </label>
                 <select
                   value={selectedModel}
                   onChange={e => setSelectedModel(e.target.value)}
-                  style={{ width: '100%', background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 10px', color: '#0284c7', fontSize: 13, fontWeight: 600, outline: 'none' }}>
+                  style={{ width: '100%', background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '8px 10px', color: colors.textMain, fontSize: 12, fontWeight: 600, outline: 'none' }}>
                   {availableModels.map(m => (
                     <option key={m.id} value={m.id}>{m.name || m.id}</option>
                   ))}
@@ -511,18 +619,18 @@ export default function AntigravityControlCenter() {
             </div>
 
             {/* Right Panel: Chat Stream & Interactive Thread */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)', overflow: 'hidden', boxShadow: colors.cardShadow }}>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)', overflow: 'hidden', boxShadow: colors.cardShadow }}>
               
               {/* Chat Thread */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {messages.map((m, idx) => (
                   <div key={idx} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                     
                     {/* Reasoning Accordion (if exists) */}
                     {m.thought && (
-                      <div style={{ marginBottom: 8, background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: colors.textMuted }}>
-                          <span>🧠 Reasoning Process ({Math.floor(m.thought.length / 4)} tokens)</span>
+                      <div style={{ marginBottom: 6, background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          <span>Reasoning Process ({Math.floor(m.thought.length / 4)} tokens)</span>
                         </div>
                         <div style={{ marginTop: 6, fontSize: 12, color: colors.textSub, whiteSpace: 'pre-wrap', lineHeight: 1.5, maxHeight: 160, overflowY: 'auto', fontFamily: 'monospace' }}>
                           {m.thought}
@@ -532,12 +640,12 @@ export default function AntigravityControlCenter() {
 
                     {/* Chat Bubble */}
                     <div style={{
-                      background: m.role === 'user' ? '#0284c7' : colors.cardInner,
+                      background: m.role === 'user' ? (isDark ? '#222226' : '#09090b') : colors.cardInner,
                       color: m.role === 'user' ? '#ffffff' : colors.textMain,
-                      border: m.role === 'user' ? 'none' : `1px solid ${colors.border}`,
-                      borderRadius: 14,
-                      padding: '14px 18px',
-                      fontSize: 14,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 10,
+                      padding: '12px 16px',
+                      fontSize: 13,
                       lineHeight: 1.6,
                       whiteSpace: 'pre-wrap'
                     }}>
@@ -550,9 +658,9 @@ export default function AntigravityControlCenter() {
                 {isStreaming && (
                   <div style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
                     {currentThought && (
-                      <div style={{ marginBottom: 8, background: colors.cardInner, border: '1px solid #0284c7', borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#0284c7', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>⚡</span> Thinking in progress...
+                      <div style={{ marginBottom: 6, background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: colors.textMain, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          <span>Thinking...</span>
                         </div>
                         <div style={{ marginTop: 6, fontSize: 12, color: colors.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.5, fontFamily: 'monospace' }}>
                           {currentThought}
@@ -560,7 +668,7 @@ export default function AntigravityControlCenter() {
                       </div>
                     )}
                     {currentDelta && (
-                      <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 14, padding: '14px 18px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                         {currentDelta}
                       </div>
                     )}
@@ -570,19 +678,32 @@ export default function AntigravityControlCenter() {
               </div>
 
               {/* Chat Input Bar */}
-              <div style={{ borderTop: `1px solid ${colors.border}`, padding: 16, background: colors.cardBg, display: 'flex', gap: 12 }}>
+              <div style={{ borderTop: `1px solid ${colors.border}`, padding: 14, background: colors.cardBg, display: 'flex', gap: 10 }}>
                 <input
                   type="text"
                   value={inputMessage}
                   onChange={e => setInputMessage(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Type a message or action (*takes a step forward*)..."
-                  style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 10, padding: '12px 16px', color: colors.textMain, fontSize: 14, outline: 'none' }}
+                  style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px', color: colors.textMain, fontSize: 13, outline: 'none' }}
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={isStreaming || !inputMessage.trim()}
-                  style={{ background: isStreaming ? colors.border : '#0284c7', color: '#fff', border: 'none', borderRadius: 10, padding: '0 24px', fontWeight: 700, fontSize: 14, cursor: isStreaming ? 'not-allowed' : 'pointer' }}>
+                  style={{
+                    background: isStreaming ? colors.border : colors.btnPrimaryBg,
+                    color: isStreaming ? colors.textMuted : colors.btnPrimaryText,
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '0 20px',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: isStreaming ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  <Icons.Send />
                   {isStreaming ? 'Streaming...' : 'Send'}
                 </button>
               </div>
@@ -592,35 +713,35 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 3: 🎛️ MODEL CONTROLS & REASONING ENGINE */}
+        {/* TAB 3: MODEL CONTROLS & REASONING ENGINE */}
         {activeTab === 'controls' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
             
             {/* Reasoning Budget Control */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 24, boxShadow: colors.cardShadow }}>
-              <h3 style={{ margin: '0 0 16px', fontSize: 18, color: colors.textMain }}>🧠 Thinking & Reasoning Token Budget</h3>
-              <p style={{ fontSize: 13, color: colors.textMuted, margin: '0 0 20px' }}>Configure how many internal thinking tokens Gemini allocates before writing output.</p>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
+              <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>Thinking Token Budget</h3>
+              <p style={{ fontSize: 12, color: colors.textMuted, margin: '0 0 18px' }}>Configure internal reasoning token limit before final output generation.</p>
 
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
                 {[
                   { label: 'Off', budget: 0 },
-                  { label: 'Snappy (2K)', budget: 2048 },
-                  { label: 'Balanced (8K)', budget: 8192 },
-                  { label: 'Deep (24K)', budget: 24576 },
-                  { label: 'Max (64K)', budget: 65536 }
+                  { label: '2K', budget: 2048 },
+                  { label: '8K', budget: 8192 },
+                  { label: '24K', budget: 24576 },
+                  { label: '64K', budget: 65536 }
                 ].map(p => (
                   <button
                     key={p.budget}
                     onClick={() => setThinkingBudget(p.budget)}
                     style={{
                       flex: 1,
-                      background: thinkingBudget === p.budget ? '#0284c7' : colors.cardInner,
-                      color: thinkingBudget === p.budget ? '#ffffff' : colors.textMain,
+                      background: thinkingBudget === p.budget ? colors.btnPrimaryBg : colors.cardInner,
+                      color: thinkingBudget === p.budget ? colors.btnPrimaryText : colors.textMain,
                       border: `1px solid ${colors.border}`,
-                      borderRadius: 8,
-                      padding: '8px 4px',
-                      fontSize: 12,
-                      fontWeight: 600,
+                      borderRadius: 6,
+                      padding: '7px 2px',
+                      fontSize: 11,
+                      fontWeight: 700,
                       cursor: 'pointer'
                     }}>
                     {p.label}
@@ -628,10 +749,10 @@ export default function AntigravityControlCenter() {
                 ))}
               </div>
 
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
                   <span style={{ color: colors.textMuted }}>Custom Token Budget:</span>
-                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{thinkingBudget.toLocaleString()} tokens</span>
+                  <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{thinkingBudget.toLocaleString()} tokens</span>
                 </div>
                 <input
                   type="range"
@@ -640,19 +761,20 @@ export default function AntigravityControlCenter() {
                   step="1024"
                   value={thinkingBudget}
                   onChange={e => setThinkingBudget(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#0284c7' }}
+                  style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
                 />
               </div>
             </div>
 
             {/* Generation Parameters */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 24, boxShadow: colors.cardShadow }}>
-              <h3 style={{ margin: '0 0 16px', fontSize: 18, color: colors.textMain }}>🎛️ Sampling & Output Length</h3>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
+              <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>Sampling Parameters</h3>
+              <p style={{ fontSize: 12, color: colors.textMuted, margin: '0 0 18px' }}>Adjust temperature and length parameters (overridden by client if set).</p>
               
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
                   <span style={{ color: colors.textMuted }}>Temperature:</span>
-                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{temperature} ({temperature < 0.5 ? 'Precise' : temperature < 0.9 ? 'Creative' : 'Chaotic'})</span>
+                  <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{temperature}</span>
                 </div>
                 <input
                   type="range"
@@ -661,14 +783,14 @@ export default function AntigravityControlCenter() {
                   step="0.05"
                   value={temperature}
                   onChange={e => setTemperature(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#0284c7' }}
+                  style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
                 />
               </div>
 
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
                   <span style={{ color: colors.textMuted }}>Max Output Tokens:</span>
-                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{maxTokens.toLocaleString()} tokens</span>
+                  <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{maxTokens.toLocaleString()}</span>
                 </div>
                 <input
                   type="range"
@@ -677,14 +799,14 @@ export default function AntigravityControlCenter() {
                   step="1024"
                   value={maxTokens}
                   onChange={e => setMaxTokens(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#0284c7' }}
+                  style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
                 />
               </div>
 
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
                   <span style={{ color: colors.textMuted }}>Top-P (Nucleus Sampling):</span>
-                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{topP}</span>
+                  <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{topP}</span>
                 </div>
                 <input
                   type="range"
@@ -693,31 +815,31 @@ export default function AntigravityControlCenter() {
                   step="0.05"
                   value={topP}
                   onChange={e => setTopP(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#0284c7' }}
+                  style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
                 />
               </div>
             </div>
 
             {/* Uncensored Roleplay Bypass */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 24, gridColumn: '1 / -1', boxShadow: colors.cardShadow }}>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, gridColumn: '1 / -1', boxShadow: colors.cardShadow }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <h3 style={{ margin: '0 0 4px', fontSize: 16, color: colors.textMain }}>🔓 Uncensored Roleplay Safety Override (`BLOCK_NONE`)</h3>
-                  <p style={{ margin: 0, fontSize: 13, color: colors.textMuted }}>Bypasses Google content moderation filters across all categories for unrestricted creative writing and character chat.</p>
+                  <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: colors.textMain }}>Safety Override (BLOCK_NONE)</h3>
+                  <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>Bypasses content moderation filters across all categories for unrestricted creative writing.</p>
                 </div>
                 <button
                   onClick={() => setUncensoredMode(!uncensoredMode)}
                   style={{
-                    background: uncensoredMode ? 'rgba(16, 185, 129, 0.15)' : colors.cardInner,
-                    color: uncensoredMode ? '#10b981' : colors.textMuted,
-                    border: `1px solid ${uncensoredMode ? 'rgba(16, 185, 129, 0.3)' : colors.border}`,
-                    borderRadius: 8,
-                    padding: '8px 16px',
+                    background: uncensoredMode ? colors.btnPrimaryBg : colors.cardInner,
+                    color: uncensoredMode ? colors.btnPrimaryText : colors.textMuted,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 6,
+                    padding: '8px 14px',
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: 12,
                     cursor: 'pointer'
                   }}>
-                  {uncensoredMode ? '✓ ENABLED (BLOCK_NONE)' : 'OFF (Standard)'}
+                  {uncensoredMode ? 'ENABLED' : 'DISABLED'}
                 </button>
               </div>
             </div>
@@ -725,34 +847,35 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 4: ⚡ ACCOUNTS & QUOTA */}
+        {/* TAB 4: ACCOUNTS & QUOTA */}
         {activeTab === 'accounts' && (
-          <div style={{ display: 'grid', gap: 20 }}>
+          <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 4px', color: colors.textMain }}>⚡ Connected Google AI Pro Accounts</h2>
-                <p style={{ margin: 0, fontSize: 13, color: colors.textMuted }}>Traffic is automatically load-balanced across all accounts. If one hits a rate limit, it fails over immediately.</p>
+                <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 4px', color: colors.textMain }}>Connected Google AI Pro Accounts</h2>
+                <p style={{ margin: 0, fontSize: 13, color: colors.textMuted }}>Traffic is automatically load-balanced across accounts with seamless 429 failover.</p>
               </div>
               <button
                 onClick={fetchStatusAndModels}
-                style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: '#0284c7', borderRadius: 8, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                🔄 Refresh Status
+                style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMain, borderRadius: 6, padding: '7px 12px', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icons.Refresh />
+                Refresh
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
               {accounts.map((acc, idx) => (
-                <div key={acc.id} style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 14, padding: 20, boxShadow: colors.cardShadow }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <span style={{ fontWeight: 700, fontSize: 15, color: colors.textMain }}>{acc.name}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: acc.status === 'Ready' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: acc.status === 'Ready' ? '#10b981' : '#ef4444' }}>
-                      ● {acc.status}
+                <div key={acc.id} style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 18, boxShadow: colors.cardShadow }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: colors.textMain }}>{acc.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 4, background: colors.badgeBg, border: `1px solid ${colors.badgeBorder}`, color: colors.textMain }}>
+                      {acc.status}
                     </span>
                   </div>
                   <div style={{ fontSize: 12, color: colors.textSub, lineHeight: 1.8 }}>
-                    <div>Project ID: <code style={{ color: '#0284c7' }}>{acc.projectId}</code></div>
+                    <div>Project ID: <code style={{ color: colors.textMain, fontWeight: 600 }}>{acc.projectId}</code></div>
                     <div>Account Slot: <code style={{ color: colors.textMuted }}>ACCOUNT_{idx + 1}</code></div>
-                    <div>Failures / 429s: <span style={{ color: acc.failCount > 0 ? '#ef4444' : '#10b981', fontWeight: 600 }}>{acc.failCount}</span></div>
+                    <div>Failures / 429s: <span style={{ color: colors.textMain, fontWeight: 600 }}>{acc.failCount}</span></div>
                   </div>
                 </div>
               ))}
@@ -760,76 +883,66 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 5: 🎮 CLIENT GUIDES (JANITOR AI & SILLYTAVERN) */}
+        {/* TAB 5: CLIENT GUIDES (JANITOR AI & SILLYTAVERN) */}
         {activeTab === 'clients' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
             
             {/* Janitor AI Card */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 24, boxShadow: colors.cardShadow }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <span style={{ fontSize: 24 }}>🐱</span>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 18, color: colors.textMain }}>Janitor AI Configuration</h3>
-                  <span style={{ fontSize: 12, color: colors.textMuted }}>Custom OpenAI / Reverse Proxy Mode</span>
-                </div>
-              </div>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>Janitor AI Setup</h3>
+              <p style={{ margin: '0 0 16px', fontSize: 12, color: colors.textMuted }}>Configuration for Janitor AI Custom OpenAI mode.</p>
 
-              <div style={{ background: colors.cardInner, padding: 16, borderRadius: 10, border: `1px solid ${colors.border}`, marginBottom: 16, fontSize: 13, lineHeight: 1.8 }}>
-                <div><span style={{ color: colors.textSub }}>API Type: </span> <code style={{ color: '#0284c7' }}>OpenAI / Custom OpenAI</code></div>
-                <div><span style={{ color: colors.textSub }}>Reverse Proxy URL: </span> <code style={{ color: '#0284c7' }}>{baseUrl}</code></div>
-                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: '#0284c7' }}>{apiKey}</code></div>
-                <div><span style={{ color: colors.textSub }}>Model: </span> <code style={{ color: '#0284c7' }}>gemini-3.7-flash-high</code></div>
+              <div style={{ background: colors.cardInner, padding: 14, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16, fontSize: 12, lineHeight: 1.8 }}>
+                <div><span style={{ color: colors.textSub }}>API Format: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>OpenAI / Custom OpenAI</code></div>
+                <div><span style={{ color: colors.textSub }}>Reverse Proxy URL: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
+                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey}</code></div>
+                <div><span style={{ color: colors.textSub }}>Recommended Model: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.7-flash-high</code></div>
               </div>
 
               <button
                 onClick={() => copyToClipboard(baseUrl, 'janitorUrl')}
-                style={{ width: '100%', background: '#0284c7', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                {copiedField === 'janitorUrl' ? '✓ Copied URL!' : '📋 Copy Janitor AI Proxy URL'}
+                style={{ width: '100%', background: colors.btnPrimaryBg, color: colors.btnPrimaryText, border: 'none', borderRadius: 6, padding: '9px 0', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                {copiedField === 'janitorUrl' ? <><Icons.Check /> Copied</> : <><Icons.Copy /> Copy Janitor AI Proxy URL</>}
               </button>
             </div>
 
             {/* SillyTavern Card */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 24, boxShadow: colors.cardShadow }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <span style={{ fontSize: 24 }}>🍺</span>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 18, color: colors.textMain }}>SillyTavern Configuration</h3>
-                  <span style={{ fontSize: 12, color: colors.textMuted }}>Chat Completion / OpenAI API</span>
-                </div>
-              </div>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>SillyTavern Setup</h3>
+              <p style={{ margin: '0 0 16px', fontSize: 12, color: colors.textMuted }}>Configuration for SillyTavern Chat Completion API.</p>
 
-              <div style={{ background: colors.cardInner, padding: 16, borderRadius: 10, border: `1px solid ${colors.border}`, marginBottom: 16, fontSize: 13, lineHeight: 1.8 }}>
-                <div><span style={{ color: colors.textSub }}>API: </span> <code style={{ color: '#0284c7' }}>Chat Completion (OpenAI)</code></div>
-                <div><span style={{ color: colors.textSub }}>Custom Endpoint: </span> <code style={{ color: '#0284c7' }}>{baseUrl}</code></div>
-                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: '#0284c7' }}>{apiKey}</code></div>
-                <div><span style={{ color: colors.textSub }}>Streaming: </span> <code style={{ color: '#10b981' }}>Enabled (SSE)</code></div>
+              <div style={{ background: colors.cardInner, padding: 14, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16, fontSize: 12, lineHeight: 1.8 }}>
+                <div><span style={{ color: colors.textSub }}>API: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>Chat Completion (OpenAI)</code></div>
+                <div><span style={{ color: colors.textSub }}>Custom Endpoint: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
+                <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey}</code></div>
+                <div><span style={{ color: colors.textSub }}>Streaming: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>Enabled (SSE)</code></div>
               </div>
 
               <button
                 onClick={() => copyToClipboard(baseUrl, 'tavernUrl')}
-                style={{ width: '100%', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                {copiedField === 'tavernUrl' ? '✓ Copied URL!' : '📋 Copy SillyTavern Endpoint URL'}
+                style={{ width: '100%', background: colors.btnPrimaryBg, color: colors.btnPrimaryText, border: 'none', borderRadius: 6, padding: '9px 0', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                {copiedField === 'tavernUrl' ? <><Icons.Check /> Copied</> : <><Icons.Copy /> Copy SillyTavern Endpoint URL</>}
               </button>
             </div>
 
           </div>
         )}
 
-        {/* TAB 6: 📊 ANALYTICS & VALUE */}
+        {/* TAB 6: ANALYTICS & VALUE */}
         {activeTab === 'analytics' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 14, padding: 24, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 6 }}>Requests Served</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#0284c7' }}>{requestsCount}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Requests Processed</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{requestsCount}</div>
             </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 14, padding: 24, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 6 }}>Estimated Tokens Processed</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#6366f1' }}>{totalTokensServed.toLocaleString()}</div>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Tokens</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>{totalTokensServed.toLocaleString()}</div>
             </div>
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 14, padding: 24, boxShadow: colors.cardShadow }}>
-              <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 6 }}>Est. Cloud API Cost Saved</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: '#10b981' }}>$0.00 / 100% Free</div>
-              <span style={{ fontSize: 11, color: colors.textSub }}>Using your Google AI Pro quota</span>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 20, boxShadow: colors.cardShadow }}>
+              <div style={{ fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Estimated Cost</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain, fontFamily: 'monospace' }}>$0.00</div>
+              <span style={{ fontSize: 11, color: colors.textSub }}>Google AI Pro Included</span>
             </div>
           </div>
         )}
