@@ -2,8 +2,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-// Minimalist SVG Icons (Zero Emojis)
+// Minimalist SVG Icons
 const Icons = {
+  Lock: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+  ),
+  Key: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>
+    </svg>
+  ),
   Sparkle: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
@@ -79,9 +89,9 @@ const Icons = {
       <line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
     </svg>
   ),
-  Shield: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+  LogOut: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
     </svg>
   )
 };
@@ -98,8 +108,14 @@ export default function AntigravityControlCenter() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
+  // Authentication State (Key Gate)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [loginKeyInput, setLoginKeyInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
   const [origin, setOrigin] = useState('');
-  const [apiKey, setApiKey] = useState('KARS-2010915');
+  const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -170,24 +186,90 @@ export default function AntigravityControlCenter() {
     }
   };
 
+  // Auth Initialization on Load (checks URL parameter ?key=... or localStorage)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setOrigin(window.location.origin);
-      const savedKey = localStorage.getItem('proxy_test_key') || 'KARS-2010915';
-      setApiKey(savedKey);
-      fetchStatusAndModels();
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlKey = urlParams.get('key') || urlParams.get('auth');
+      const storedKey = localStorage.getItem('proxy_master_key') || localStorage.getItem('proxy_test_key') || '';
+
+      const keyToTest = urlKey || storedKey;
+
+      if (keyToTest) {
+        verifyAndUnlock(keyToTest, !!urlKey);
+      } else {
+        setIsAuthenticated(false);
+      }
     }
   }, []);
+
+  const verifyAndUnlock = async (key: string, clearUrlParam = false) => {
+    setIsVerifying(true);
+    setLoginError('');
+    const trimmed = key.trim();
+
+    try {
+      const start = Date.now();
+      const res = await fetch('/api/status', {
+        headers: { 'Authorization': `Bearer ${trimmed}` }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setApiKey(trimmed);
+        localStorage.setItem('proxy_master_key', trimmed);
+        setIsAuthenticated(true);
+        setAccounts(data.accounts || []);
+        if (Array.isArray(data.supportedModels)) setAvailableModels(data.supportedModels);
+        setLatencyMs(Date.now() - start);
+
+        if (clearUrlParam && window.history.replaceState) {
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } else {
+        setLoginError('Invalid Key. Access Denied.');
+        setIsAuthenticated(false);
+      }
+    } catch {
+      setLoginError('Unable to connect to gateway.');
+      setIsAuthenticated(false);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginKeyInput.trim()) {
+      setLoginError('Please enter your Proxy Key.');
+      return;
+    }
+    verifyAndUnlock(loginKeyInput);
+  };
+
+  const handleLockDashboard = () => {
+    localStorage.removeItem('proxy_master_key');
+    setApiKey('');
+    setIsAuthenticated(false);
+    setLoginKeyInput('');
+    setLoginError('');
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentDelta, currentThought]);
 
   const fetchStatusAndModels = async () => {
+    if (!apiKey) return;
     setIsSyncingModels(true);
     const start = Date.now();
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch('/api/status', {
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
       if (res.ok) {
         const data = await res.json();
         setAccounts(data.accounts || []);
@@ -316,7 +398,6 @@ export default function AntigravityControlCenter() {
     textSub: isDark ? '#71717a' : '#71717a',
     btnPrimaryBg: isDark ? '#ffffff' : '#09090b',
     btnPrimaryText: isDark ? '#000000' : '#ffffff',
-    btnPrimaryHover: isDark ? '#e4e4e7' : '#27272a',
     badgeBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
     badgeBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
     cardShadow: isDark ? '0 12px 32px -8px rgba(0,0,0,0.8)' : '0 2px 12px -2px rgba(0,0,0,0.06)',
@@ -331,6 +412,97 @@ export default function AntigravityControlCenter() {
   const baseUrl = origin ? `${origin}/v1` : 'https://your-app.vercel.app/v1';
   const chatUrl = origin ? `${origin}/v1/chat/completions` : 'https://your-app.vercel.app/v1/chat/completions';
 
+  // Render Loading Splash while checking key
+  if (isAuthenticated === null) {
+    return (
+      <div style={{ minHeight: '100vh', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Icons.Key />
+          <span>Verifying security key...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Login Gate Screen if Unauthenticated
+  if (!isAuthenticated) {
+    return (
+      <div style={{ minHeight: '100vh', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{
+          width: '100%',
+          maxWidth: 380,
+          background: colors.cardBg,
+          border: `1px solid ${colors.border}`,
+          borderRadius: 16,
+          padding: 32,
+          boxShadow: colors.cardShadow
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: colors.cardInner, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMain, marginBottom: 14 }}>
+              <Icons.Lock />
+            </div>
+            <h1 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 6px', letterSpacing: '-0.02em', color: colors.textMain }}>
+              Antigravity Protected
+            </h1>
+            <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>
+              Enter your master Proxy API Key to unlock the control center.
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <input
+                type="password"
+                placeholder="Enter API Key (e.g. KARS-2010915)..."
+                value={loginKeyInput}
+                onChange={e => setLoginKeyInput(e.target.value)}
+                autoFocus
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  background: colors.inputBg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 8,
+                  padding: '12px 14px',
+                  color: colors.textMain,
+                  fontSize: 13,
+                  outline: 'none',
+                  fontFamily: 'monospace'
+                }}
+              />
+              {loginError && (
+                <div style={{ marginTop: 6, fontSize: 11, color: '#ef4444', fontWeight: 600 }}>
+                  {loginError}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isVerifying}
+              style={{
+                background: colors.btnPrimaryBg,
+                color: colors.btnPrimaryText,
+                border: 'none',
+                borderRadius: 8,
+                padding: '12px 0',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: isVerifying ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6
+              }}>
+              {isVerifying ? 'Verifying...' : 'Unlock Gateway'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Full Unlocked Dashboard
   return (
     <div style={{ minHeight: '100vh', background: colors.bg, color: colors.textMain, fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', transition: 'background-color 0.15s, color 0.15s' }}>
       
@@ -421,6 +593,27 @@ export default function AntigravityControlCenter() {
               {showKey ? 'Hide' : 'Show'}
             </button>
           </div>
+
+          {/* 1-Click Lock / Logout Button */}
+          <button
+            onClick={handleLockDashboard}
+            title="Lock Dashboard (Log Out)"
+            style={{
+              background: colors.cardInner,
+              border: `1px solid ${colors.border}`,
+              color: colors.textMuted,
+              borderRadius: 6,
+              padding: '5px 9px',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5
+            }}>
+            <Icons.LogOut />
+            Lock
+          </button>
         </div>
       </nav>
 
