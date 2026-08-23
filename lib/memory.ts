@@ -210,6 +210,32 @@ async function callRedis(command: string, ...args: (string | number)[]): Promise
   }
 }
 
+// Upstash Redis Pipeline helper (executes batch commands in 1 single HTTP request)
+async function callRedisPipeline(commands: (string | number)[][]): Promise<any[]> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token || commands.length === 0) return [];
+
+  try {
+    const cleanUrl = url.replace(/\/$/, '');
+    const res = await fetch(`${cleanUrl}/pipeline`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(commands)
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      return data.map(item => item?.result);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
 
 export function isRedisConfigured(): boolean {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
@@ -315,7 +341,7 @@ export async function getSessionById(chatId: string): Promise<ChatSession | null
   return memoryStore.get(chatId) || null;
 }
 
-// List all sessions (Ultra-fast parallel retrieval via Promise.all)
+// List all sessions (Ultra-fast 1-request pipeline retrieval)
 export async function listAllSessions(): Promise<ChatSession[]> {
   const sessions: ChatSession[] = [];
 
@@ -323,8 +349,9 @@ export async function listAllSessions(): Promise<ChatSession[]> {
     try {
       const ids: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
       if (ids && ids.length > 0) {
-        const rawList = await Promise.all(ids.map(id => callRedis('GET', `antigravity:session:${id}`)));
-        for (const raw of rawList) {
+        const pipelineCommands = ids.map(id => ['GET', `antigravity:session:${id}`]);
+        const results = await callRedisPipeline(pipelineCommands);
+        for (const raw of results) {
           if (raw) {
             sessions.push(typeof raw === 'string' ? JSON.parse(raw) : raw);
           }
