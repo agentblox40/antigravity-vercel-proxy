@@ -236,8 +236,7 @@ export function transformOpenAIToAntigravity(
   body: any,
   modelId: string,
   projectId: string,
-  augmentedSystem?: string,
-  oocAnchor?: string
+  augmentedSystem?: string
 ) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   let userSystemText = augmentedSystem || '';
@@ -289,58 +288,48 @@ export function transformOpenAIToAntigravity(
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
   }
 
-  // Format & Immersion Anchor at Depth 0 (the immediate active user turn)
-  const formattingAnchor = oocAnchor || `\n\n[Active Formatting & Character Persona Directive]:
-• Adhere strictly to character markdown syntax:
-  - Wrap all character actions, scene narration, and physical movements in *asterisks* (e.g. *she looks away nervously*).
-  - Wrap all spoken dialogue in "double quotes" (e.g. "What do you mean?").
-  - Wrap inner thoughts, telepathy, or internal monologues in \`backticks\` (e.g. \`He definitely saw me...\`).
-• Maintain full immersion in character persona, lore, speech habits, and scenario without breaking character.`;
-
-  if (merged.length > 0) {
-    for (let i = merged.length - 1; i >= 0; i--) {
-      if (merged[i].role === 'user') {
-        const text = merged[i].parts[0]?.text || '';
-        if (!text.includes('[Active Formatting & Character Persona Directive') && !text.includes('[Active Continuity & OOC Directives')) {
-          merged[i].parts[0].text = text + formattingAnchor;
-        }
-        break;
-      }
-    }
-  }
-
-  const maxTokens = typeof body.max_tokens === 'number' && body.max_tokens > 0 
-    ? body.max_tokens 
-    : (typeof body.max_completion_tokens === 'number' && body.max_completion_tokens > 0 ? body.max_completion_tokens : 16384);
-
-  const generationConfig: any = {
-    temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
-    maxOutputTokens: maxTokens,
-    topK: typeof body.top_k === 'number' ? body.top_k : 40,
-    topP: typeof body.top_p === 'number' ? body.top_p : 1
-  };
-
   let thinkingBudget = 8192;
   const modelClean = modelId.toLowerCase();
 
-  if (modelClean.includes('max') || modelClean.includes('xhigh') || body.reasoning_effort === 'max') {
+  if (modelClean.includes('max') || modelClean.includes(':max') || modelClean.includes('xhigh') || body.reasoning_effort === 'max') {
     thinkingBudget = 65536;
-  } else if (modelClean.includes('high') || body.reasoning_effort === 'high') {
+  } else if (modelClean.includes('high') || modelClean.includes(':high') || body.reasoning_effort === 'high') {
     thinkingBudget = 24576;
-  } else if (modelClean.includes('low') || body.reasoning_effort === 'low') {
+  } else if (modelClean.includes('low') || modelClean.includes(':low') || body.reasoning_effort === 'low') {
     thinkingBudget = 2048;
-  } else if (modelClean.includes('medium') || body.reasoning_effort === 'medium') {
+  } else if (modelClean.includes('medium') || modelClean.includes(':medium') || modelClean.includes(':med') || body.reasoning_effort === 'medium') {
     thinkingBudget = 8192;
+  } else if (modelClean.includes('fast') || modelClean.includes(':fast') || modelClean.includes(':off') || modelClean === 'gemini-3.5-flash' || modelClean === 'gemini-2.5-flash') {
+    thinkingBudget = 0;
   } else if (typeof body.thinking_budget === 'number') {
     thinkingBudget = body.thinking_budget;
   } else if (body.thinking?.budget_tokens) {
     thinkingBudget = body.thinking.budget_tokens;
-  } else if (modelClean === 'gemini-3.5-flash' || modelClean === 'gemini-2.5-flash') {
-    thinkingBudget = 0;
   }
+
+  const clientMaxTokens = typeof body.max_tokens === 'number' && body.max_tokens > 0 
+    ? body.max_tokens 
+    : (typeof body.max_completion_tokens === 'number' && body.max_completion_tokens > 0 ? body.max_completion_tokens : 8192);
+
+  // Decouple: ensure thinking tokens never cannibalize visible output limit
+  const upstreamMaxTokens = thinkingBudget > 0 
+    ? Math.max(16384, clientMaxTokens + thinkingBudget)
+    : clientMaxTokens;
+
+  const generationConfig: any = {
+    temperature: typeof body.temperature === 'number' ? body.temperature : 0.7,
+    maxOutputTokens: upstreamMaxTokens,
+    topK: typeof body.top_k === 'number' ? body.top_k : 40,
+    topP: typeof body.top_p === 'number' ? body.top_p : 1
+  };
 
   if (thinkingBudget > 0) {
     generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };
+  }
+
+  if (body.stop) {
+    const stopList = Array.isArray(body.stop) ? body.stop : [body.stop];
+    generationConfig.stopSequences = stopList.filter((s: any) => typeof s === 'string' && s.length > 0);
   }
 
   const systemInstructionParts: { text: string }[] = [];
@@ -349,12 +338,6 @@ export function transformOpenAIToAntigravity(
   } else {
     systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
-
-  // Explicit formatting & immersion rule in system instruction
-  systemInstructionParts.push({
-    text: 'Formatting Directives: Always wrap actions/narration in *asterisks*, spoken dialogue in "double quotes", and internal thoughts in `backticks`. Maintain complete persona immersion.'
-  });
-
 
   let wireModel = 'gemini-3.7-flash-tiered';
   if (modelClean.startsWith('gemini-3.7-flash')) wireModel = 'gemini-3.7-flash-tiered';

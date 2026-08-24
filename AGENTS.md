@@ -3,22 +3,22 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v2.4.0`  
+> *Current Version*: `v2.5.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
 
 ## 1. System Overview & Core Philosophy
 
-`antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client roleplay applications (Janitor AI, SillyTavern, LibreChat, Agnaistic) with **Google Antigravity's internal CloudCode PA infrastructure**.
+`antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure**.
 
-### Key Architectural Pillars
+### Key Architectural Pillars (OmniRoute / OpenRouter Standard)
 1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
-2. **Ultra-Low Latency Pure Pass-Through**: Near-instant Time-To-First-Token (TTFT) by eliminating proxy-level regex scraping, string mutations, and blocking database operations on the completion hot path.
-3. **Lorebary & External Lorebook Handoff**: Delegates 100% of character lore, world-building, and dynamic keyword injection to external Lorebooks (Lorebary, Janitor AI Lorebook, SillyTavern World Info).
-4. **Lossless Cloud Memory Engine**: Upstash Redis REST `/pipeline` batch persistence bypassing client-side 128k token context limits with deterministic session fingerprinting and 1M token context stitching.
-5. **Multi-Account Smart Failover**: Automated round-robin load-balancing and quota isolation across Google OAuth accounts with non-resetting cooldown counters.
-6. **Strict Roleplay Markdown Formatting**: Depth-0 in-context anchoring guaranteeing proper formatting (`*actions*`, `"dialogue"`, `` `thoughts` ``) even during deep 64k thinking budgets.
+2. **Zero-Tampering Pure Pass-Through**: 100% pure message and system prompt translation without synthetic prompt injections or formatting anchors, guaranteeing perfect instruction following and context memory without context rot.
+3. **Decoupled Thinking Tokens**: Automatically provisions full upstream `maxOutputTokens` headroom (16k+ tokens) so Gemini 3.7 thinking tokens never cannibalize the client's visible response budget.
+4. **50/50 Round-Robin Load Balancing**: Evenly distributes generation requests across Google OAuth accounts on every turn with instantaneous failover on 429 quota exhaustion.
+5. **Passive Cloud Logging**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency.
+6. **Clean Utility / Summary Execution**: Janitor AI memory/summary requests execute as pure utility queries without character card contamination.
 
 ---
 

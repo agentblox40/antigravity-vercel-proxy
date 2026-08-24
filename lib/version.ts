@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.4.0';
+export const CURRENT_VERSION = '2.5.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.4.0',
+    version: '2.5.0',
     tag: 'LATEST',
+    title: 'OmniRoute-Standard Pure Pass-Through & Decoupled Thinking Engine',
+    date: 'Aug 24, 2026',
+    commit: 'latest',
+    description: 'Adopted exact OmniRoute/OpenRouter architecture: pure zero-interference prompt pass-through, decoupled thinking budget, clean summary handling, and 50/50 round-robin account balancing.',
+    highlights: [
+      'Pure Pass-Through Translation: Zero synthetic prompt injections, passing character cards and jailbreaks with 100% fidelity.',
+      'Decoupled Thinking Tokens: Upstream maxOutputTokens calculated with full headroom (16k+ tokens) so reasoning never cuts responses mid-sentence.',
+      '50/50 Round-Robin Load Balancing: Automatically alternates requests between Google accounts to prevent quota exhaustion.',
+      'Clean Utility & Summary Execution: Janitor AI memory/summary requests execute without character card contamination.'
+    ]
+  },
+  {
+    version: '2.4.0',
+    tag: 'MAJOR',
     title: 'Ultra-Low Latency Debloat & Lorebary Architecture',
     date: 'Aug 23, 2026',
-    commit: 'latest',
+    commit: '5ea29c8',
     description: 'Stripped proxy-level lore and OOC scrapers for near-instant TTFT, delegating all character lore to Lorebary and external Lorebooks.',
     highlights: [
       'Zero-Overhead Hot Path: Eliminated regex scraping and string allocations for minimum Time-To-First-Token.',

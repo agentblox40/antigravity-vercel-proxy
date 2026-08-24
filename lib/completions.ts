@@ -65,7 +65,7 @@ export async function handleChatCompletions(req: NextRequest) {
   const modelId = body.model || 'gemini-3.7-flash';
   const accounts = getAccounts();
 
-  // Extract raw system text & latest user text for Memory & OOC engine
+  // Extract raw system text & latest user text for background logging
   const messages = Array.isArray(body.messages) ? body.messages : [];
   let rawSystemText = '';
   let latestUserText = '';
@@ -84,10 +84,8 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
-  // Memory & OOC Processing
+  // Background passive session identification (for Logged Chats dashboard tab only)
   let session: any = null;
-  let augmentedSystem: string | undefined = undefined;
-  let oocAnchor = '';
   const disableMemory = req.headers.get('x-disable-memory') === 'true' || body.disable_memory === true;
 
   if (!disableMemory) {
@@ -97,23 +95,10 @@ export async function handleChatCompletions(req: NextRequest) {
         rawSystemText,
         req.headers
       );
-
       session = await getOrCreateChatSession(chatId, characterId, characterName, sessionTitle);
-
-      // Persist full character system prompt into session
       if (rawSystemText) {
         session.systemPrompt = rawSystemText;
-      } else if (!rawSystemText && session.systemPrompt) {
-        rawSystemText = session.systemPrompt;
       }
-
-      augmentedSystem = rawSystemText;
-
-      // Generate in-context Depth 0 anchor for formatting & immersion
-      oocAnchor = getActiveOOCAnchor();
-
-      // Stitch history if client truncated earlier messages
-      body.messages = stitchLosslessHistory(session, messages);
     } catch (memErr) {
       console.warn('Memory engine non-blocking warning:', memErr);
     }
@@ -162,13 +147,25 @@ export async function handleChatCompletions(req: NextRequest) {
     );
   }
 
+  // 50/50 Round-Robin Account Balancing
+  let primaryAccount: any;
+  try {
+    primaryAccount = pickAccount();
+  } catch {
+    primaryAccount = accounts[0];
+  }
+  const otherAccounts = accounts.filter(a => a.id !== primaryAccount?.id);
+  const orderedAccounts = primaryAccount ? [primaryAccount, ...otherAccounts] : accounts;
+  const accountsToTry = availableAccounts.length > 0
+    ? orderedAccounts.filter(a => availableAccounts.some(avail => avail.id === a.id))
+    : orderedAccounts;
+
   const attemptLogs: { account: string; status: number; error: string }[] = [];
-  const accountsToTry = availableAccounts.length > 0 ? availableAccounts : accounts;
 
   for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
-      let envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, augmentedSystem, oocAnchor);
+      let envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, rawSystemText);
 
       let upstreamRes: Response | null = null;
       for (const upstreamUrl of UPSTREAM_URLS) {
@@ -187,7 +184,7 @@ export async function handleChatCompletions(req: NextRequest) {
           // If model has no capacity (503) or is unsupported (404/400), fallback to gemini-3.7-flash-tiered
           if ((res.status === 503 || res.status === 404 || res.status === 400) && envelope.model !== 'gemini-3.7-flash-tiered') {
             console.warn(`Upstream returned ${res.status} for ${envelope.model}. Auto-falling back to gemini-3.7-flash-tiered...`);
-            envelope = transformOpenAIToAntigravity(body, 'gemini-3.7-flash', account.projectId, augmentedSystem, oocAnchor);
+            envelope = transformOpenAIToAntigravity(body, 'gemini-3.7-flash', account.projectId, rawSystemText);
             res = await fetch(upstreamUrl, {
               method: 'POST',
               headers: {
