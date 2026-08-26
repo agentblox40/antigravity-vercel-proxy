@@ -58,14 +58,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const currentConfig = await getInjectionsConfig();
 
-    // Case 1: Toggle Master Switch
+    // Case 1: Full Array Replacement (e.g. bulk toggle, reordering)
+    if (Array.isArray(body.injections)) {
+      currentConfig.injections = body.injections.map((inj: PromptInjection) => ({
+        ...inj,
+        tokens: estimateTokens(inj.content)
+      }));
+      if (typeof body.masterEnabled === 'boolean') {
+        currentConfig.masterEnabled = body.masterEnabled;
+      }
+      await saveInjectionsConfig(currentConfig);
+      return NextResponse.json({ success: true, config: currentConfig }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    // Case 2: Toggle Master Switch Only
     if (typeof body.masterEnabled === 'boolean' && !body.action) {
       currentConfig.masterEnabled = body.masterEnabled;
       await saveInjectionsConfig(currentConfig);
       return NextResponse.json({ success: true, config: currentConfig }, { headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
-    // Case 2: Reset to Defaults
+    // Case 3: Reset to Defaults
     if (body.action === 'reset_defaults') {
       const resetConfig = {
         masterEnabled: true,
@@ -75,7 +88,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, config: resetConfig }, { headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
-    // Case 3: Toggle Individual Injection
+    // Case 4: Toggle Individual Injection
     if (body.action === 'toggle' && body.id) {
       const target = (currentConfig.injections || []).find(inj => inj.id === body.id);
       if (target) {
@@ -86,7 +99,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Injection not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
-    // Case 4: Create or Update Injection
+    // Case 5: Create or Update Injection
     if (body.action === 'upsert' && body.injection) {
       const inj: PromptInjection = body.injection;
       if (!inj.title || !inj.content) {
@@ -119,19 +132,6 @@ export async function POST(req: NextRequest) {
         currentConfig.injections.push(newInj);
       }
 
-      await saveInjectionsConfig(currentConfig);
-      return NextResponse.json({ success: true, config: currentConfig }, { headers: { 'Access-Control-Allow-Origin': '*' } });
-    }
-
-    // Case 5: Full Array Replacement (e.g. reordering)
-    if (Array.isArray(body.injections)) {
-      currentConfig.injections = body.injections.map((inj: PromptInjection) => ({
-        ...inj,
-        tokens: estimateTokens(inj.content)
-      }));
-      if (typeof body.masterEnabled === 'boolean') {
-        currentConfig.masterEnabled = body.masterEnabled;
-      }
       await saveInjectionsConfig(currentConfig);
       return NextResponse.json({ success: true, config: currentConfig }, { headers: { 'Access-Control-Allow-Origin': '*' } });
     }
