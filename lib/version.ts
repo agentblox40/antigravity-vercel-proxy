@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.7.0';
+export const CURRENT_VERSION = '2.8.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.7.0',
+    version: '2.8.0',
     tag: 'LATEST',
-    title: 'Strict Model Validation & Zero Silent Fallback Engine',
+    title: 'Modular Prompt Injections & Directives Manager',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Added a dedicated Injections Management panel in the dashboard with 7 curated roleplay presets and custom directive block creation attached automatically to every completion turn.',
+    highlights: [
+      'Automatic Depth-0 Stacking: Active System Notes, OOC rules, and style directives attach cleanly below the terminal user turn on every request.',
+      '7 Curated System Presets: Preloaded with Strict Knowledge Limits, Natural Dialogue, Fresh Prose, Inner <think> Monologue, Show Don\'t Tell, Slow Romance, and NSFW Positioning.',
+      'Custom Injection Creator: Build, edit, delete, and reorder custom prompt directive cards with live token cost estimation.',
+      'Master & Per-Card Toggles: Instantly turn all or individual injections ON/OFF from the dashboard without editing character cards in Janitor AI.'
+    ]
+  },
+  {
+    version: '2.7.0',
+    tag: 'MAJOR',
+    title: 'Strict Model Validation & Zero Silent Fallback Engine',
+    date: 'Aug 26, 2026',
+    commit: '030e332',
     description: 'Eliminated all silent model fallbacks and secret substitutions. Requests with unrecognized or failing models now return immediate, transparent error diagnostics.',
     highlights: [
       'Zero Silent Fallbacks: Removed all automatic fallbacks to Gemini 3.7 Flash so developers and testers never get gaslighted.',

@@ -289,10 +289,16 @@ export function transformOpenAIToAntigravity(
   body: any,
   resolved: { wireModel: string; defaultThinkingBudget: number },
   projectId: string,
-  augmentedSystem?: string
+  augmentedSystem?: string,
+  userInjectionsText?: string,
+  systemInjectionsText?: string
 ) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   let userSystemText = augmentedSystem || '';
+  if (systemInjectionsText && systemInjectionsText.trim()) {
+    userSystemText = userSystemText ? `${userSystemText}\n\n${systemInjectionsText.trim()}` : systemInjectionsText.trim();
+  }
+
   const contents: any[] = [];
 
   for (const m of messages) {
@@ -339,6 +345,14 @@ export function transformOpenAIToAntigravity(
   // Google Antigravity requires last turn to be 'user' (never model/assistant)
   if (merged[merged.length - 1]?.role === 'model') {
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
+  }
+
+  // Attach active modular prompt injections to the terminal user turn (Depth 0)
+  if (userInjectionsText && userInjectionsText.trim()) {
+    const lastUserTurn = merged[merged.length - 1];
+    if (lastUserTurn && lastUserTurn.role === 'user' && lastUserTurn.parts?.[0]) {
+      lastUserTurn.parts[0].text = `${lastUserTurn.parts[0].text}\n\n${userInjectionsText.trim()}`;
+    }
   }
 
   let thinkingBudget = resolved.defaultThinkingBudget;

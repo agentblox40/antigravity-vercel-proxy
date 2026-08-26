@@ -14,6 +14,7 @@ import {
   recordTurnsIntoSession,
   extractInjectedLore,
 } from './memory';
+import { getActiveInjectionsFormatted } from './injections';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -190,11 +191,19 @@ export async function handleChatCompletions(req: NextRequest) {
     : orderedAccounts;
 
   const attemptLogs: { account: string; status: number; error: string }[] = [];
+  const { userInjectionsText, systemInjectionsText } = await getActiveInjectionsFormatted();
 
   for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
-      const envelope = transformOpenAIToAntigravity(body, resolved, account.projectId, rawSystemText);
+      const envelope = transformOpenAIToAntigravity(
+        body,
+        resolved,
+        account.projectId,
+        rawSystemText,
+        userInjectionsText,
+        systemInjectionsText
+      );
 
       let upstreamRes: Response | null = null;
       for (const upstreamUrl of UPSTREAM_URLS) {

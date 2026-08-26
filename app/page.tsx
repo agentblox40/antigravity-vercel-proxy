@@ -141,6 +141,11 @@ const Icons = {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>
     </svg>
+  ),
+  Syringe: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-.4.4-1 .4-1.4 0l-2.6-2.6c-.4-.4-.4-1 0-1.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/>
+    </svg>
   )
 };
 
@@ -152,7 +157,7 @@ const PRESETS = [
 ];
 
 export default function AntigravityControlCenter() {
-  const [activeTab, setActiveTab] = useState<'models' | 'logs' | 'playground' | 'controls' | 'accounts' | 'clients' | 'updates'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'injections' | 'logs' | 'playground' | 'controls' | 'accounts' | 'clients' | 'updates'>('models');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
@@ -216,6 +221,22 @@ export default function AntigravityControlCenter() {
   const toggleLoreExpand = (key: string) => {
     setExpandedLoreMap(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  // Injections State
+  const [injectionsData, setInjectionsData] = useState<any>({
+    masterEnabled: true,
+    activeCount: 0,
+    totalTokens: 0,
+    injections: []
+  });
+  const [isLoadingInjections, setIsLoadingInjections] = useState(false);
+  const [isSavingInjection, setIsSavingInjection] = useState(false);
+  const [editingInjection, setEditingInjection] = useState<any | null>(null);
+  const [isCreatingNewInj, setIsCreatingNewInj] = useState(false);
+  const [newInjTitle, setNewInjTitle] = useState('');
+  const [newInjCategory, setNewInjCategory] = useState<'system_note' | 'ooc' | 'style' | 'custom'>('system_note');
+  const [newInjPosition, setNewInjPosition] = useState<'depth_0_user' | 'system_instruction'>('depth_0_user');
+  const [newInjContent, setNewInjContent] = useState('');
 
   // Deployment & Update Logs Telemetry State
   const [deploymentData, setDeploymentData] = useState<any>(null);
@@ -331,8 +352,9 @@ export default function AntigravityControlCenter() {
           window.history.replaceState({}, document.title, cleanUrl);
         }
 
-        // Fetch memory overview
+        // Fetch memory overview & prompt injections
         fetchMemoryOverview(trimmed);
+        fetchInjectionsData(trimmed);
       } else {
         setLoginError('Invalid Key. Access Denied.');
         setIsAuthenticated(false);
@@ -343,6 +365,115 @@ export default function AntigravityControlCenter() {
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const fetchInjectionsData = async (currentKey = apiKey) => {
+    if (!currentKey) return;
+    setIsLoadingInjections(true);
+    try {
+      const res = await fetch('/api/injections', {
+        headers: { 'Authorization': `Bearer ${currentKey}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInjectionsData(data);
+      }
+    } catch {}
+    finally {
+      setIsLoadingInjections(false);
+    }
+  };
+
+  const handleToggleMasterInjections = async (newVal: boolean) => {
+    setInjectionsData((prev: any) => ({ ...prev, masterEnabled: newVal }));
+    try {
+      await fetch('/api/injections', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masterEnabled: newVal })
+      });
+    } catch {}
+  };
+
+  const handleToggleSingleInjection = async (id: string, currentEnabled: boolean) => {
+    const nextVal = !currentEnabled;
+    setInjectionsData((prev: any) => {
+      const updated = (prev.injections || []).map((inj: any) => inj.id === id ? { ...inj, enabled: nextVal } : inj);
+      const activeCount = updated.filter((inj: any) => inj.enabled).length;
+      const totalTokens = updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0);
+      return { ...prev, injections: updated, activeCount, totalTokens };
+    });
+
+    try {
+      await fetch('/api/injections', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle', id, enabled: nextVal })
+      });
+    } catch {}
+  };
+
+  const handleSaveInjection = async (inj: any) => {
+    setIsSavingInjection(true);
+    try {
+      const res = await fetch('/api/injections', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'upsert', injection: inj })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) {
+          const updated = data.config.injections || [];
+          const activeCount = updated.filter((i: any) => i.enabled).length;
+          const totalTokens = updated.reduce((acc: number, i: any) => acc + (i.enabled ? (i.tokens || 0) : 0), 0);
+          setInjectionsData({
+            masterEnabled: data.config.masterEnabled,
+            injections: updated,
+            activeCount,
+            totalTokens
+          });
+        }
+        setEditingInjection(null);
+        setIsCreatingNewInj(false);
+        setNewInjTitle('');
+        setNewInjContent('');
+      }
+    } catch {}
+    finally {
+      setIsSavingInjection(false);
+    }
+  };
+
+  const handleDeleteInjection = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this prompt injection block?')) return;
+    setInjectionsData((prev: any) => {
+      const updated = (prev.injections || []).filter((inj: any) => inj.id !== id);
+      const activeCount = updated.filter((inj: any) => inj.enabled).length;
+      const totalTokens = updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0);
+      return { ...prev, injections: updated, activeCount, totalTokens };
+    });
+
+    try {
+      await fetch(`/api/injections?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+    } catch {}
+  };
+
+  const handleResetInjectionsToDefault = async () => {
+    if (!confirm('Reset all prompt injections back to curated defaults (Strict Knowledge, Natural Dialogue, Fresh Prose, <think> thoughts, Show Don\'t Tell, Slow Romance, NSFW)?')) return;
+    try {
+      const res = await fetch('/api/injections', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_defaults' })
+      });
+      if (res.ok) {
+        await fetchInjectionsData();
+      }
+    } catch {}
   };
 
   const fetchMemoryOverview = async (currentKey = apiKey) => {
@@ -797,6 +928,7 @@ export default function AntigravityControlCenter() {
           <div style={{ display: 'flex', gap: 2, background: colors.cardInner, padding: 3, borderRadius: 8, border: `1px solid ${colors.border}` }}>
             {[
               { id: 'models', label: 'Models Catalog', icon: <Icons.Cpu /> },
+              { id: 'injections', label: 'Injections', icon: <Icons.Syringe /> },
               { id: 'logs', label: 'Logged Chats', icon: <Icons.FileText /> },
               { id: 'playground', label: 'Roleplay Studio', icon: <Icons.Chat /> },
               { id: 'controls', label: 'Model Controls', icon: <Icons.Sliders /> },
@@ -808,6 +940,7 @@ export default function AntigravityControlCenter() {
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id as any);
+                  if (tab.id === 'injections') fetchInjectionsData();
                   if (tab.id === 'logs') fetchMemoryOverview();
                   if (tab.id === 'updates') fetchStatusAndModels();
                 }}
@@ -1076,6 +1209,431 @@ export default function AntigravityControlCenter() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: MODULAR PROMPT INJECTIONS & DIRECTIVES MANAGER */}
+        {activeTab === 'injections' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Header Control Toolbar */}
+            <div style={{
+              background: colors.cardBg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+              padding: '18px 22px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: colors.cardShadow,
+              flexWrap: 'wrap',
+              gap: 12
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: colors.textMain, letterSpacing: '-0.01em' }}>
+                    Modular Prompt Injections & Directives
+                  </h1>
+                  <span style={{
+                    fontSize: 11,
+                    background: isDark ? '#2e1065' : '#ede9fe',
+                    color: isDark ? '#c084fc' : '#7e22ce',
+                    border: `1px solid ${isDark ? '#6b21a8' : '#ddd6fe'}`,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    fontWeight: 700
+                  }}>
+                    {injectionsData.masterEnabled ? `${injectionsData.activeCount || 0} Active` : 'Master Switch OFF'}
+                  </span>
+                  <span style={{
+                    fontSize: 11,
+                    color: colors.textSub,
+                    background: colors.cardInner,
+                    border: `1px solid ${colors.border}`,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    fontFamily: 'monospace'
+                  }}>
+                    ~{injectionsData.totalTokens || 0} tokens overhead
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>
+                  Active System Notes, OOC rules, and formatting directives are automatically attached to the terminal user turn (Depth 0) on every response.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => handleToggleMasterInjections(!injectionsData.masterEnabled)}
+                  style={{
+                    background: injectionsData.masterEnabled ? (isDark ? '#059669' : '#10b981') : (isDark ? '#3f3f46' : '#e4e4e7'),
+                    color: injectionsData.masterEnabled ? '#ffffff' : colors.textMain,
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '8px 14px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  <span>{injectionsData.masterEnabled ? '🟢 Injections ON' : '⚪ Injections Paused'}</span>
+                </button>
+
+                <button
+                  onClick={() => setIsCreatingNewInj(prev => !prev)}
+                  style={{
+                    background: isDark ? '#ffffff' : '#000000',
+                    color: isDark ? '#000000' : '#ffffff',
+                    border: 'none',
+                    borderRadius: 6,
+                    padding: '8px 14px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                  <Icons.Plus /> {isCreatingNewInj ? 'Cancel' : 'Add Custom Block'}
+                </button>
+
+                <button
+                  onClick={handleResetInjectionsToDefault}
+                  title="Reset to 7 Curated Roleplay Presets"
+                  style={{
+                    background: colors.cardInner,
+                    border: `1px solid ${colors.border}`,
+                    color: colors.textSub,
+                    borderRadius: 6,
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}>
+                  Reset Defaults
+                </button>
+              </div>
+            </div>
+
+            {/* Inline Form: Create New Custom Injection */}
+            {isCreatingNewInj && (
+              <div style={{
+                background: colors.cardBg,
+                border: `1px solid ${isDark ? '#6b21a8' : '#c4b5fd'}`,
+                borderRadius: 12,
+                padding: 20,
+                boxShadow: colors.cardShadow,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: colors.textMain }}>
+                  ✨ Add New Custom Prompt Injection Block
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
+                      Title / Label:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Custom Scene Formatting / Spanish Dialogue..."
+                      value={newInjTitle}
+                      onChange={e => setNewInjTitle(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        background: colors.inputBg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 6,
+                        padding: '8px 12px',
+                        color: colors.textMain,
+                        fontSize: 13,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
+                      Category:
+                    </label>
+                    <select
+                      value={newInjCategory}
+                      onChange={(e: any) => setNewInjCategory(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        background: colors.inputBg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 6,
+                        padding: '8px 12px',
+                        color: colors.textMain,
+                        fontSize: 13,
+                        outline: 'none'
+                      }}>
+                      <option value="system_note">System Note</option>
+                      <option value="ooc">OOC Directive</option>
+                      <option value="style">Style Modifier</option>
+                      <option value="custom">Custom Rule</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
+                      Attachment Position:
+                    </label>
+                    <select
+                      value={newInjPosition}
+                      onChange={(e: any) => setNewInjPosition(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        background: colors.inputBg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 6,
+                        padding: '8px 12px',
+                        color: colors.textMain,
+                        fontSize: 13,
+                        outline: 'none'
+                      }}>
+                      <option value="depth_0_user">Terminal User Turn (Depth 0 - High Adherence)</option>
+                      <option value="system_instruction">System Prompt (Global Context)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
+                    Prompt Directive Content:
+                  </label>
+                  <textarea
+                    rows={4}
+                    placeholder="e.g. [SYSTEM NOTE: Always describe actions in third-person past tense and emphasize atmospheric sensory cues.]"
+                    value={newInjContent}
+                    onChange={e => setNewInjContent(e.target.value)}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: colors.inputBg,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 6,
+                      padding: '10px 12px',
+                      color: colors.textMain,
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      lineHeight: 1.5,
+                      outline: 'none',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button
+                    onClick={() => { setIsCreatingNewInj(false); setNewInjTitle(''); setNewInjContent(''); }}
+                    style={{
+                      background: colors.cardInner,
+                      border: `1px solid ${colors.border}`,
+                      color: colors.textSub,
+                      borderRadius: 6,
+                      padding: '8px 14px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}>
+                    Cancel
+                  </button>
+                  <button
+                    disabled={!newInjTitle.trim() || !newInjContent.trim() || isSavingInjection}
+                    onClick={() => handleSaveInjection({
+                      title: newInjTitle.trim(),
+                      category: newInjCategory,
+                      position: newInjPosition,
+                      content: newInjContent.trim(),
+                      enabled: true
+                    })}
+                    style={{
+                      background: isDark ? '#ffffff' : '#000000',
+                      color: isDark ? '#000000' : '#ffffff',
+                      border: 'none',
+                      borderRadius: 6,
+                      padding: '8px 16px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: (!newInjTitle.trim() || !newInjContent.trim() || isSavingInjection) ? 'not-allowed' : 'pointer'
+                    }}>
+                    {isSavingInjection ? 'Saving...' : 'Save & Enable Block'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Injections Cards Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
+              {(injectionsData.injections || []).map((inj: any) => {
+                const isEditing = editingInjection?.id === inj.id;
+                return (
+                  <div
+                    key={inj.id}
+                    style={{
+                      background: colors.cardBg,
+                      border: `1px solid ${inj.enabled && injectionsData.masterEnabled ? (isDark ? '#4c1d95' : '#c4b5fd') : colors.border}`,
+                      borderRadius: 12,
+                      padding: 18,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      boxShadow: colors.cardShadow,
+                      transition: 'border-color 0.15s'
+                    }}>
+                    <div>
+                      {/* Card Header Toolbar */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: inj.category === 'ooc' ? (isDark ? '#831843' : '#fce7f3') : (inj.category === 'style' ? (isDark ? '#1e3a8a' : '#dbeafe') : (isDark ? '#3b0764' : '#ede9fe')),
+                            color: inj.category === 'ooc' ? (isDark ? '#fbcfe8' : '#9d174d') : (inj.category === 'style' ? (isDark ? '#bfdbfe' : '#1e40af') : (isDark ? '#e9d5ff' : '#6b21a8')),
+                            border: `1px solid ${colors.border}`
+                          }}>
+                            {inj.category || 'NOTE'}
+                          </span>
+
+                          <span style={{
+                            fontSize: 10,
+                            color: colors.textSub,
+                            background: colors.cardInner,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            border: `1px solid ${colors.border}`
+                          }}>
+                            {inj.position === 'system_instruction' ? 'System Prompt' : 'Depth 0 User'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 10, color: colors.textMuted, fontFamily: 'monospace' }}>
+                            ~{inj.tokens || Math.floor((inj.content?.length || 0) / 4)} tok
+                          </span>
+
+                          {/* Toggle Switch */}
+                          <button
+                            onClick={() => handleToggleSingleInjection(inj.id, inj.enabled)}
+                            style={{
+                              background: inj.enabled && injectionsData.masterEnabled ? (isDark ? '#059669' : '#10b981') : (isDark ? '#27272a' : '#e4e4e7'),
+                              color: inj.enabled && injectionsData.masterEnabled ? '#ffffff' : colors.textSub,
+                              border: 'none',
+                              borderRadius: 14,
+                              padding: '3px 10px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}>
+                            {inj.enabled ? 'ON' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Card Title */}
+                      <h3 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700, color: colors.textMain }}>
+                        {inj.title}
+                      </h3>
+
+                      {/* Content Box or Inline Editor */}
+                      {isEditing ? (
+                        <div style={{ marginTop: 8 }}>
+                          <textarea
+                            rows={5}
+                            value={editingInjection.content}
+                            onChange={e => setEditingInjection({ ...editingInjection, content: e.target.value })}
+                            style={{
+                              width: '100%',
+                              boxSizing: 'border-box',
+                              background: colors.inputBg,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: 6,
+                              padding: '8px 10px',
+                              color: colors.textMain,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              lineHeight: 1.4,
+                              outline: 'none',
+                              resize: 'vertical'
+                            }}
+                          />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+                            <button
+                              onClick={() => setEditingInjection(null)}
+                              style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textSub, borderRadius: 4, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                              Cancel
+                            </button>
+                            <button
+                              disabled={isSavingInjection}
+                              onClick={() => handleSaveInjection(editingInjection)}
+                              style={{ background: isDark ? '#ffffff' : '#000000', color: isDark ? '#000000' : '#ffffff', border: 'none', borderRadius: 4, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          background: isDark ? '#0f0c1b' : '#f8fafc',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 8,
+                          padding: '10px 12px',
+                          fontSize: 11,
+                          lineHeight: 1.45,
+                          color: colors.textSub,
+                          fontFamily: 'monospace',
+                          whiteSpace: 'pre-wrap',
+                          maxHeight: 130,
+                          overflowY: 'auto'
+                        }}>
+                          {inj.content}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card Actions Footer */}
+                    {!isEditing && (
+                      <div style={{ borderTop: `1px solid ${colors.borderMuted}`, paddingTop: 10, marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            onClick={() => setEditingInjection({ ...inj })}
+                            style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textSub, borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => copyToClipboard(inj.content, `inj_${inj.id}`)}
+                            style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textSub, borderRadius: 4, padding: '4px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                            {copiedField === `inj_${inj.id}` ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteInjection(inj.id)}
+                          title="Delete injection block"
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', padding: '4px 6px', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <Icons.Trash />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
