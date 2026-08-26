@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.1.1`  
+> *Current Version*: `v3.2.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -24,6 +24,7 @@
 9. **50/50 Round-Robin Load Balancing**: Evenly distributes generation requests across Google OAuth accounts on every turn with instantaneous failover on 429 quota exhaustion.
 10. **Lorebary & Lorebook Injection Tracking**: Passively extracts dynamic `<lore>`, `<world_info>`, and `<memory>` entries and renders an interactive turn-by-turn inspection panel in the Logged Chats explorer.
 11. **Passive Cloud Logging & 1-Click DB Wipe**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency and 1-click database flush.
+12. **In-Chat Control Commands & History Sanitization**: In-band control commands (`<MYSETTINGS>`, `<ENABLE: X, Y>`, `<DISABLE: X, Y>`, `<INJECTIONS: ON/OFF>`) allow real-time module inspection and toggling directly inside roleplay chat boxes with 0ms delay, 0 Google API quota cost, and automatic sanitization of past command turns from upstream prompts to ensure 100% character immersion.
 
 ---
 

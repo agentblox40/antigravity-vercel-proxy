@@ -14,7 +14,11 @@ import {
   recordTurnsIntoSession,
   extractInjectedLore,
 } from './memory';
-import { getActiveInjectionsFormatted } from './injections';
+import {
+  getActiveInjectionsFormatted,
+  detectInChatCommand,
+  executeInChatCommand
+} from './injections';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -131,6 +135,23 @@ export async function handleChatCompletions(req: NextRequest) {
       }
     } catch (memErr) {
       console.warn('Memory engine non-blocking warning:', memErr);
+    }
+  }
+
+  // Check for In-Chat Roleplay Control Commands (<MYSETTINGS>, <ENABLE: ...>, <DISABLE: ...>)
+  const inChatCmd = detectInChatCommand(latestUserText);
+  if (inChatCmd) {
+    const menuOutput = await executeInChatCommand(inChatCmd);
+
+    // Record command exchange into session asynchronously for visibility in dashboard
+    if (session) {
+      recordTurnsIntoSession(session, messages, menuOutput, undefined, undefined, undefined).catch(() => {});
+    }
+
+    if (body.stream) {
+      return buildImmediateCommandStreamResponse(menuOutput, modelId);
+    } else {
+      return buildImmediateCommandJsonResponse(menuOutput, modelId);
     }
   }
 
@@ -496,6 +517,88 @@ export async function handleChatCompletions(req: NextRequest) {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Retry-After': String(minCooldownSec),
+      },
+    }
+  );
+}
+
+function buildImmediateCommandStreamResponse(content: string, modelId: string) {
+  const encoder = new TextEncoder();
+  const id = `chatcmpl-cmd-${crypto.randomUUID().slice(0, 8)}`;
+  const created = Math.floor(Date.now() / 1000);
+
+  const customStream = new ReadableStream({
+    start(controller) {
+      const chunk1 = {
+        id,
+        object: 'chat.completion.chunk',
+        created,
+        model: modelId,
+        choices: [
+          {
+            index: 0,
+            delta: { role: 'assistant', content },
+            finish_reason: null,
+          },
+        ],
+      };
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk1)}\n\n`));
+
+      const chunkDone = {
+        id,
+        object: 'chat.completion.chunk',
+        created,
+        model: modelId,
+        choices: [
+          {
+            index: 0,
+            delta: {},
+            finish_reason: 'stop',
+          },
+        ],
+      };
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunkDone)}\n\n`));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+
+  return new NextResponse(customStream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+}
+
+function buildImmediateCommandJsonResponse(content: string, modelId: string) {
+  return NextResponse.json(
+    {
+      id: `chatcmpl-cmd-${crypto.randomUUID().slice(0, 8)}`,
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model: modelId,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content,
+          },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: Math.max(1, Math.floor(content.length / 4)),
+        total_tokens: 10 + Math.max(1, Math.floor(content.length / 4)),
+      },
+    },
+    {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
       },
     }
   );

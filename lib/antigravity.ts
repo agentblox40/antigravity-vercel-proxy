@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { detectInChatCommand } from './injections';
 
 export interface AccountConfig {
   id: string;
@@ -310,6 +311,10 @@ export function transformOpenAIToAntigravity(
     }
     text = text.trim();
     if (!text && role !== 'system') continue;
+
+    // Sanitize past in-chat settings commands and proxy menu outputs from upstream wire history
+    if (role === 'user' && detectInChatCommand(text)) continue;
+    if (role === 'assistant' && (text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') || text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]'))) continue;
 
     if (role === 'system') {
       if (!userSystemText.includes(text)) {

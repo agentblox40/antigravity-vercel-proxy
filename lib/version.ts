@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.1.1';
+export const CURRENT_VERSION = '3.2.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.1.1',
+    version: '3.2.0',
     tag: 'LATEST',
-    title: 'Strict Injections Isolation & Master Switch Metric Sync',
+    title: 'In-Chat Roleplay Control Commands & History Sanitization',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Added in-band roleplay control commands (<MYSETTINGS>, <ENABLE: X, Y>, <DISABLE: X, Y>, <INJECTIONS: ON/OFF>) for 0ms in-chat configuration toggling with 0 Google API quota cost and automatic history sanitization.',
+    highlights: [
+      'In-Chat Settings Menu: Send <MYSETTINGS> in Janitor AI or SillyTavern to instantly receive a numbered active/disabled directives menu with 0ms delay and 0 tokens sent to Google.',
+      'On-the-Fly Directives Toggling: Send <ENABLE: 1, 3> or <DISABLE: 5, 6> (or names like <ENABLE: Slow Romance>) to update module states in real-time and immediately receive a refreshed confirmation menu.',
+      'Master Switch In-Chat Control: Use <INJECTIONS: OFF> and <INJECTIONS: ON> to pause or resume the prompt injection engine directly from chat.',
+      'Automatic History Sanitization: When resuming roleplay on subsequent turns, past settings commands and menu outputs are automatically filtered out from upstream Google wire payloads to maintain 100% character immersion.'
+    ]
+  },
+  {
+    version: '3.1.1',
+    tag: 'PATCH',
+    title: 'Strict Injections Isolation & Master Switch Metric Sync',
+    date: 'Aug 26, 2026',
+    commit: '63307e0',
     description: 'Fixed phantom injection metadata inheritance on new turns and synchronized active count/token metrics when Master Switch is paused.',
     highlights: [
       'Eliminated Phantom Metadata Inheritance: Fixed recordTurnsIntoSession so turning off prompt injections immediately zeroes out attached directives on all subsequent turns without inheriting prior session snapshots.',

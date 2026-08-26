@@ -263,3 +263,168 @@ export async function getActiveInjectionsFormatted(turnCount = 1): Promise<{
     attachedInjections
   };
 }
+
+export interface InChatCommand {
+  type: 'view' | 'enable' | 'disable' | 'master_toggle';
+  rawInput: string;
+  targets?: string[];
+  masterEnabled?: boolean;
+}
+
+export function detectInChatCommand(rawText: string): InChatCommand | null {
+  if (!rawText) return null;
+  const trimmed = rawText.trim();
+
+  // Pattern 1: View menu: <MYSETTINGS>, <SETTINGS>, /settings, <MY_SETTINGS>
+  if (/^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i.test(trimmed) || /^\/settings\s*$/i.test(trimmed)) {
+    return { type: 'view', rawInput: trimmed };
+  }
+
+  // Pattern 2: Master Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
+  const masterMatch = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i.exec(trimmed);
+  if (masterMatch) {
+    const val = masterMatch[1].toUpperCase();
+    const enable = val === 'ON' || val === 'RESUME' || val === 'ENABLE';
+    return { type: 'master_toggle', rawInput: trimmed, masterEnabled: enable };
+  }
+
+  // Pattern 3: Enable specific modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
+  const enableMatch = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
+  if (enableMatch) {
+    const targets = enableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+    return { type: 'enable', rawInput: trimmed, targets };
+  }
+
+  // Pattern 4: Disable specific modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
+  const disableMatch = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
+  if (disableMatch) {
+    const targets = disableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+    return { type: 'disable', rawInput: trimmed, targets };
+  }
+
+  return null;
+}
+
+export function formatTriggerModeLabel(inj: PromptInjection): string {
+  const mode = inj.triggerMode || 'always';
+  if (mode === 'probability') return `🎲 ${inj.probabilityPercent ?? 10}% Chance`;
+  if (mode === 'interval') return `⏱️ Every ${inj.intervalTurns ?? 5} Texts`;
+  if (mode === 'first_turn') return '⚡ First Turn Only';
+  return 'Always';
+}
+
+export function generateSettingsMenu(config: InjectionsConfig, notice?: string): string {
+  const injections = config.injections || [];
+  const isMasterOn = config.masterEnabled !== false;
+  const activeList: { num: number; inj: PromptInjection }[] = [];
+  const disabledList: { num: number; inj: PromptInjection }[] = [];
+
+  injections.forEach((inj, idx) => {
+    const num = idx + 1;
+    if (inj.enabled) {
+      activeList.push({ num, inj });
+    } else {
+      disabledList.push({ num, inj });
+    }
+  });
+
+  const totalTokens = isMasterOn
+    ? activeList.reduce((acc, item) => acc + (item.inj.tokens || estimateTokens(item.inj.content)), 0)
+    : 0;
+
+  const lines: string[] = [];
+  lines.push('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]');
+  if (notice) {
+    lines.push(`\n${notice}\n`);
+  } else {
+    lines.push('');
+  }
+
+  lines.push(`Master Switch: ${isMasterOn ? '🟢 ON' : '⚪ PAUSED'} (${isMasterOn ? activeList.length : 0} active • ~${totalTokens} tok)`);
+  lines.push('────────────────────────────────────────');
+
+  lines.push('\n[✅ ENABLED DIRECTIVES]:');
+  if (activeList.length === 0) {
+    lines.push('  (None active)');
+  } else {
+    for (const { num, inj } of activeList) {
+      const modeStr = formatTriggerModeLabel(inj);
+      lines.push(`${num}. ${inj.title} (${modeStr})`);
+    }
+  }
+
+  lines.push('\n[❌ DISABLED DIRECTIVES]:');
+  if (disabledList.length === 0) {
+    lines.push('  (None disabled)');
+  } else {
+    for (const { num, inj } of disabledList) {
+      const modeStr = formatTriggerModeLabel(inj);
+      lines.push(`${num}. ${inj.title} (${modeStr})`);
+    }
+  }
+
+  lines.push('\n────────────────────────────────────────');
+  lines.push('💡 Quick Commands:');
+  lines.push('• To enable:  <ENABLE: 1, 3>   or  <ENABLE: Slow Romance>');
+  lines.push('• To disable: <DISABLE: 5, 6>  or  <DISABLE: Slow Romance>');
+  lines.push('• Master switch: <INJECTIONS: ON>  or  <INJECTIONS: OFF>');
+  lines.push('• View menu:  <MYSETTINGS>');
+  lines.push('────────────────────────────────────────');
+  lines.push('✨ To continue your roleplay, simply send your character dialogue normally!');
+
+  return lines.join('\n');
+}
+
+export async function executeInChatCommand(cmd: InChatCommand): Promise<string> {
+  const config = await getInjectionsConfig();
+  const injections = config.injections || [];
+
+  if (cmd.type === 'view') {
+    return generateSettingsMenu(config);
+  }
+
+  if (cmd.type === 'master_toggle') {
+    const nextState = cmd.masterEnabled ?? !config.masterEnabled;
+    config.masterEnabled = nextState;
+    await saveInjectionsConfig(config);
+    const notice = `✨ Updated: Master Injections Switch is now ${nextState ? '🟢 ON' : '⚪ PAUSED'}.`;
+    return generateSettingsMenu(config, notice);
+  }
+
+  if (cmd.type === 'enable' || cmd.type === 'disable') {
+    const shouldEnable = cmd.type === 'enable';
+    const targets = cmd.targets || [];
+    const matchedTitles: string[] = [];
+
+    for (const t of targets) {
+      const rawTarget = t.trim();
+      const num = parseInt(rawTarget, 10);
+      let targetInj: PromptInjection | undefined;
+
+      if (!isNaN(num) && num >= 1 && num <= injections.length) {
+        targetInj = injections[num - 1];
+      } else {
+        // Match by title (case-insensitive substring)
+        const lower = rawTarget.toLowerCase();
+        targetInj = injections.find(i => i.title.toLowerCase().includes(lower) || i.id.toLowerCase() === lower);
+      }
+
+      if (targetInj) {
+        targetInj.enabled = shouldEnable;
+        matchedTitles.push(targetInj.title);
+      }
+    }
+
+    if (matchedTitles.length > 0) {
+      await saveInjectionsConfig(config);
+      const actionWord = shouldEnable ? 'Enabled' : 'Disabled';
+      const notice = `✨ Updated: ${actionWord} [${matchedTitles.join(', ')}].`;
+      return generateSettingsMenu(config, notice);
+    } else {
+      const notice = `⚠️ No matching injection directives found for: "${targets.join(', ')}".`;
+      return generateSettingsMenu(config, notice);
+    }
+  }
+
+  return generateSettingsMenu(config);
+}
