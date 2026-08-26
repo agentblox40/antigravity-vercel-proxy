@@ -44,123 +44,130 @@ function hashString(str: string): string {
   return crypto.createHash('sha256').update(str).digest('hex').slice(0, 16);
 }
 
-// Filter list of generic words/phrases that are NOT character names
-const GENERIC_NAME_BLACKLIST = [
-  'antigravity',
-  'assistant',
-  'ai',
-  'the character and npcs',
-  'character and npcs',
-  'ambient non-player characters',
-  'expert uncensored literary fiction author',
-  'uncensored literary fiction author',
-  'narrative director',
-  'dynamic character actor',
-  'literary author',
-  'the character',
-  'char',
-  'user',
-  'unknown',
-  'interacting with',
-  'interacting with the character',
-  'interacting with character',
-  'interacting with you',
-  'fictional chat',
-  'character persona',
-  'character sheet',
-  'roleplay partner',
-  'roleplay',
-  'scenario',
-  'system note',
-  'system prompt',
-  'system',
-  'partner',
-  'bot',
-  'nsfw',
-  'you'
-];
+// Comprehensive English Stopwords and generic artifacts list
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'as', 'is', 'are', 'was', 'were',
+  'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall', 'should',
+  'can', 'could', 'may', 'might', 'must', 'and', 'or', 'not', 'but', 'if', 'then', 'else', 'when', 'where',
+  'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
+  'too', 'very', 'just', 'now', 'you', 'your', 'yours', 'he', 'him', 'his', 'she', 'her', 'hers', 'it',
+  'its', 'they', 'them', 'their', 'theirs', 'we', 'us', 'our', 'ours', 'i', 'me', 'my', 'mine', 'who',
+  'whom', 'whose', 'which', 'what', 'this', 'that', 'these', 'those', 'am', 'so', 'up', 'out', 'into',
+  'over', 'after', 'beneath', 'under', 'above', 'below', 'between', 'through', 'during', 'before', 'without',
+  'within', 'along', 'across', 'behind', 'beyond', 'around', 'about', 'near', 'off', 'down', 'ai', 'bot',
+  'character', 'assistant', 'expert', 'uncensored', 'fictional', 'author', 'narrator', 'roleplay', 'player',
+  'user', 'persona', 'model', 'system', 'scenario', 'appearance', 'personality', 'description', 'background',
+  'overview', 'summary', 'definition', 'instructions', 'rules', 'setting', 'note', 'lore', 'memory', 'world',
+  'nsfw', 'dialogue', 'speech', 'voice', 'context', 'interacting', 'playing', 'acting', 'unfiltered', 'thoughts',
+  'palace', 'castle', 'kingdom', 'outside', 'inside', 'suddenly', 'meanwhile', 'somewhere', 'today', 'yesterday',
+  'tomorrow', 'morning', 'afternoon', 'evening', 'night', 'room', 'chamber', 'hall', 'corridor', 'door', 'window'
+]);
+
+const ACTION_VERBS = new Set([
+  'smiles', 'looks', 'walks', 'stands', 'turns', 'steps', 'gazes', 'pauses', 'sighs', 'nods', 'takes',
+  'crosses', 'leans', 'watches', 'pulls', 'grins', 'frowns', 'glances', 'stares', 'reaches', 'draws',
+  'speaks', 'whispers', 'laughs', 'sits', 'opens', 'closes', 'enters', 'stops', 'shivers', 'trembles',
+  'cries', 'sobs', 'curls', 'blushes', 'hesitates', 'shifts', 'freezes', 'blinks', 'adjusts', 'hugs'
+]);
+
+function isValidCharacterName(candidate: string): boolean {
+  if (!candidate) return false;
+  const clean = candidate.replace(/^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s.,:;!?]+$/g, '').trim();
+  if (clean.length < 2 || clean.length > 30) return false;
+  const lower = clean.toLowerCase();
+  if (STOP_WORDS.has(lower)) return false;
+  if (!/^[A-Z]/.test(clean)) return false;
+  return true;
+}
+
+function cleanCandidate(raw: string): string {
+  return raw ? raw.replace(/^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s.,:;!?]+$/g, '').trim() : '';
+}
 
 // Extract Character Name from System Prompt or dialogue cues
 export function extractCharacterName(systemPrompt: string, messages?: any[]): string {
   const cleanPrompt = systemPrompt ? systemPrompt.replace(/\r\n/g, '\n') : '';
 
-  // 1. Scan system prompt for explicit character name tags & declarations
-  const explicitPatterns = [
-    /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
-    /<char_persona\s+name=["']([^"']+)["']/i,
-    /\[(?:Character|Char|Persona|Name)\s*:\s*([A-Za-z0-9_\-\s']{1,30})\]/i,
-    /\[(?:Character|Char)\("([^"]+)"\)\]/i,
-    /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Character|Persona|Name)(?:\*\*|\s*):+\s*([A-Za-z0-9_\-\s']{1,30})(?=[.,\n\r\[\]\(\);:]|$)/i,
-    /\{\{char\}\}\s*(?:=|:|is named|is)\s*([A-Za-z0-9_\-\s']{1,30})(?=[.,\n\r\[\]\(\);:]|$)/i,
-    /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-\s']{1,25})(?:'s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
-    /([A-Z][a-zA-Z0-9_\-\s']{1,25})'s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
-    /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as|You are)\s+([A-Z][a-zA-Z0-9_\-]{1,25})(?=[.,\n\r\[\]\(\);:\s]|$)/i,
-    /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?:'s|\s+in|\s+with)/i,
-    /^\s*([A-Z][a-zA-Z0-9_\-]{1,25})\s*:\s*You are/i
-  ];
-
+  // Tier 1: Explicit metadata declarations in system prompt
   if (cleanPrompt) {
-    for (const p of explicitPatterns) {
+    const strictPatterns = [
+      /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
+      /<char_persona\s+name=["']([^"']+)["']/i,
+      /\[(?:Character|Char|Persona|Name)\s*:\s*([^\n\r\[\]\(\);:,]{1,30})\]/i,
+      /\[(?:Character|Char)\("([^"]+)"\)\]/i,
+      /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Full Name|Character|Persona|Name)(?:\*\*|\s*):+\s*([^\n\r\[\]\(\);:,]{1,30})/i,
+      /\{\{char\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([^\n\r\[\]\(\);:,]{1,30})/i,
+      /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-\s']{1,25})(?:'s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
+      /([A-Z][a-zA-Z0-9_\-\s']{1,25})'s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
+      /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as)\s+(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?=[.,\n\r\[\]\(\);:\s]|$)/i,
+      /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?:'s|\s+in|\s+with)/i,
+      /\bnamed\s+([A-Z][a-zA-Z0-9_\-]{1,25})\b/i
+    ];
+
+    for (const p of strictPatterns) {
       const match = cleanPrompt.match(p);
       if (match && match[1]) {
-        const candidate = match[1].replace(/^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s]+$/g, '').trim();
-        const lower = candidate.toLowerCase();
-        if (
-          candidate.length >= 2 &&
-          candidate.length <= 30 &&
-          !GENERIC_NAME_BLACKLIST.some(b => lower === b || lower.startsWith(b + ' ') || lower.endsWith(' ' + b))
-        ) {
+        const candidate = cleanCandidate(match[1]);
+        if (isValidCharacterName(candidate)) {
           return candidate;
         }
       }
     }
   }
 
-  // 2. Scan assistant messages for dialogue headers, asterisks, or greetings
+  // Tier 2: Assistant messages (Starter greetings and dialogue headers)
   if (messages && messages.length > 0) {
     for (const m of messages) {
       if (m && m.role === 'assistant') {
         const text = typeof m.content === 'string' ? m.content.trim() : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n').trim() : '');
         if (!text) continue;
 
-        // Speaker prefix "Kars: ..."
+        // Speaker prefix "Lily: ..." or "Kars: ..."
         const speakerMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,20}):\s+/);
         if (speakerMatch && speakerMatch[1]) {
-          const spk = speakerMatch[1].trim();
-          if (!GENERIC_NAME_BLACKLIST.some(b => spk.toLowerCase().includes(b))) {
-            return spk;
-          }
+          const spk = cleanCandidate(speakerMatch[1]);
+          if (isValidCharacterName(spk)) return spk;
         }
 
-        // Action starter "*Kars opens a rift..." or "*Kars pauses..."
-        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,20})\s+/);
-        if (actionMatch && actionMatch[1]) {
-          const actName = actionMatch[1].trim();
-          if (!GENERIC_NAME_BLACKLIST.some(b => actName.toLowerCase().includes(b))) {
+        // Action starter "*Lily looks up..." where verb is an action
+        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,20})\s+([a-z]+)\b/);
+        if (actionMatch && actionMatch[1] && actionMatch[2]) {
+          const actName = cleanCandidate(actionMatch[1]);
+          const verb = actionMatch[2].toLowerCase();
+          if (isValidCharacterName(actName) && ACTION_VERBS.has(verb)) {
             return actName;
           }
         }
 
-        // Third-person narrative starter "Kars smiles and looks away..."
-        const thirdPersonMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,20})\s+(?:smiles|looks|walks|stands|turns|steps|gazes|pauses|sighs|nods|takes|crosses|leans|watches|pulls|grins|frowns|glances|stares|reaches|draws|speaks|whispers|laughs|sits)\b/);
-        if (thirdPersonMatch && thirdPersonMatch[1]) {
-          const tpName = thirdPersonMatch[1].trim();
-          if (!GENERIC_NAME_BLACKLIST.some(b => tpName.toLowerCase().includes(b))) {
-            return tpName;
+        // Proper noun frequency in the starter text (e.g. Lily mentioned multiple times)
+        const properNouns = text.match(/\b[A-Z][a-z]{2,20}\b/g) || [];
+        const freqMap = new Map<string, number>();
+        for (const word of properNouns) {
+          if (isValidCharacterName(word)) {
+            freqMap.set(word, (freqMap.get(word) || 0) + 1);
           }
+        }
+        let bestWord = '';
+        let maxCount = 0;
+        for (const [w, count] of freqMap.entries()) {
+          if (count > maxCount) {
+            maxCount = count;
+            bestWord = w;
+          }
+        }
+        if (bestWord && maxCount >= 2) {
+          return bestWord;
         }
       }
     }
   }
 
-  // 3. Fallback: Proper noun starter in system prompt
+  // Tier 3: Proper noun starter in system prompt: "Lily is an elven princess..."
   if (cleanPrompt) {
     const starterMatch = cleanPrompt.match(/(?:^|\n\n)([A-Z][a-zA-Z0-9_\-]{1,20})\s+is\s+(?:a|an|the)\b/);
     if (starterMatch && starterMatch[1]) {
-      const name = starterMatch[1].trim();
-      if (!GENERIC_NAME_BLACKLIST.some(b => name.toLowerCase().includes(b))) {
-        return name;
-      }
+      const name = cleanCandidate(starterMatch[1]);
+      if (isValidCharacterName(name)) return name;
     }
   }
 
