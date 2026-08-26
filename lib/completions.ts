@@ -191,7 +191,10 @@ export async function handleChatCompletions(req: NextRequest) {
     : orderedAccounts;
 
   const attemptLogs: { account: string; status: number; error: string }[] = [];
-  const { userInjectionsText, systemInjectionsText } = await getActiveInjectionsFormatted();
+  const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
+  const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj } = await getActiveInjectionsFormatted();
+  const userInjectionsText = bypassInjections ? '' : rawUserInj;
+  const systemInjectionsText = bypassInjections ? '' : rawSysInj;
 
   for (const account of accountsToTry) {
     try {

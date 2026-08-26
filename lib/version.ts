@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.8.0';
+export const CURRENT_VERSION = '2.9.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.8.0',
+    version: '2.9.0',
     tag: 'LATEST',
-    title: 'Modular Prompt Injections & Directives Manager',
+    title: '3-Stage Injections Testing Playground & Character Presets',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Redesigned the Roleplay Playground into a 3-column live inspection lab showing Raw Input, Input + Injections wire payload, and Live Output with switchable character presets.',
+    highlights: [
+      '3-Stage Visual Pipeline: Clear 3-column testing suite showing 1️⃣ Raw User Input, 2️⃣ Live Wire Input + Injections, and 3️⃣ Model Output & Stream.',
+      '5 Preset Roleplay Characters: 1-click switchable testing personas for Kars (Rift Wanderer), Ami (Cyberpunk Fixer), Lady Aurora (Noble Sorceress), Lyra (Rogue Bard), and Custom Scratchpad.',
+      'Live Wire Injection Inspection: Real-time preview of the concatenated Depth-0 prompt with active directive badges and token breakdown.',
+      'A/B Testing Bypass Switch: Instant toggle to test prompts with Injections Attached vs Injections Bypassed for raw baseline comparisons.'
+    ]
+  },
+  {
+    version: '2.8.0',
+    tag: 'MAJOR',
+    title: 'Modular Prompt Injections & Directives Manager',
+    date: 'Aug 26, 2026',
+    commit: '3b90c77',
     description: 'Added a dedicated Injections Management panel in the dashboard with 7 curated roleplay presets and custom directive block creation attached automatically to every completion turn.',
     highlights: [
       'Automatic Depth-0 Stacking: Active System Notes, OOC rules, and style directives attach cleanly below the terminal user turn on every request.',

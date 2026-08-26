@@ -149,6 +149,70 @@ const Icons = {
   )
 };
 
+interface PlaygroundCharacterPreset {
+  id: string;
+  name: string;
+  avatar: string;
+  tagline: string;
+  category: string;
+  systemPrompt: string;
+  defaultStarter: string;
+  defaultUserInput: string;
+}
+
+const PLAYGROUND_PRESETS: PlaygroundCharacterPreset[] = [
+  {
+    id: 'kars_rift',
+    name: 'Kars • Dimensional Wanderer',
+    avatar: '❄️',
+    tagline: 'Arrogant rift magic wielder in a freezing breach',
+    category: 'Dark Fantasy / Action',
+    systemPrompt: `You are Kars, an enigmatic, haughty, yet sharply perceptive dimensional wanderer. You wield cold rift magic and speak with clipped arrogance and dark wit. Maintain immersion in character markdown syntax (*asterisks* for actions, "quotes" for speech, \`backticks\` for inner monologue).`,
+    defaultStarter: `*(A freezing rift tears through the air behind you, frosting the stone floor)* "Keep up if you value your skin."`,
+    defaultUserInput: `Kars: Let's go *i open a rift as magnificent cold appears through it*`
+  },
+  {
+    id: 'ami_cyberpunk',
+    name: 'Ami • Neon Fixer',
+    avatar: '🦾',
+    tagline: 'Cynical chrome-enhanced mercenary in Sector 4',
+    category: 'Cyberpunk Noir',
+    systemPrompt: `You are Ami, a cynical chrome-enhanced fixer in Neon Sector 4. Gritty, street-smart, speaks in fast slang, wary of betrayal. Maintain immersion in character markdown syntax (*asterisks* for actions, "quotes" for speech, \`backticks\` for inner monologue).`,
+    defaultStarter: `*(Slides a chipped datapad across the greasy table)* "Contract is simple. You grab the core, I keep you alive. Questions?"`,
+    defaultUserInput: `*I lean against the counter, flicking a lighter* "What's the catch, Ami?"`
+  },
+  {
+    id: 'aurora_noble',
+    name: 'Lady Aurora • Academy Prodigy',
+    avatar: '👑',
+    tagline: 'High-born sorceress with sharp tongue & hidden depth',
+    category: 'Slow-Burn Romance / Drama',
+    systemPrompt: `You are Lady Aurora, a proud noble sorceress with high standards and hidden vulnerability. Slow to trust, sharp-tongued, nuanced aristocratic cadence. Maintain immersion in character markdown syntax (*asterisks* for actions, "quotes" for speech, \`backticks\` for inner monologue).`,
+    defaultStarter: `*(Glances up from her illuminated grimoire, eyes narrowing)* "You are late. Again. Explain yourself before I lose patience."`,
+    defaultUserInput: `*I set the recovered family seal on your desk with an apologetic grin* "I had to evade three patrols to get this back for you."`
+  },
+  {
+    id: 'lyra_bard',
+    name: 'Lyra • Rogue Bard',
+    avatar: '🍻',
+    tagline: 'Charming tavern wanderer seeking secrets and gold',
+    category: 'Fantasy / Banter',
+    systemPrompt: `You are Lyra, a cheerful yet observant bard with quick fingers and quicker retorts. Charismatic, playful, loves coin and rare rumors. Maintain immersion in character markdown syntax (*asterisks* for actions, "quotes" for speech, \`backticks\` for inner monologue).`,
+    defaultStarter: `*(Tuning her lute in the warm tavern firelight, winking)* "Look what the storm dragged in! Care for a song or a secret?"`,
+    defaultUserInput: `*I slide two gold pieces across the wood* "Tell me about the strange portal in the woods."`
+  },
+  {
+    id: 'custom_scratchpad',
+    name: 'Custom Character Scratchpad',
+    avatar: '🛠️',
+    tagline: 'Create your own custom prompt, starter, and tests',
+    category: 'Custom Sandbox',
+    systemPrompt: `You are an immersive roleplay assistant. Maintain immersion in character markdown syntax (*asterisks* for actions, "quotes" for speech, \`backticks\` for inner monologue).`,
+    defaultStarter: `*(Looking at you thoughtfully)* "What brings you here today?"`,
+    defaultUserInput: `*I step forward with a curious expression*`
+  }
+];
+
 const PRESETS = [
   { name: 'Tavern Roleplay', sys: 'You are an immersive, descriptive roleplay character. Write vivid reactions, actions in asterisks, and speech in quotes.' },
   { name: 'Dark Fantasy RPG', sys: 'You are the Dungeon Master in a gritty dark fantasy world. Describe atmospheric details, sensory cues, and combat physics.' },
@@ -178,15 +242,19 @@ export default function AntigravityControlCenter() {
   const [selectedModel, setSelectedModel] = useState('gemini-3.7-flash-high');
   const [isSyncingModels, setIsSyncingModels] = useState(false);
 
-  // Playground & Chat State
-  const [systemPrompt, setSystemPrompt] = useState(PRESETS[0].sys);
+  // Playground & 3-Stage Testing Lab State
+  const [selectedPresetId, setSelectedPresetId] = useState('kars_rift');
+  const [systemPrompt, setSystemPrompt] = useState(PLAYGROUND_PRESETS[0].systemPrompt);
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; thought?: string }>>([
-    { role: 'assistant', content: "*(Adjusts cloak and looks up from the corner table)* Well, who do we have here? Pull up a chair and state your business." }
+    { role: 'assistant', content: PLAYGROUND_PRESETS[0].defaultStarter }
   ]);
-  const [inputMessage, setInputMessage] = useState('');
+  const [inputMessage, setInputMessage] = useState(PLAYGROUND_PRESETS[0].defaultUserInput);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentThought, setCurrentThought] = useState('');
   const [currentDelta, setCurrentDelta] = useState('');
+  const [playgroundBypassInjections, setPlaygroundBypassInjections] = useState(false);
+  const [playgroundLastLatency, setPlaygroundLastLatency] = useState<number | null>(null);
+  const [playgroundShowSystem, setPlaygroundShowSystem] = useState(false);
 
   // Model Parameter Controls
   const [temperature, setTemperature] = useState(0.7);
@@ -653,6 +721,17 @@ export default function AntigravityControlCenter() {
     URL.revokeObjectURL(url);
   };
 
+  const handleSelectPreset = (preset: PlaygroundCharacterPreset) => {
+    setSelectedPresetId(preset.id);
+    setSystemPrompt(preset.systemPrompt);
+    setMessages([
+      { role: 'assistant', content: preset.defaultStarter }
+    ]);
+    setInputMessage(preset.defaultUserInput);
+    setCurrentThought('');
+    setCurrentDelta('');
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isStreaming) return;
 
@@ -685,6 +764,7 @@ export default function AntigravityControlCenter() {
           max_tokens: maxTokens,
           top_p: topP,
           thinking_budget: thinkingBudget,
+          bypass_injections: playgroundBypassInjections,
           stream: true
         })
       });
@@ -732,10 +812,12 @@ export default function AntigravityControlCenter() {
         }
       }
 
+      const totalElapsed = Date.now() - start;
+      setPlaygroundLastLatency(totalElapsed);
       setMessages([...newHistory, { role: 'assistant', content: accumulatedContent, thought: accumulatedThought }]);
       setTotalTokensServed(prev => prev + Math.floor((userText.length + accumulatedContent.length + accumulatedThought.length) / 3));
       setRequestsCount(prev => prev + 1);
-      setLatencyMs(Date.now() - start);
+      setLatencyMs(totalElapsed);
 
       // Refresh memory if active
       setTimeout(() => fetchMemoryOverview(), 1000);
@@ -2034,143 +2116,502 @@ export default function AntigravityControlCenter() {
           </div>
         )}
 
-        {/* TAB 3: ROLEPLAY STUDIO */}
-        {activeTab === 'playground' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20 }}>
-            
-            {/* Left Sidebar: Character Definition & Presets */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 18, height: 'calc(100vh - 150px)', display: 'flex', flexDirection: 'column', boxShadow: colors.cardShadow }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textMain }}>Scenario & Persona</h3>
-              </div>
-              
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
-                {PRESETS.map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSystemPrompt(p.sys)}
-                    style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textMain, padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                    {p.name}
-                  </button>
-                ))}
-              </div>
+        {/* TAB 3: 3-STAGE INJECTIONS TESTING LAB & PLAYGROUND */}
+        {activeTab === 'playground' && (() => {
+          const activeInjections = injectionsData.masterEnabled && !playgroundBypassInjections
+            ? (injectionsData.injections || []).filter((i: any) => i.enabled && i.position !== 'system_instruction')
+            : [];
+          const activeInjectionsText = activeInjections.map((i: any) => i.content.trim()).join('\n\n');
+          const rawInputTrimmed = inputMessage.trim();
+          
+          const rawTokens = Math.max(1, Math.floor((rawInputTrimmed.length || 0) / 4));
+          const injTokens = activeInjections.reduce((acc: number, i: any) => acc + (i.tokens || Math.floor((i.content?.length || 0) / 4)), 0);
+          const totalWireTokens = rawTokens + (playgroundBypassInjections ? 0 : injTokens);
 
-              <textarea
-                value={systemPrompt}
-                onChange={e => setSystemPrompt(e.target.value)}
-                placeholder="Enter character persona or scenario instructions..."
-                style={{ flex: 1, width: '100%', boxSizing: 'border-box', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 12px', color: colors.textMain, fontSize: 12, resize: 'none', outline: 'none', lineHeight: 1.5, marginBottom: 14 }}
-              />
+          const currentPreset = PLAYGROUND_PRESETS.find(p => p.id === selectedPresetId) || PLAYGROUND_PRESETS[0];
 
-              <div style={{ borderTop: `1px solid ${colors.borderMuted}`, paddingTop: 12 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Model Selection
-                </label>
-                <select
-                  value={selectedModel}
-                  onChange={e => setSelectedModel(e.target.value)}
-                  style={{ width: '100%', background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 6, padding: '8px 10px', color: colors.textMain, fontSize: 12, fontWeight: 600, outline: 'none' }}>
-                  {availableModels.map(m => (
-                    <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Top Character Presets Bar */}
+              <div style={{
+                background: colors.cardBg,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 12,
+                padding: '14px 18px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: colors.cardShadow,
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: colors.textSub }}>
+                    Preset Characters:
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {PLAYGROUND_PRESETS.map(preset => {
+                      const isSel = selectedPresetId === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          onClick={() => handleSelectPreset(preset)}
+                          style={{
+                            background: isSel ? (isDark ? '#27272a' : '#09090b') : colors.cardInner,
+                            color: isSel ? '#ffffff' : colors.textMain,
+                            border: `1px solid ${isSel ? (isDark ? '#52525b' : '#27272a') : colors.border}`,
+                            borderRadius: 8,
+                            padding: '6px 12px',
+                            fontSize: 12,
+                            fontWeight: isSel ? 700 : 500,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            transition: 'all 0.15s'
+                          }}>
+                          <span>{preset.avatar}</span>
+                          <span>{preset.name.split('•')[0].trim()}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            {/* Right Panel: Chat Stream & Interactive Thread */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)', overflow: 'hidden', boxShadow: colors.cardShadow }}>
-              
-              {/* Chat Thread */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {messages.map((m, idx) => (
-                  <div key={idx} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
-                    
-                    {/* Reasoning Accordion (if exists) */}
-                    {m.thought && (
-                      <div style={{ marginBottom: 6, background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          <span>Reasoning Process ({Math.floor(m.thought.length / 4)} tokens)</span>
-                        </div>
-                        <div style={{ marginTop: 6, fontSize: 12, color: colors.textSub, whiteSpace: 'pre-wrap', lineHeight: 1.5, maxHeight: 160, overflowY: 'auto', fontFamily: 'monospace' }}>
-                          {m.thought}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Chat Bubble */}
-                    <div style={{
-                      background: m.role === 'user' ? (isDark ? '#222226' : '#09090b') : colors.cardInner,
-                      color: m.role === 'user' ? '#ffffff' : colors.textMain,
+                {/* Quick Model Selector & Options */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <select
+                    value={selectedModel}
+                    onChange={e => setSelectedModel(e.target.value)}
+                    style={{
+                      background: colors.cardInner,
                       border: `1px solid ${colors.border}`,
-                      borderRadius: 10,
-                      padding: '12px 16px',
-                      fontSize: 13,
-                      lineHeight: 1.6,
-                      whiteSpace: 'pre-wrap'
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                      color: colors.textMain,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      outline: 'none'
                     }}>
-                      {m.content}
+                    {availableModels.map(m => (
+                      <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={() => setPlaygroundShowSystem(prev => !prev)}
+                    style={{
+                      background: colors.cardInner,
+                      border: `1px solid ${colors.border}`,
+                      color: colors.textSub,
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}>
+                    {playgroundShowSystem ? '▲ Hide Persona' : '▼ Edit Persona'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMessages([{ role: 'assistant', content: currentPreset.defaultStarter }]);
+                      setInputMessage(currentPreset.defaultUserInput);
+                      setCurrentThought('');
+                      setCurrentDelta('');
+                      setPlaygroundLastLatency(null);
+                    }}
+                    title="Reset dialogue turns to character starter"
+                    style={{
+                      background: colors.cardInner,
+                      border: `1px solid ${colors.border}`,
+                      color: colors.textSub,
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}>
+                    <Icons.Refresh /> Reset
+                  </button>
+                </div>
+              </div>
+
+              {/* Collapsible System Persona Editor */}
+              {playgroundShowSystem && (
+                <div style={{
+                  background: colors.cardBg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 12,
+                  padding: '14px 18px',
+                  boxShadow: colors.cardShadow,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: colors.textMain }}>
+                      📜 Character System Prompt / Scenario ({currentPreset.name})
+                    </span>
+                    <span style={{ fontSize: 11, color: colors.textMuted }}>
+                      ~{Math.floor(systemPrompt.length / 4)} tokens
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={systemPrompt}
+                    onChange={e => setSystemPrompt(e.target.value)}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: colors.inputBg,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      color: colors.textMain,
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      lineHeight: 1.4,
+                      outline: 'none',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* 3-Column Inspection Lab Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 1.2fr', gap: 16, height: 'calc(100vh - 220px)' }}>
+                
+                {/* 1️⃣ STAGE 1: RAW USER INPUT */}
+                <div style={{
+                  background: colors.cardBg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 12,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxShadow: colors.cardShadow,
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {/* Column Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${colors.border}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13 }}>1️⃣</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: colors.textMain }}>
+                          Raw User Input
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 11, color: colors.textSub, fontFamily: 'monospace' }}>
+                        ~{rawTokens} tokens
+                      </span>
+                    </div>
+
+                    {/* Starter & Dialogue History Snippet */}
+                    <div style={{
+                      background: colors.cardInner,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      marginBottom: 10,
+                      fontSize: 11,
+                      color: colors.textSub,
+                      lineHeight: 1.4,
+                      maxHeight: 110,
+                      overflowY: 'auto'
+                    }}>
+                      <div style={{ fontWeight: 700, color: colors.textMain, marginBottom: 2 }}>
+                        {currentPreset.avatar} {currentPreset.name.split('•')[0].trim()} Starter:
+                      </div>
+                      {messages[0]?.content || currentPreset.defaultStarter}
+                    </div>
+
+                    {/* Input Textarea */}
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
+                      Your Message / Turn Action:
+                    </label>
+                    <textarea
+                      value={inputMessage}
+                      onChange={e => setInputMessage(e.target.value)}
+                      onKeyDown={e => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder='Type roleplay action (*looks around*) or speech ("hello")...'
+                      style={{
+                        flex: 1,
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        background: colors.inputBg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 8,
+                        padding: '10px 12px',
+                        color: colors.textMain,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        outline: 'none',
+                        resize: 'none',
+                        marginBottom: 10
+                      }}
+                    />
+
+                    {/* Stage 1 Action Toolbar */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: colors.textMuted }}>
+                        Press <kbd style={{ background: colors.cardInner, padding: '2px 4px', borderRadius: 3, border: `1px solid ${colors.border}` }}>Ctrl + Enter</kbd> to test
+                      </span>
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={isStreaming || !inputMessage.trim()}
+                        style={{
+                          background: isStreaming ? colors.border : (isDark ? '#ffffff' : '#000000'),
+                          color: isStreaming ? colors.textMuted : (isDark ? '#000000' : '#ffffff'),
+                          border: 'none',
+                          borderRadius: 8,
+                          padding: '8px 18px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: isStreaming || !inputMessage.trim() ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}>
+                        <Icons.Send /> {isStreaming ? 'Generating...' : 'Send Test'}
+                      </button>
                     </div>
                   </div>
-                ))}
+                </div>
 
-                {/* Live Streaming Delta */}
-                {isStreaming && (
-                  <div style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
-                    {currentThought && (
-                      <div style={{ marginBottom: 6, background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '8px 12px' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: colors.textMain, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          <span>Thinking...</span>
+                {/* 2️⃣ STAGE 2: INPUT + INJECTIONS (LIVE WIRE INSPECTION) */}
+                <div style={{
+                  background: colors.cardBg,
+                  border: `1px solid ${injectionsData.masterEnabled && !playgroundBypassInjections ? (isDark ? '#4c1d95' : '#c4b5fd') : colors.border}`,
+                  borderRadius: 12,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: colors.cardShadow,
+                  overflow: 'hidden'
+                }}>
+                  {/* Column Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${colors.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>2️⃣</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: colors.textMain }}>
+                        Input + Injections (Live Wire)
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setPlaygroundBypassInjections(prev => !prev)}
+                      title="Toggle injections on or off for this playground test"
+                      style={{
+                        background: playgroundBypassInjections ? (isDark ? '#27272a' : '#e4e4e7') : (isDark ? '#059669' : '#10b981'),
+                        color: playgroundBypassInjections ? colors.textSub : '#ffffff',
+                        border: 'none',
+                        borderRadius: 12,
+                        padding: '2px 8px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}>
+                      {playgroundBypassInjections ? '⚪ Injections Bypassed' : '⚡ Injections Attached'}
+                    </button>
+                  </div>
+
+                  {/* Active Injections Chips */}
+                  <div style={{ marginBottom: 10, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {playgroundBypassInjections ? (
+                      <span style={{ fontSize: 10, color: colors.textMuted, fontStyle: 'italic' }}>
+                        All injections temporarily bypassed for raw baseline testing.
+                      </span>
+                    ) : activeInjections.length === 0 ? (
+                      <span style={{ fontSize: 10, color: colors.textMuted, fontStyle: 'italic' }}>
+                        No active Depth-0 prompt injections configured.
+                      </span>
+                    ) : (
+                      activeInjections.map((inj: any) => (
+                        <span
+                          key={inj.id}
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            background: isDark ? '#2e1065' : '#ede9fe',
+                            color: isDark ? '#c084fc' : '#7e22ce',
+                            border: `1px solid ${isDark ? '#6b21a8' : '#ddd6fe'}`,
+                            padding: '1px 6px',
+                            borderRadius: 4
+                          }}>
+                          ✓ {inj.title}
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Wire Assembly Preview Box */}
+                  <div style={{
+                    flex: 1,
+                    background: isDark ? '#0a0714' : '#f8fafc',
+                    border: `1px solid ${isDark ? '#2e1065' : '#e2e8f0'}`,
+                    borderRadius: 8,
+                    padding: 12,
+                    overflowY: 'auto',
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                    color: colors.textMain,
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {/* User Raw Input highlighted */}
+                    <div style={{ color: isDark ? '#60a5fa' : '#2563eb', fontWeight: 600, marginBottom: activeInjectionsText ? 8 : 0 }}>
+                      {rawInputTrimmed || '<Type user input to preview wire payload>'}
+                    </div>
+
+                    {/* Active Injections text */}
+                    {!playgroundBypassInjections && activeInjectionsText && (
+                      <div style={{ color: isDark ? '#c084fc' : '#9333ea', opacity: 0.9 }}>
+                        {activeInjectionsText}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Token Math Footer */}
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: colors.textSub, fontFamily: 'monospace' }}>
+                    <span>Payload Breakdown:</span>
+                    <span>
+                      {rawTokens} raw {playgroundBypassInjections ? '' : `+ ${injTokens} inj`} = <strong>~{totalWireTokens} tok</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3️⃣ STAGE 3: MODEL OUTPUT & REASONING STREAM */}
+                <div style={{
+                  background: colors.cardBg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 12,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: colors.cardShadow,
+                  overflow: 'hidden'
+                }}>
+                  {/* Column Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${colors.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>3️⃣</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: colors.textMain }}>
+                        Model Output & Stream
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {playgroundLastLatency !== null && (
+                        <span style={{ fontSize: 10, color: colors.textSub, background: colors.cardInner, border: `1px solid ${colors.border}`, padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                          {playgroundLastLatency}ms
+                        </span>
+                      )}
+                      {messages[messages.length - 1]?.content && messages[messages.length - 1]?.role === 'assistant' && (
+                        <button
+                          onClick={() => copyToClipboard(messages[messages.length - 1].content, 'playground_output')}
+                          style={{
+                            background: copiedField === 'playground_output' ? (isDark ? '#ffffff' : '#000000') : colors.cardInner,
+                            color: copiedField === 'playground_output' ? (isDark ? '#000000' : '#ffffff') : colors.textMain,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: 4,
+                            padding: '2px 6px',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}>
+                          {copiedField === 'playground_output' ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Output Content Body */}
+                  <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Reasoning / Thought Stream Box */}
+                    {(currentThought || (messages[messages.length - 1]?.thought)) && (
+                      <div style={{
+                        background: isDark ? '#181524' : '#faf5ff',
+                        border: `1px solid ${isDark ? '#4c1d95' : '#e9d5ff'}`,
+                        borderRadius: 8,
+                        padding: '8px 12px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, color: isDark ? '#c084fc' : '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                          <span>💭 &lt;think&gt; Inner Monologue &amp; Reasoning</span>
+                          <span style={{ fontFamily: 'monospace' }}>
+                            ~{Math.floor(((currentThought || messages[messages.length - 1]?.thought || '').length) / 4)} tok
+                          </span>
                         </div>
-                        <div style={{ marginTop: 6, fontSize: 12, color: colors.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.5, fontFamily: 'monospace' }}>
-                          {currentThought}
+                        <div style={{
+                          fontSize: 11,
+                          color: colors.textSub,
+                          fontFamily: 'monospace',
+                          lineHeight: 1.45,
+                          whiteSpace: 'pre-wrap',
+                          maxHeight: 140,
+                          overflowY: 'auto'
+                        }}>
+                          {currentThought || messages[messages.length - 1]?.thought}
                         </div>
                       </div>
                     )}
-                    {currentDelta && (
-                      <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 10, padding: '12px 16px', fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+
+                    {/* Live Streaming Delta or Latest Turn Output */}
+                    {isStreaming && currentDelta && (
+                      <div style={{
+                        background: colors.cardInner,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 8,
+                        padding: '12px 14px',
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        color: colors.textMain,
+                        whiteSpace: 'pre-wrap'
+                      }}>
                         {currentDelta}
                       </div>
                     )}
+
+                    {!isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
+                      <div style={{
+                        background: colors.cardInner,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 8,
+                        padding: '12px 14px',
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        color: colors.textMain,
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        {messages[messages.length - 1].content}
+                      </div>
+                    )}
+
+                    {!isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
+                      <div style={{ textAlign: 'center', padding: '60px 10px', color: colors.textMuted, fontStyle: 'italic', fontSize: 12 }}>
+                        Click "Send Test" or press Ctrl+Enter to generate a model completion.
+                      </div>
+                    )}
                   </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
 
-              {/* Chat Input Bar */}
-              <div style={{ borderTop: `1px solid ${colors.border}`, padding: 14, background: colors.cardBg, display: 'flex', gap: 10 }}>
-                <input
-                  type="text"
-                  value={inputMessage}
-                  onChange={e => setInputMessage(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Type a message or action (*takes a step forward*)..."
-                  style={{ flex: 1, background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px', color: colors.textMain, fontSize: 13, outline: 'none' }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={isStreaming || !inputMessage.trim()}
-                  style={{
-                    background: isStreaming ? colors.border : colors.btnPrimaryBg,
-                    color: isStreaming ? colors.textMuted : colors.btnPrimaryText,
-                    border: 'none',
-                    borderRadius: 8,
-                    padding: '0 20px',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: isStreaming ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}>
-                  <Icons.Send />
-                  {isStreaming ? 'Streaming...' : 'Send'}
-                </button>
-              </div>
+                  {/* Model Footer Tag */}
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${colors.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
+                    <span style={{ color: colors.textSub }}>Model:</span>
+                    <span style={{ fontWeight: 600, color: colors.textMain, fontFamily: 'monospace' }}>
+                      {selectedModel}
+                    </span>
+                  </div>
+                </div>
 
+              </div>
             </div>
-
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB 5: MODEL CONTROLS & REASONING ENGINE */}
         {activeTab === 'controls' && (
