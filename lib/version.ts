@@ -8,16 +8,31 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.9.0';
+export const CURRENT_VERSION = '3.0.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.9.0',
+    version: '3.0.0',
     tag: 'LATEST',
-    title: '3-Stage Injections Testing Playground & Character Presets',
+    title: 'Dynamic Trigger Cadences & Turn-Accurate Injections in Logged Chats',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Added configurable trigger frequencies (% Chance, Every N texts, First Turn) for prompt injections and rendered turn-accurate injected directives directly below each user message in Logged Chats.',
+    highlights: [
+      'Turn-Level Snapshot Isolation: Injections are evaluated per turn and rendered directly below each user message, showing only what was injected with that specific turn.',
+      '🎲 % Chance Probability Trigger: Configure random trigger probabilities (e.g. 5% or 10% chance per message) for organic NPC introductions and atmospheric events.',
+      '⏱️ Interval (Every N Texts): Configure turn intervals (e.g. Every 5 or 10 messages) to periodically refresh context without spamming.',
+      '⚡ First Turn Only: Injects opening directives exclusively on the scenario\'s opening user turn.',
+      'Direct Below-User Log Inspection: Expandable panel beneath user message bubbles revealing active directive titles, trigger reasons, and full injected text.'
+    ]
+  },
+  {
+    version: '2.9.0',
+    tag: 'MAJOR',
+    title: '3-Stage Injections Testing Playground & Character Presets',
+    date: 'Aug 26, 2026',
+    commit: 'af03e3d',
     description: 'Redesigned the Roleplay Playground into a 3-column live inspection lab showing Raw Input, Input + Injections wire payload, and Live Output with switchable character presets.',
     highlights: [
       '3-Stage Visual Pipeline: Clear 3-column testing suite showing 1️⃣ Raw User Input, 2️⃣ Live Wire Input + Injections, and 3️⃣ Model Output & Stream.',

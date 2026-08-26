@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v2.9.0`  
+> *Current Version*: `v3.0.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -15,14 +15,14 @@
 ### Key Architectural Pillars (OmniRoute / OpenRouter Standard)
 1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
 2. **Zero-Tampering Pure Pass-Through**: 100% pure message and system prompt translation without synthetic prompt injections or formatting anchors, guaranteeing perfect instruction following and context memory without context rot.
-3. **Modular Injections Engine**: Centralized dashboard management for toggleable System Notes, OOC rules, and custom style directives automatically stacked at Depth-0 terminal user turns with 0 copy-paste friction.
-4. **3-Stage Testing Lab & Character Presets**: Interactive 3-column playground showing 1️⃣ Raw User Input, 2️⃣ Live Wire Input + Injections, and 3️⃣ Model Output with switchable character personas.
-5. **Zero Silent Fallback & Strict Validation**: Unknown or unsupported model names return an immediate `HTTP 404 Model Not Found`. If an upstream model returns an error (404/400/503), the proxy never silently swaps models; it returns the exact error diagnostic.
-6. **Decoupled Thinking Tokens**: Automatically provisions full upstream `maxOutputTokens` headroom (16k+ tokens) so Gemini 3.7 thinking tokens never cannibalize the client's visible response budget.
-7. **50/50 Round-Robin Load Balancing**: Evenly distributes generation requests across Google OAuth accounts on every turn with instantaneous failover on 429 quota exhaustion.
-8. **Lorebary & Lorebook Injection Tracking**: Passively extracts dynamic `<lore>`, `<world_info>`, and `<memory>` entries and renders an interactive turn-by-turn inspection panel in the Logged Chats explorer.
-9. **Passive Cloud Logging**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency.
-10. **Clean Utility / Summary Execution**: Janitor AI memory/summary requests execute as pure utility queries without character card contamination.
+3. **Modular Injections & Dynamic Cadence Engine**: Centralized dashboard management for toggleable System Notes, OOC rules, and custom style directives with dynamic trigger cadences (`Always`, `🎲 % Chance Probability`, `⏱️ Every N Texts`, `⚡ First Turn Only`) automatically stacked at Depth-0 terminal user turns with 0 copy-paste friction.
+4. **Turn-Accurate Logged Chats Injections**: Turn-level snapshot isolation displaying the exact active directives that fired on each message directly beneath the user's input bubble.
+5. **3-Stage Testing Lab & Character Presets**: Interactive 3-column playground showing 1️⃣ Raw User Input, 2️⃣ Live Wire Input + Injections, and 3️⃣ Model Output with switchable character personas.
+6. **Zero Silent Fallback & Strict Validation**: Unknown or unsupported model names return an immediate `HTTP 404 Model Not Found`. If an upstream model returns an error (404/400/503), the proxy never silently swaps models; it returns the exact error diagnostic.
+7. **Decoupled Thinking Tokens**: Automatically provisions full upstream `maxOutputTokens` headroom (16k+ tokens) so Gemini 3.7 thinking tokens never cannibalize the client's visible response budget.
+8. **50/50 Round-Robin Load Balancing**: Evenly distributes generation requests across Google OAuth accounts on every turn with instantaneous failover on 429 quota exhaustion.
+9. **Lorebary & Lorebook Injection Tracking**: Passively extracts dynamic `<lore>`, `<world_info>`, and `<memory>` entries and renders an interactive turn-by-turn inspection panel in the Logged Chats explorer.
+10. **Passive Cloud Logging**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency.
 
 ---
 

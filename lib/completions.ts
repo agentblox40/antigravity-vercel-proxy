@@ -191,10 +191,12 @@ export async function handleChatCompletions(req: NextRequest) {
     : orderedAccounts;
 
   const attemptLogs: { account: string; status: number; error: string }[] = [];
+  const turnCount = Math.max(1, messages.filter(m => m && m.role !== 'system').length);
   const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
-  const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj } = await getActiveInjectionsFormatted();
+  const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj, attachedInjections: rawAttachedInj } = await getActiveInjectionsFormatted(turnCount);
   const userInjectionsText = bypassInjections ? '' : rawUserInj;
   const systemInjectionsText = bypassInjections ? '' : rawSysInj;
+  const attachedInjections = bypassInjections ? [] : rawAttachedInj;
 
   for (const account of accountsToTry) {
     try {
@@ -356,10 +358,10 @@ export async function handleChatCompletions(req: NextRequest) {
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
 
-              // Record asynchronously into memory with dynamic Lorebary injections
+              // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
               if (session) {
                 const injectedLore = extractInjectedLore(messages, rawSystemText);
-                recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore).catch(() => {});
+                recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore, attachedInjections).catch(() => {});
               }
             } catch (err) {
               controller.error(err);
@@ -397,10 +399,10 @@ export async function handleChatCompletions(req: NextRequest) {
         }
       }
 
-      // Record asynchronously into memory with dynamic Lorebary injections
+      // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
       if (session) {
         const injectedLore = extractInjectedLore(messages, rawSystemText);
-        recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore).catch(() => {});
+        recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore, attachedInjections).catch(() => {});
       }
 
       return NextResponse.json(

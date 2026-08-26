@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { AttachedInjectionEntry } from './injections';
 
 export interface InjectedLoreEntry {
   title: string;
@@ -14,6 +15,7 @@ export interface ArchivedMessage {
   reasoning_content?: string;
   timestamp: number;
   injectedLore?: InjectedLoreEntry[];
+  attachedInjections?: AttachedInjectionEntry[];
 }
 
 export interface ChatSession {
@@ -569,7 +571,8 @@ export async function recordTurnsIntoSession(
   incomingMessages: any[] | string,
   assistantText: string,
   reasoningContent?: string,
-  injectedLore?: InjectedLoreEntry[]
+  injectedLore?: InjectedLoreEntry[],
+  attachedInjections?: AttachedInjectionEntry[]
 ): Promise<void> {
   const now = Date.now();
   const trimmedAssistant = (assistantText || '').trim();
@@ -593,7 +596,8 @@ export async function recordTurnsIntoSession(
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content,
       timestamp: now - (nonSystem.length - idx) * 1000,
-      injectedLore: isLastUser && injectedLore && injectedLore.length > 0 ? injectedLore : undefined
+      injectedLore: isLastUser && injectedLore && injectedLore.length > 0 ? injectedLore : undefined,
+      attachedInjections: isLastUser && attachedInjections && attachedInjections.length > 0 ? attachedInjections : undefined
     };
   });
 

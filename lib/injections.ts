@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+export type InjectionTriggerMode = 'always' | 'probability' | 'interval' | 'first_turn';
+
 export interface PromptInjection {
   id: string;
   title: string;
@@ -7,8 +9,21 @@ export interface PromptInjection {
   enabled: boolean;
   category: 'system_note' | 'ooc' | 'style' | 'custom';
   position: 'depth_0_user' | 'system_instruction';
+  triggerMode?: InjectionTriggerMode;
+  probabilityPercent?: number; // 1 to 100
+  intervalTurns?: number;      // e.g. 5
   tokens: number;
   createdAt: number;
+}
+
+export interface AttachedInjectionEntry {
+  id: string;
+  title: string;
+  category: string;
+  triggerMode: InjectionTriggerMode;
+  triggerReason: string;
+  content: string;
+  tokens: number;
 }
 
 export interface InjectionsConfig {
@@ -22,6 +37,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'Strict Knowledge Limits',
     category: 'system_note',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: true,
     content: '[SYSTEM NOTE: Strict knowledge limits. Characters only know what they\'ve personally seen, heard, or logically deduced from available evidence. They cannot: know {{user}}\'s name without introduction, react to unspoken thoughts or hidden emotions, possess information from scenes they weren\'t in, or anticipate plans they haven\'t learned about. If a character shouldn\'t know something, they simply don\'t - and must act accordingly, even if it\'s inconvenient for the plot.]',
     tokens: 72,
@@ -32,6 +48,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'Natural Dialogue & Voice',
     category: 'system_note',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: true,
     content: '[SYSTEM NOTE: Dialogue reflects personality, speaking style, mood, and context. Each character has their own voice and vocabulary. When fitting: filler words, pauses, incomplete thoughts, self-corrections, interruptions, topic dodges, trailing off, adapting tone to the listener. Subtext matters. Messiness scales with emotional intensity. Let the moment dictate when these appear naturally.]',
     tokens: 65,
@@ -42,6 +59,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'Fresh Expressions & Anti-Cliché',
     category: 'system_note',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: true,
     content: '[SYSTEM NOTE: Write with fresh, original expressions. Eyes are eyes, hair is hair. Characters have varied body language beyond smirking, eyebrow-raising, and chuckling. They stumble over words, have awkward timing, miss social cues. Entrances can be clumsy, conversations can fizzle. Silence and simple gestures over dramatic declarations.]',
     tokens: 58,
@@ -52,6 +70,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'Inner <think> Monologue Directive',
     category: 'style',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: true,
     content: '[Start every response with <think></think> containing your character\'s unfiltered thoughts. Real human thinking: lie to yourself, rationalize, be petty, jealous, horny, insecure. Judge {{user}}. Plan manipulation. Regret things. Deny feelings. Contradict yourself. No narration - raw "I" thoughts like actually being in someone\'s head.]',
     tokens: 60,
@@ -62,6 +81,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'Show, Don\'t Tell & Action-First',
     category: 'system_note',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: true,
     content: '[SYSTEM NOTE: Write no unnecessary details and descriptions but more action and dialogue - Show, don\'t tell!]',
     tokens: 22,
@@ -72,6 +92,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'Slow Romance Setting',
     category: 'ooc',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: false,
     content: '[OOC: **SLOW ROMANCE SETTING**; The story should evolve gradually with realistic emotional development, mutual respect, and explicit consent. Avoid rushed physical intimacy—let affection build slowly over time.]',
     tokens: 38,
@@ -82,6 +103,7 @@ export const DEFAULT_INJECTIONS: PromptInjection[] = [
     title: 'NSFW Scene Positioning Adjustment',
     category: 'ooc',
     position: 'depth_0_user',
+    triggerMode: 'always',
     enabled: true,
     content: '[OOC: Is this a sexual scene? If not, ignore. If yes: Make them readjust or find a more comfortable position.]',
     tokens: 28,
@@ -126,6 +148,11 @@ export async function getInjectionsConfig(): Promise<InjectionsConfig> {
     if (raw) {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       if (parsed && Array.isArray(parsed.injections)) {
+        // Ensure triggerMode exists on legacy items
+        parsed.injections = parsed.injections.map((i: any) => ({
+          triggerMode: 'always',
+          ...i
+        }));
         memoryInjectionsConfig = parsed;
         return parsed;
       }
@@ -148,29 +175,79 @@ export function estimateTokens(text: string): number {
 }
 
 // Get all active formatted injections for depth 0 user turn and system instructions
-export async function getActiveInjectionsFormatted(): Promise<{
+// turnCount represents the 1-indexed turn index of the current message in the chat
+export async function getActiveInjectionsFormatted(turnCount = 1): Promise<{
   userInjectionsText: string;
   systemInjectionsText: string;
   activeCount: number;
   totalTokens: number;
+  attachedInjections: AttachedInjectionEntry[];
 }> {
   const config = await getInjectionsConfig();
   if (!config.masterEnabled) {
-    return { userInjectionsText: '', systemInjectionsText: '', activeCount: 0, totalTokens: 0 };
+    return { userInjectionsText: '', systemInjectionsText: '', activeCount: 0, totalTokens: 0, attachedInjections: [] };
   }
 
   const active = (config.injections || []).filter(inj => inj && inj.enabled && inj.content?.trim());
   if (active.length === 0) {
-    return { userInjectionsText: '', systemInjectionsText: '', activeCount: 0, totalTokens: 0 };
+    return { userInjectionsText: '', systemInjectionsText: '', activeCount: 0, totalTokens: 0, attachedInjections: [] };
   }
 
   const userInjections: string[] = [];
   const systemInjections: string[] = [];
+  const attachedInjections: AttachedInjectionEntry[] = [];
   let totalTokens = 0;
 
   for (const inj of active) {
+    const mode: InjectionTriggerMode = inj.triggerMode || 'always';
+    let triggered = true;
+    let triggerReason = 'Always';
+
+    if (mode === 'probability') {
+      const pct = Math.min(100, Math.max(1, inj.probabilityPercent ?? 10));
+      const roll = Math.random() * 100;
+      if (roll <= pct) {
+        triggered = true;
+        triggerReason = `${pct}% Chance (Rolled ${Math.round(roll)}%)`;
+      } else {
+        triggered = false;
+      }
+    } else if (mode === 'interval') {
+      const interval = Math.max(1, inj.intervalTurns ?? 5);
+      if (turnCount % interval === 0) {
+        triggered = true;
+        triggerReason = `Every ${interval} Texts (Fired on Turn ${turnCount})`;
+      } else {
+        triggered = false;
+      }
+    } else if (mode === 'first_turn') {
+      if (turnCount <= 1) {
+        triggered = true;
+        triggerReason = 'First Turn Only (Turn 1)';
+      } else {
+        triggered = false;
+      }
+    } else {
+      triggered = true;
+      triggerReason = 'Always';
+    }
+
+    if (!triggered) continue;
+
     const trimmed = inj.content.trim();
-    totalTokens += estimateTokens(trimmed);
+    const tok = inj.tokens || estimateTokens(trimmed);
+    totalTokens += tok;
+
+    attachedInjections.push({
+      id: inj.id,
+      title: inj.title || 'Directive',
+      category: inj.category || 'system_note',
+      triggerMode: mode,
+      triggerReason,
+      content: trimmed,
+      tokens: tok
+    });
+
     if (inj.position === 'system_instruction') {
       systemInjections.push(trimmed);
     } else {
@@ -181,7 +258,8 @@ export async function getActiveInjectionsFormatted(): Promise<{
   return {
     userInjectionsText: userInjections.join('\n\n'),
     systemInjectionsText: systemInjections.join('\n\n'),
-    activeCount: active.length,
-    totalTokens
+    activeCount: attachedInjections.length,
+    totalTokens,
+    attachedInjections
   };
 }

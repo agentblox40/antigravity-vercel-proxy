@@ -285,9 +285,14 @@ export default function AntigravityControlCenter() {
   const [memorySearch, setMemorySearch] = useState('');
   const [selectedCharFilter, setSelectedCharFilter] = useState<string>('all');
   const [expandedLoreMap, setExpandedLoreMap] = useState<Record<string, boolean>>({});
+  const [expandedInjectionsMap, setExpandedInjectionsMap] = useState<Record<string, boolean>>({});
 
   const toggleLoreExpand = (key: string) => {
     setExpandedLoreMap(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleInjectionsExpand = (key: string) => {
+    setExpandedInjectionsMap(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   // Injections State
@@ -304,6 +309,9 @@ export default function AntigravityControlCenter() {
   const [newInjTitle, setNewInjTitle] = useState('');
   const [newInjCategory, setNewInjCategory] = useState<'system_note' | 'ooc' | 'style' | 'custom'>('system_note');
   const [newInjPosition, setNewInjPosition] = useState<'depth_0_user' | 'system_instruction'>('depth_0_user');
+  const [newInjTriggerMode, setNewInjTriggerMode] = useState<'always' | 'probability' | 'interval' | 'first_turn'>('always');
+  const [newInjProbability, setNewInjProbability] = useState<number>(10);
+  const [newInjInterval, setNewInjInterval] = useState<number>(5);
   const [newInjContent, setNewInjContent] = useState('');
 
   // Deployment & Update Logs Telemetry State
@@ -1416,14 +1424,14 @@ export default function AntigravityControlCenter() {
                   ✨ Add New Custom Prompt Injection Block
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
                       Title / Label:
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Custom Scene Formatting / Spanish Dialogue..."
+                      placeholder="e.g. Introduce Background NPCs / Scene Reminders..."
                       value={newInjTitle}
                       onChange={e => setNewInjTitle(e.target.value)}
                       style={{
@@ -1467,11 +1475,11 @@ export default function AntigravityControlCenter() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
-                      Attachment Position:
+                      Trigger Cadence:
                     </label>
                     <select
-                      value={newInjPosition}
-                      onChange={(e: any) => setNewInjPosition(e.target.value)}
+                      value={newInjTriggerMode}
+                      onChange={(e: any) => setNewInjTriggerMode(e.target.value)}
                       style={{
                         width: '100%',
                         boxSizing: 'border-box',
@@ -1483,10 +1491,68 @@ export default function AntigravityControlCenter() {
                         fontSize: 13,
                         outline: 'none'
                       }}>
-                      <option value="depth_0_user">Terminal User Turn (Depth 0 - High Adherence)</option>
-                      <option value="system_instruction">System Prompt (Global Context)</option>
+                      <option value="always">🔄 Always (Every Turn)</option>
+                      <option value="probability">🎲 % Chance Probability</option>
+                      <option value="interval">⏱️ Every N Texts (Interval)</option>
+                      <option value="first_turn">⚡ First Turn Only</option>
                     </select>
                   </div>
+
+                  {newInjTriggerMode === 'probability' && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: colors.textSub }}>
+                          Probability / Chance:
+                        </label>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: isDark ? '#c084fc' : '#7e22ce' }}>
+                          {newInjProbability}%
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="range"
+                          min={1}
+                          max={100}
+                          value={newInjProbability}
+                          onChange={e => setNewInjProbability(parseInt(e.target.value))}
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ fontSize: 11, fontFamily: 'monospace', width: 35, textAlign: 'right', color: colors.textMain }}>
+                          {newInjProbability}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {newInjTriggerMode === 'interval' && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: colors.textSub, marginBottom: 4 }}>
+                        Trigger Interval:
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: colors.textSub }}>Every</span>
+                        <input
+                          type="number"
+                          min={2}
+                          max={50}
+                          value={newInjInterval}
+                          onChange={e => setNewInjInterval(Math.max(2, parseInt(e.target.value) || 2))}
+                          style={{
+                            width: 60,
+                            background: colors.inputBg,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: 6,
+                            padding: '6px 8px',
+                            color: colors.textMain,
+                            fontSize: 13,
+                            outline: 'none',
+                            textAlign: 'center'
+                          }}
+                        />
+                        <span style={{ fontSize: 12, color: colors.textSub }}>messages</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1495,7 +1561,7 @@ export default function AntigravityControlCenter() {
                   </label>
                   <textarea
                     rows={4}
-                    placeholder="e.g. [SYSTEM NOTE: Always describe actions in third-person past tense and emphasize atmospheric sensory cues.]"
+                    placeholder="e.g. [SYSTEM NOTE: Periodically introduce a new background NPC or passerby with distinct behavior to make the scene feel lively.]"
                     value={newInjContent}
                     onChange={e => setNewInjContent(e.target.value)}
                     style={{
@@ -1536,6 +1602,9 @@ export default function AntigravityControlCenter() {
                       title: newInjTitle.trim(),
                       category: newInjCategory,
                       position: newInjPosition,
+                      triggerMode: newInjTriggerMode,
+                      probabilityPercent: newInjProbability,
+                      intervalTurns: newInjInterval,
                       content: newInjContent.trim(),
                       enabled: true
                     })}
@@ -1559,6 +1628,7 @@ export default function AntigravityControlCenter() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
               {(injectionsData.injections || []).map((inj: any) => {
                 const isEditing = editingInjection?.id === inj.id;
+                const mode = inj.triggerMode || 'always';
                 return (
                   <div
                     key={inj.id}
@@ -1575,8 +1645,8 @@ export default function AntigravityControlCenter() {
                     }}>
                     <div>
                       {/* Card Header Toolbar */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span style={{
                             fontSize: 9,
                             fontWeight: 800,
@@ -1591,8 +1661,21 @@ export default function AntigravityControlCenter() {
                             {inj.category || 'NOTE'}
                           </span>
 
+                          {/* Trigger Cadence Badge */}
                           <span style={{
-                            fontSize: 10,
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: mode === 'probability' ? (isDark ? '#14532d' : '#dcfce7') : (mode === 'interval' ? (isDark ? '#1e3a8a' : '#dbeafe') : (mode === 'first_turn' ? (isDark ? '#713f12' : '#fef9c3') : colors.cardInner)),
+                            color: mode === 'probability' ? (isDark ? '#86efac' : '#166534') : (mode === 'interval' ? (isDark ? '#93c5fd' : '#1e40af') : (mode === 'first_turn' ? (isDark ? '#fde047' : '#854d0e') : colors.textSub)),
+                            border: `1px solid ${colors.border}`
+                          }}>
+                            {mode === 'probability' ? `🎲 ${inj.probabilityPercent || 10}% Chance` : (mode === 'interval' ? `⏱️ Every ${inj.intervalTurns || 5} Texts` : (mode === 'first_turn' ? '⚡ First Turn' : '🔄 Always'))}
+                          </span>
+
+                          <span style={{
+                            fontSize: 9,
                             color: colors.textSub,
                             background: colors.cardInner,
                             padding: '2px 6px',
@@ -1636,7 +1719,56 @@ export default function AntigravityControlCenter() {
 
                       {/* Content Box or Inline Editor */}
                       {isEditing ? (
-                        <div style={{ marginTop: 8 }}>
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: colors.textSub, marginBottom: 2 }}>
+                                Trigger Mode:
+                              </label>
+                              <select
+                                value={editingInjection.triggerMode || 'always'}
+                                onChange={(e: any) => setEditingInjection({ ...editingInjection, triggerMode: e.target.value })}
+                                style={{ width: '100%', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 4, padding: '4px 6px', color: colors.textMain, fontSize: 11, outline: 'none' }}>
+                                <option value="always">🔄 Always</option>
+                                <option value="probability">🎲 % Chance</option>
+                                <option value="interval">⏱️ Every N Texts</option>
+                                <option value="first_turn">⚡ First Turn</option>
+                              </select>
+                            </div>
+
+                            {editingInjection.triggerMode === 'probability' && (
+                              <div>
+                                <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: colors.textSub, marginBottom: 2 }}>
+                                  Chance ({editingInjection.probabilityPercent || 10}%):
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={100}
+                                  value={editingInjection.probabilityPercent || 10}
+                                  onChange={e => setEditingInjection({ ...editingInjection, probabilityPercent: parseInt(e.target.value) || 10 })}
+                                  style={{ width: '100%', boxSizing: 'border-box', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 4, padding: '4px 6px', color: colors.textMain, fontSize: 11, outline: 'none' }}
+                                />
+                              </div>
+                            )}
+
+                            {editingInjection.triggerMode === 'interval' && (
+                              <div>
+                                <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: colors.textSub, marginBottom: 2 }}>
+                                  Interval (Every N):
+                                </label>
+                                <input
+                                  type="number"
+                                  min={2}
+                                  max={50}
+                                  value={editingInjection.intervalTurns || 5}
+                                  onChange={e => setEditingInjection({ ...editingInjection, intervalTurns: parseInt(e.target.value) || 5 })}
+                                  style={{ width: '100%', boxSizing: 'border-box', background: colors.inputBg, border: `1px solid ${colors.border}`, borderRadius: 4, padding: '4px 6px', color: colors.textMain, fontSize: 11, outline: 'none' }}
+                                />
+                              </div>
+                            )}
+                          </div>
+
                           <textarea
                             rows={5}
                             value={editingInjection.content}
@@ -1656,7 +1788,7 @@ export default function AntigravityControlCenter() {
                               resize: 'vertical'
                             }}
                           />
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                             <button
                               onClick={() => setEditingInjection(null)}
                               style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, color: colors.textSub, borderRadius: 4, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
@@ -2080,6 +2212,94 @@ export default function AntigravityControlCenter() {
                               }}>
                                 {m.content}
                               </div>
+
+                              {/* Turn-Accurate Attached Proxy Injections directly below user input */}
+                              {m.attachedInjections && m.attachedInjections.length > 0 && (
+                                <div style={{
+                                  marginTop: 8,
+                                  background: isDark ? '#140e24' : '#f5f3ff',
+                                  border: `1px solid ${isDark ? '#4c1d95' : '#c4b5fd'}`,
+                                  borderRadius: 8,
+                                  padding: '8px 12px'
+                                }}>
+                                  <div
+                                    onClick={() => toggleInjectionsExpand(`inj_${m.id || idx}`)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      cursor: 'pointer',
+                                      userSelect: 'none'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ fontSize: 12 }}>💉</span>
+                                      <span style={{ fontSize: 11, fontWeight: 700, color: isDark ? '#c084fc' : '#7e22ce' }}>
+                                        Injected with this message ({m.attachedInjections.length} {m.attachedInjections.length === 1 ? 'directive' : 'directives'} • ~{m.attachedInjections.reduce((acc: number, i: any) => acc + (i.tokens || 0), 0)} tok)
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: 10, color: isDark ? '#c084fc' : '#7e22ce', fontWeight: 600 }}>
+                                      {expandedInjectionsMap[`inj_${m.id || idx}`] ? '▲ Collapse' : '▼ View Injected Text'}
+                                    </span>
+                                  </div>
+
+                                  {/* Badges preview */}
+                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                                    {m.attachedInjections.map((inj: any, iIdx: number) => (
+                                      <span
+                                        key={iIdx}
+                                        style={{
+                                          fontSize: 9,
+                                          fontWeight: 700,
+                                          background: isDark ? '#2e1065' : '#ede9fe',
+                                          color: isDark ? '#d8b4fe' : '#6b21a8',
+                                          border: `1px solid ${isDark ? '#581c87' : '#ddd6fe'}`,
+                                          padding: '2px 6px',
+                                          borderRadius: 4
+                                        }}>
+                                        ✓ {inj.title} ({inj.triggerReason || 'Always'})
+                                      </span>
+                                    ))}
+                                  </div>
+
+                                  {/* Expanded full injected prompt text */}
+                                  {expandedInjectionsMap[`inj_${m.id || idx}`] && (
+                                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${isDark ? '#3b0764' : '#e9d5ff'}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                      {m.attachedInjections.map((inj: any, iIdx: number) => (
+                                        <div key={iIdx} style={{
+                                          background: isDark ? '#0a0714' : '#ffffff',
+                                          border: `1px solid ${isDark ? '#2e1065' : '#e2e8f0'}`,
+                                          borderRadius: 6,
+                                          padding: '6px 8px'
+                                        }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, fontWeight: 700, color: colors.textMain, marginBottom: 2 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                              <span style={{
+                                                background: isDark ? '#581c87' : '#d8b4fe',
+                                                color: isDark ? '#f3e8ff' : '#581c87',
+                                                fontSize: 9,
+                                                fontWeight: 800,
+                                                textTransform: 'uppercase',
+                                                padding: '1px 5px',
+                                                borderRadius: 3
+                                              }}>
+                                                {inj.category || 'DIRECTIVE'}
+                                              </span>
+                                              <span>{inj.title}</span>
+                                              <span style={{ fontSize: 9, color: isDark ? '#c084fc' : '#7e22ce' }}>
+                                                [{inj.triggerReason || 'Always'}]
+                                              </span>
+                                            </div>
+                                            <span style={{ color: colors.textSub, fontFamily: 'monospace' }}>~{inj.tokens} tok</span>
+                                          </div>
+                                          <div style={{ fontSize: 11, color: colors.textSub, fontFamily: 'monospace', whiteSpace: 'pre-wrap', lineHeight: 1.4, maxHeight: 140, overflowY: 'auto', background: isDark ? '#08060f' : '#f8fafc', padding: '6px 8px', borderRadius: 4 }}>
+                                            {inj.content}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })
@@ -2118,8 +2338,19 @@ export default function AntigravityControlCenter() {
 
         {/* TAB 3: 3-STAGE INJECTIONS TESTING LAB & PLAYGROUND */}
         {activeTab === 'playground' && (() => {
+          const currentTurnNumber = Math.max(1, messages.filter(m => m.role === 'user').length + 1);
           const activeInjections = injectionsData.masterEnabled && !playgroundBypassInjections
-            ? (injectionsData.injections || []).filter((i: any) => i.enabled && i.position !== 'system_instruction')
+            ? (injectionsData.injections || []).filter((i: any) => {
+                if (!i.enabled || i.position === 'system_instruction' || !i.content?.trim()) return false;
+                const mode = i.triggerMode || 'always';
+                if (mode === 'interval') {
+                  return currentTurnNumber % (i.intervalTurns || 5) === 0;
+                }
+                if (mode === 'first_turn') {
+                  return currentTurnNumber <= 1;
+                }
+                return true;
+              })
             : [];
           const activeInjectionsText = activeInjections.map((i: any) => i.content.trim()).join('\n\n');
           const rawInputTrimmed = inputMessage.trim();
@@ -2444,7 +2675,7 @@ export default function AntigravityControlCenter() {
                             padding: '1px 6px',
                             borderRadius: 4
                           }}>
-                          ✓ {inj.title}
+                          ✓ {inj.title} {inj.triggerMode === 'probability' ? `(🎲 ${inj.probabilityPercent || 10}%)` : (inj.triggerMode === 'interval' ? `(⏱️ ${inj.intervalTurns || 5}t)` : (inj.triggerMode === 'first_turn' ? '(⚡ Turn 1)' : ''))}
                         </span>
                       ))
                     )}

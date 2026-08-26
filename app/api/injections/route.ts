@@ -109,6 +109,9 @@ export async function POST(req: NextRequest) {
           enabled: typeof inj.enabled === 'boolean' ? inj.enabled : true,
           category: inj.category || 'custom',
           position: inj.position || 'depth_0_user',
+          triggerMode: inj.triggerMode || 'always',
+          probabilityPercent: typeof inj.probabilityPercent === 'number' ? inj.probabilityPercent : 10,
+          intervalTurns: typeof inj.intervalTurns === 'number' ? inj.intervalTurns : 5,
           tokens: estimateTokens(inj.content),
           createdAt: Date.now()
         };
