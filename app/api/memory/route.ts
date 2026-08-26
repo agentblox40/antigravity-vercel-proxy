@@ -6,6 +6,7 @@ import {
   getOrCreateChatSession,
   saveChatSession,
   deleteChatSession,
+  deleteAllChatSessions,
   isRedisConfigured,
   ChatSession
 } from '@/lib/memory';
@@ -168,10 +169,19 @@ export async function DELETE(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const chatId = searchParams.get('chatId');
+  const deleteAll = searchParams.get('all') === 'true';
+
+  if (deleteAll) {
+    const success = await deleteAllChatSessions();
+    return NextResponse.json(
+      { success, message: 'All logged chat sessions deleted successfully.' },
+      { headers: { 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
 
   if (!chatId) {
     return NextResponse.json(
-      { error: { message: 'Missing chatId parameter.' } },
+      { error: { message: 'Missing chatId parameter or all=true.' } },
       { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }

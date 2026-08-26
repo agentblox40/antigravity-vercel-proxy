@@ -855,6 +855,21 @@ export default function AntigravityControlCenter() {
     } catch {}
   };
 
+  const handleDeleteAllChats = async () => {
+    if (!confirm('⚠️ Are you sure you want to DELETE ALL saved chat transcripts from the database?\n\n(Note: This only clears the proxy dashboard archive. Your active roleplays in Janitor AI / SillyTavern will NOT be affected.)')) return;
+    try {
+      const res = await fetch('/api/memory?all=true', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+      if (res.ok) {
+        setSelectedChatId(null);
+        setSelectedSession(null);
+        fetchMemoryOverview();
+      }
+    } catch {}
+  };
+
   const handleClearChatHistory = async (chatId: string) => {
     if (!confirm('Clear message history for this chat? (Pinned OOC rules and lore facts will be kept)')) return;
     try {
@@ -1912,8 +1927,30 @@ export default function AntigravityControlCenter() {
                     gap: 6
                   }}>
                   <Icons.Refresh />
-                  {isLoadingMemory ? 'Syncing...' : 'Refresh Logs'}
+                  {isLoadingMemory ? 'Syncing...' : 'Refresh'}
                 </button>
+
+                {memorySessions.length > 0 && (
+                  <button
+                    onClick={handleDeleteAllChats}
+                    title="Delete all saved roleplay transcripts from database"
+                    style={{
+                      background: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                      border: `1px solid ${isDark ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5'}`,
+                      color: isDark ? '#f87171' : '#b91c1c',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}>
+                    <Icons.Trash />
+                    Clear All Chats
+                  </button>
+                )}
               </div>
             </div>
 

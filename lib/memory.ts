@@ -60,38 +60,70 @@ const GENERIC_NAME_BLACKLIST = [
   'the character',
   'char',
   'user',
-  'unknown'
+  'unknown',
+  'interacting with',
+  'interacting with the character',
+  'interacting with character',
+  'interacting with you',
+  'fictional chat',
+  'character persona',
+  'character sheet',
+  'roleplay partner',
+  'roleplay',
+  'scenario',
+  'system note',
+  'system prompt',
+  'system',
+  'partner',
+  'bot',
+  'nsfw',
+  'you'
 ];
 
 // Extract Character Name from System Prompt or dialogue cues
 export function extractCharacterName(systemPrompt: string, messages?: any[]): string {
-  // 1. Scan system prompt for explicit character name tags
-  const patterns = [
+  const cleanPrompt = systemPrompt ? systemPrompt.replace(/\r\n/g, '\n') : '';
+
+  // 1. Scan system prompt for explicit character name tags & declarations
+  const explicitPatterns = [
     /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
-    /\[(?:Character|Char|Persona|Name):\s*([A-Za-z0-9_\-\s]{1,30})\]/i,
-    /(?:Character Name|Char Name|Character|Persona):\s*([A-Za-z0-9_\-\s]{1,30})(?=[.,\n\r\[\]\(\);:]|$)/i,
-    /(?:You operate as|You are playing as|You play as)\s+([A-Z][a-zA-Z0-9_\-\s]{1,25})(?=[.,\n\r\[\]\(\);:]|$)/i,
-    /^\s*([A-Z][a-zA-Z0-9_\-\s]{1,25})\s*:\s*You are/i
+    /<char_persona\s+name=["']([^"']+)["']/i,
+    /\[(?:Character|Char|Persona|Name)\s*:\s*([A-Za-z0-9_\-\s']{1,30})\]/i,
+    /\[(?:Character|Char)\("([^"]+)"\)\]/i,
+    /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Character|Persona|Name)(?:\*\*|\s*):+\s*([A-Za-z0-9_\-\s']{1,30})(?=[.,\n\r\[\]\(\);:]|$)/i,
+    /\{\{char\}\}\s*(?:=|:|is named|is)\s*([A-Za-z0-9_\-\s']{1,30})(?=[.,\n\r\[\]\(\);:]|$)/i,
+    /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-\s']{1,25})(?:'s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
+    /([A-Z][a-zA-Z0-9_\-\s']{1,25})'s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
+    /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as|You are)\s+([A-Z][a-zA-Z0-9_\-]{1,25})(?=[.,\n\r\[\]\(\);:\s]|$)/i,
+    /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?:'s|\s+in|\s+with)/i,
+    /^\s*([A-Z][a-zA-Z0-9_\-]{1,25})\s*:\s*You are/i
   ];
 
-  if (systemPrompt) {
-    for (const p of patterns) {
-      const match = systemPrompt.match(p);
+  if (cleanPrompt) {
+    for (const p of explicitPatterns) {
+      const match = cleanPrompt.match(p);
       if (match && match[1]) {
-        const name = match[1].trim();
-        const lower = name.toLowerCase();
-        if (name.length > 1 && !GENERIC_NAME_BLACKLIST.some(b => lower.includes(b))) {
-          return name;
+        const candidate = match[1].replace(/^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s]+$/g, '').trim();
+        const lower = candidate.toLowerCase();
+        if (
+          candidate.length >= 2 &&
+          candidate.length <= 30 &&
+          !GENERIC_NAME_BLACKLIST.some(b => lower === b || lower.startsWith(b + ' ') || lower.endsWith(' ' + b))
+        ) {
+          return candidate;
         }
       }
     }
   }
 
-  // 2. Check assistant messages for dialogue headers or character introduction
+  // 2. Scan assistant messages for dialogue headers, asterisks, or greetings
   if (messages && messages.length > 0) {
     for (const m of messages) {
-      if (m && m.role === 'assistant' && typeof m.content === 'string') {
-        const text = m.content.trim();
+      if (m && m.role === 'assistant') {
+        const text = typeof m.content === 'string' ? m.content.trim() : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n').trim() : '');
+        if (!text) continue;
+
+        // Speaker prefix "Kars: ..."
         const speakerMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,20}):\s+/);
         if (speakerMatch && speakerMatch[1]) {
           const spk = speakerMatch[1].trim();
@@ -99,6 +131,8 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
             return spk;
           }
         }
+
+        // Action starter "*Kars opens a rift..." or "*Kars pauses..."
         const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,20})\s+/);
         if (actionMatch && actionMatch[1]) {
           const actName = actionMatch[1].trim();
@@ -106,19 +140,31 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
             return actName;
           }
         }
+
+        // Third-person narrative starter "Kars smiles and looks away..."
+        const thirdPersonMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,20})\s+(?:smiles|looks|walks|stands|turns|steps|gazes|pauses|sighs|nods|takes|crosses|leans|watches|pulls|grins|frowns|glances|stares|reaches|draws|speaks|whispers|laughs|sits)\b/);
+        if (thirdPersonMatch && thirdPersonMatch[1]) {
+          const tpName = thirdPersonMatch[1].trim();
+          if (!GENERIC_NAME_BLACKLIST.some(b => tpName.toLowerCase().includes(b))) {
+            return tpName;
+          }
+        }
       }
     }
   }
 
-  // 3. Fallback: Check if there is a character prompt title
-  if (systemPrompt) {
-    const firstLine = systemPrompt.split('\n')[0].replace(/^[#\-\*\[\]\s]+/, '').trim();
-    if (firstLine.length > 0 && firstLine.length < 30 && !firstLine.includes(':') && !GENERIC_NAME_BLACKLIST.some(b => firstLine.toLowerCase().includes(b))) {
-      return firstLine;
+  // 3. Fallback: Proper noun starter in system prompt
+  if (cleanPrompt) {
+    const starterMatch = cleanPrompt.match(/(?:^|\n\n)([A-Z][a-zA-Z0-9_\-]{1,20})\s+is\s+(?:a|an|the)\b/);
+    if (starterMatch && starterMatch[1]) {
+      const name = starterMatch[1].trim();
+      if (!GENERIC_NAME_BLACKLIST.some(b => name.toLowerCase().includes(b))) {
+        return name;
+      }
     }
   }
 
-  return 'Character-' + hashString(systemPrompt || 'unknown').slice(0, 6);
+  return 'Character';
 }
 
 // Derive Character & Chat Fingerprints
@@ -128,38 +174,47 @@ export function deriveChatFingerprint(
   headers?: { get: (name: string) => string | null }
 ): { characterId: string; characterName: string; chatId: string; sessionTitle: string } {
   // Check header overrides
-  const customChatId = headers?.get('x-chat-id') || headers?.get('chat-id');
+  const customChatId = headers?.get('x-chat-id') || headers?.get('chat-id') || headers?.get('x-session-id') || headers?.get('session-id');
   const customCharName = headers?.get('x-character-name') || headers?.get('character-name');
 
   const charName = customCharName || extractCharacterName(systemPrompt, messages);
-  const characterId = 'char_' + hashString((charName + systemPrompt.slice(0, 300)).trim().toLowerCase());
+  const characterId = 'char_' + hashString((charName + (systemPrompt || '').slice(0, 300)).trim().toLowerCase());
+
+  const nonSystem = (messages || []).filter(m => m && m.role !== 'system');
+  
+  // Extract a clean dialogue preview for the session title (stripping out system notes or markdown lore)
+  let preview = '';
+  for (const m of nonSystem) {
+    const raw = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '');
+    const cleaned = raw.replace(/\[(?:SYSTEM NOTE|OOC|Active Formatting)[\s\S]*?\]/gi, '').replace(/<[^>]+>[\s\S]*?<\/[^>]+>/gi, '').trim();
+    if (cleaned.length > 2) {
+      preview = cleaned.slice(0, 45).replace(/[\r\n]+/g, ' ').trim();
+      break;
+    }
+  }
+
+  const sessionTitle = preview
+    ? `${charName} • "${preview}${preview.length >= 45 ? '...' : ''}"`
+    : `${charName} Roleplay`;
 
   if (customChatId) {
     return {
       characterId,
       characterName: charName,
       chatId: customChatId,
-      sessionTitle: customChatId
+      sessionTitle
     };
   }
 
-  // Use first 3 turns for distinct conversation hashing
+  // Stable Anchor: In Janitor AI & SillyTavern, nonSystem[0] is the greeting/starter which never changes across message deletions.
   let anchor = '';
-  const nonSystem = (messages || []).filter(m => m && m.role !== 'system');
   if (nonSystem.length > 0) {
-    anchor = nonSystem.slice(0, 3).map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).slice(0, 150)).join('||');
+    const firstTurn = nonSystem[0];
+    const firstText = typeof firstTurn.content === 'string' ? firstTurn.content : JSON.stringify(firstTurn.content);
+    anchor = firstText.slice(0, 300);
   }
 
   const chatId = 'chat_' + hashString(`${characterId}::${charName}::${anchor}`);
-  
-  // Create human-friendly title
-  let preview = '';
-  if (nonSystem.length > 0) {
-    const first = nonSystem[0];
-    const text = typeof first.content === 'string' ? first.content : '';
-    preview = text.slice(0, 40).replace(/[\r\n]+/g, ' ').trim();
-  }
-  const sessionTitle = preview ? `"${preview}..."` : `${charName} Chat`;
 
   return {
     characterId,
@@ -295,7 +350,7 @@ export async function saveChatSession(session: ChatSession): Promise<void> {
   }
 }
 
-// Delete session
+// Delete single session
 export async function deleteChatSession(chatId: string): Promise<boolean> {
   memoryStore.delete(chatId);
 
@@ -308,6 +363,38 @@ export async function deleteChatSession(chatId: string): Promise<boolean> {
       }
       await callRedis('DEL', `antigravity:session:${chatId}`);
       await callRedis('SREM', 'antigravity:active_sessions', chatId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Delete ALL chat sessions (Complete Flush of chat transcripts)
+export async function deleteAllChatSessions(): Promise<boolean> {
+  memoryStore.clear();
+
+  if (isRedisConfigured()) {
+    try {
+      const ids: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
+      const pipeline: (string | number)[][] = [];
+
+      for (const id of ids) {
+        pipeline.push(['DEL', `antigravity:session:${id}`]);
+      }
+      pipeline.push(['DEL', 'antigravity:active_sessions']);
+
+      // Also clean any character session sets
+      const allCharKeys: string[] = (await callRedis('KEYS', 'antigravity:char_sessions:*')) || [];
+      for (const k of allCharKeys) {
+        pipeline.push(['DEL', k]);
+      }
+
+      if (pipeline.length > 0) {
+        await callRedisPipeline(pipeline);
+      }
       return true;
     } catch {
       return false;

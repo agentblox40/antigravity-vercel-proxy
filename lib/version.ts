@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.0.0';
+export const CURRENT_VERSION = '3.1.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.0.0',
+    version: '3.1.0',
     tag: 'LATEST',
-    title: 'Dynamic Trigger Cadences & Turn-Accurate Injections in Logged Chats',
+    title: 'Character Name Resolution, Rewind / Deletion Stability & 1-Click DB Wipe',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Comprehensively rebuilt character name extraction (eliminating "interacting with" and "character ----" artifacts), anchored session IDs to prevent chat breaking when deleting earlier turns, and added 1-click database flush.',
+    highlights: [
+      'Zero Name Artifacts: Rebuilt character resolution with 12+ Card formats (Janitor AI, SillyTavern, {{char}}, <char>, Dialogue prefixes, Third-person narrative starters) and strict blacklisting to eliminate "interacting with" and "Character-xxxxxx".',
+      'Rewind & Early Deletion Stability: Anchored chat session IDs to the character card + starter greeting so deleting earlier turns in Janitor AI / SillyTavern never breaks or splits sessions.',
+      'Dialogue-Clean Session Titles: Smart preview generator automatically filters system notes and XML tags to display clean dialogue titles (e.g. Kars • "Where are we heading now?").',
+      '🗑️ 1-Click Database Flush: Added Clear All Chats button in dashboard and DELETE /api/memory?all=true endpoint with master key authentication.'
+    ]
+  },
+  {
+    version: '3.0.0',
+    tag: 'MAJOR',
+    title: 'Dynamic Trigger Cadences & Turn-Accurate Injections in Logged Chats',
+    date: 'Aug 26, 2026',
+    commit: '9c4030e',
     description: 'Added configurable trigger frequencies (% Chance, Every N texts, First Turn) for prompt injections and rendered turn-accurate injected directives directly below each user message in Logged Chats.',
     highlights: [
       'Turn-Level Snapshot Isolation: Injections are evaluated per turn and rendered directly below each user message, showing only what was injected with that specific turn.',
