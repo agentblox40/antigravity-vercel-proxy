@@ -585,19 +585,33 @@ export async function recordTurnsIntoSession(
     nonSystem = [{ role: 'user', content: incomingMessages.trim() }];
   }
 
-  if (nonSystem.length === 0 && !trimmedAssistant) return;
+  // Map existing messages by content for preservation of prior metadata
+  const existingMap = new Map<string, ArchivedMessage>();
+  for (const existing of session.messages || []) {
+    if (existing.content) {
+      existingMap.set(existing.content.trim(), existing);
+    }
+  }
 
   // Format all active messages from the client's ground-truth list
   const formattedMessages: ArchivedMessage[] = nonSystem.map((m, idx) => {
     const content = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '');
+    const trimmed = content.trim();
     const isLastUser = idx === nonSystem.length - 1 && m.role === 'user';
+    const prior = existingMap.get(trimmed);
+
     return {
       id: 'msg_' + hashString(content + idx).slice(0, 8),
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content,
-      timestamp: now - (nonSystem.length - idx) * 1000,
-      injectedLore: isLastUser && injectedLore && injectedLore.length > 0 ? injectedLore : undefined,
-      attachedInjections: isLastUser && attachedInjections && attachedInjections.length > 0 ? attachedInjections : undefined
+      reasoning_content: prior?.reasoning_content,
+      timestamp: prior?.timestamp || (now - (nonSystem.length - idx) * 1000),
+      injectedLore: isLastUser
+        ? (injectedLore && injectedLore.length > 0 ? injectedLore : prior?.injectedLore)
+        : prior?.injectedLore,
+      attachedInjections: isLastUser
+        ? (attachedInjections && attachedInjections.length > 0 ? attachedInjections : prior?.attachedInjections)
+        : prior?.attachedInjections
     };
   });
 
