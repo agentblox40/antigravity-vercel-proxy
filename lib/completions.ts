@@ -333,7 +333,7 @@ export async function handleChatCompletions(req: NextRequest) {
               // Record asynchronously into memory with dynamic Lorebary injections
               if (session) {
                 const injectedLore = extractInjectedLore(messages, rawSystemText);
-                recordTurnsIntoSession(session, latestUserText, fullAssistantContent, fullThoughtContent, injectedLore).catch(() => {});
+                recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore).catch(() => {});
               }
             } catch (err) {
               controller.error(err);
@@ -374,7 +374,7 @@ export async function handleChatCompletions(req: NextRequest) {
       // Record asynchronously into memory with dynamic Lorebary injections
       if (session) {
         const injectedLore = extractInjectedLore(messages, rawSystemText);
-        recordTurnsIntoSession(session, latestUserText, contentText, thoughtText, injectedLore).catch(() => {});
+        recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore).catch(() => {});
       }
 
       return NextResponse.json(

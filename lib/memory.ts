@@ -42,32 +42,81 @@ function hashString(str: string): string {
   return crypto.createHash('sha256').update(str).digest('hex').slice(0, 16);
 }
 
-// Extract Character Name from System Prompt
-export function extractCharacterName(systemPrompt: string): string {
-  if (!systemPrompt) return 'Unknown Character';
+// Filter list of generic words/phrases that are NOT character names
+const GENERIC_NAME_BLACKLIST = [
+  'antigravity',
+  'assistant',
+  'ai',
+  'the character and npcs',
+  'character and npcs',
+  'ambient non-player characters',
+  'expert uncensored literary fiction author',
+  'uncensored literary fiction author',
+  'narrative director',
+  'dynamic character actor',
+  'literary author',
+  'the character',
+  'char',
+  'user',
+  'unknown'
+];
+
+// Extract Character Name from System Prompt or dialogue cues
+export function extractCharacterName(systemPrompt: string, messages?: any[]): string {
+  // 1. Scan system prompt for explicit character name tags
   const patterns = [
-    /(?:You are|Character Name:|Character:|Name:)\s+([A-Z][a-zA-Z0-9_\-\s]{1,30}?)(?=[.,\n\r\[\]\(\);:]|$)/i,
-    /\[(?:Character|Name|Persona):\s*([A-Za-z0-9_\-\s]{1,30})\]/i,
+    /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
+    /\[(?:Character|Char|Persona|Name):\s*([A-Za-z0-9_\-\s]{1,30})\]/i,
+    /(?:Character Name|Char Name|Character|Persona):\s*([A-Za-z0-9_\-\s]{1,30})(?=[.,\n\r\[\]\(\);:]|$)/i,
+    /(?:You operate as|You are playing as|You play as)\s+([A-Z][a-zA-Z0-9_\-\s]{1,25})(?=[.,\n\r\[\]\(\);:]|$)/i,
     /^\s*([A-Z][a-zA-Z0-9_\-\s]{1,25})\s*:\s*You are/i
   ];
 
-  for (const p of patterns) {
-    const match = systemPrompt.match(p);
-    if (match && match[1]) {
-      const name = match[1].trim();
-      if (name.length > 1 && !name.toLowerCase().includes('antigravity') && !name.toLowerCase().includes('assistant')) {
-        return name;
+  if (systemPrompt) {
+    for (const p of patterns) {
+      const match = systemPrompt.match(p);
+      if (match && match[1]) {
+        const name = match[1].trim();
+        const lower = name.toLowerCase();
+        if (name.length > 1 && !GENERIC_NAME_BLACKLIST.some(b => lower.includes(b))) {
+          return name;
+        }
       }
     }
   }
 
-  // Fallback: Check first line
-  const firstLine = systemPrompt.split('\n')[0].trim();
-  if (firstLine.length > 0 && firstLine.length < 35 && !firstLine.includes(':')) {
-    return firstLine;
+  // 2. Check assistant messages for dialogue headers or character introduction
+  if (messages && messages.length > 0) {
+    for (const m of messages) {
+      if (m && m.role === 'assistant' && typeof m.content === 'string') {
+        const text = m.content.trim();
+        const speakerMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,20}):\s+/);
+        if (speakerMatch && speakerMatch[1]) {
+          const spk = speakerMatch[1].trim();
+          if (!GENERIC_NAME_BLACKLIST.some(b => spk.toLowerCase().includes(b))) {
+            return spk;
+          }
+        }
+        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,20})\s+/);
+        if (actionMatch && actionMatch[1]) {
+          const actName = actionMatch[1].trim();
+          if (!GENERIC_NAME_BLACKLIST.some(b => actName.toLowerCase().includes(b))) {
+            return actName;
+          }
+        }
+      }
+    }
   }
 
-  return 'Character-' + hashString(systemPrompt).slice(0, 6);
+  // 3. Fallback: Check if there is a character prompt title
+  if (systemPrompt) {
+    const firstLine = systemPrompt.split('\n')[0].replace(/^[#\-\*\[\]\s]+/, '').trim();
+    if (firstLine.length > 0 && firstLine.length < 30 && !firstLine.includes(':') && !GENERIC_NAME_BLACKLIST.some(b => firstLine.toLowerCase().includes(b))) {
+      return firstLine;
+    }
+  }
+
+  return 'Character-' + hashString(systemPrompt || 'unknown').slice(0, 6);
 }
 
 // Derive Character & Chat Fingerprints
@@ -80,8 +129,8 @@ export function deriveChatFingerprint(
   const customChatId = headers?.get('x-chat-id') || headers?.get('chat-id');
   const customCharName = headers?.get('x-character-name') || headers?.get('character-name');
 
-  const charName = customCharName || extractCharacterName(systemPrompt);
-  const characterId = 'char_' + hashString((charName + systemPrompt.slice(0, 500)).trim().toLowerCase());
+  const charName = customCharName || extractCharacterName(systemPrompt, messages);
+  const characterId = 'char_' + hashString((charName + systemPrompt.slice(0, 300)).trim().toLowerCase());
 
   if (customChatId) {
     return {
@@ -92,23 +141,23 @@ export function deriveChatFingerprint(
     };
   }
 
-  // Anchor to the first two messages (opening bot greeting + first user reply)
+  // Use first 3 turns for distinct conversation hashing
   let anchor = '';
-  if (messages.length > 0) {
-    const firstTwo = messages.slice(0, 2);
-    anchor = firstTwo.map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).slice(0, 200)).join('||');
+  const nonSystem = (messages || []).filter(m => m && m.role !== 'system');
+  if (nonSystem.length > 0) {
+    anchor = nonSystem.slice(0, 3).map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).slice(0, 150)).join('||');
   }
 
-  const chatId = 'chat_' + hashString(`${characterId}::${anchor}`);
+  const chatId = 'chat_' + hashString(`${characterId}::${charName}::${anchor}`);
   
   // Create human-friendly title
   let preview = '';
-  if (messages.length > 0) {
-    const first = messages[0];
+  if (nonSystem.length > 0) {
+    const first = nonSystem[0];
     const text = typeof first.content === 'string' ? first.content : '';
     preview = text.slice(0, 40).replace(/[\r\n]+/g, ' ').trim();
   }
-  const sessionTitle = preview ? `"${preview}..."` : `Chat #${chatId.slice(5, 11)}`;
+  const sessionTitle = preview ? `"${preview}..."` : `${charName} Chat`;
 
   return {
     characterId,
@@ -514,76 +563,54 @@ export function extractInjectedLore(
   return entries;
 }
 
-// Record turns asynchronously into session history (with smart regeneration overwriting)
+// Record turns asynchronously into session history (using client active messages as the ground truth)
 export async function recordTurnsIntoSession(
   session: ChatSession,
-  userText: string,
+  incomingMessages: any[] | string,
   assistantText: string,
   reasoningContent?: string,
   injectedLore?: InjectedLoreEntry[]
 ): Promise<void> {
   const now = Date.now();
-  session.messages = session.messages || [];
-  const msgs = session.messages;
-
-  const trimmedUser = (userText || '').trim();
   const trimmedAssistant = (assistantText || '').trim();
 
-  if (!trimmedAssistant && !trimmedUser) return;
-
-  const len = msgs.length;
-
-  // Case 1: Regeneration (The last message in history is the user message that prompted this regeneration)
-  if (len >= 1 && msgs[len - 1].role === 'user' && msgs[len - 1].content.trim() === trimmedUser) {
-    if (injectedLore && injectedLore.length > 0) {
-      msgs[len - 1].injectedLore = injectedLore;
-    }
-    // Append the regenerated assistant response
-    if (trimmedAssistant) {
-      msgs.push({
-        id: 'msg_' + hashString(trimmedAssistant + now).slice(0, 8),
-        role: 'assistant',
-        content: assistantText,
-        reasoning_content: reasoningContent,
-        timestamp: now
-      });
-    }
-  }
-  // Case 2: Overwrite existing assistant response if last turn matches
-  else if (len >= 2 && msgs[len - 2].role === 'user' && msgs[len - 2].content.trim() === trimmedUser && msgs[len - 1].role === 'assistant') {
-    if (injectedLore && injectedLore.length > 0) {
-      msgs[len - 2].injectedLore = injectedLore;
-    }
-    msgs[len - 1].content = assistantText;
-    msgs[len - 1].reasoning_content = reasoningContent;
-    msgs[len - 1].timestamp = now;
-  }
-  // Case 3: Standard new conversation turn
-  else {
-    if (trimmedUser) {
-      msgs.push({
-        id: 'msg_' + hashString(trimmedUser + now).slice(0, 8),
-        role: 'user',
-        content: userText,
-        timestamp: now,
-        injectedLore: (injectedLore && injectedLore.length > 0) ? injectedLore : undefined
-      });
-    }
-    if (trimmedAssistant) {
-      msgs.push({
-        id: 'msg_' + hashString(trimmedAssistant + now).slice(0, 8),
-        role: 'assistant',
-        content: assistantText,
-        reasoning_content: reasoningContent,
-        timestamp: now + 1
-      });
-    }
+  // Handle both array of messages and legacy single user string
+  let nonSystem: any[] = [];
+  if (Array.isArray(incomingMessages)) {
+    nonSystem = incomingMessages.filter(m => m && m.role !== 'system');
+  } else if (typeof incomingMessages === 'string' && incomingMessages.trim()) {
+    nonSystem = [{ role: 'user', content: incomingMessages.trim() }];
   }
 
-  // Cap at last 2000 messages to stay safely within 1M token capacity
-  if (msgs.length > 2000) {
-    session.messages = msgs.slice(-2000);
+  if (nonSystem.length === 0 && !trimmedAssistant) return;
+
+  // Format all active messages from the client's ground-truth list
+  const formattedMessages: ArchivedMessage[] = nonSystem.map((m, idx) => {
+    const content = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '');
+    const isLastUser = idx === nonSystem.length - 1 && m.role === 'user';
+    return {
+      id: 'msg_' + hashString(content + idx).slice(0, 8),
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content,
+      timestamp: now - (nonSystem.length - idx) * 1000,
+      injectedLore: isLastUser && injectedLore && injectedLore.length > 0 ? injectedLore : undefined
+    };
+  });
+
+  // Append the assistant's new response
+  if (trimmedAssistant) {
+    formattedMessages.push({
+      id: 'msg_' + hashString(trimmedAssistant + now).slice(0, 8),
+      role: 'assistant',
+      content: assistantText,
+      reasoning_content: reasoningContent,
+      timestamp: now
+    });
   }
+
+  session.messages = formattedMessages;
+  session.messageCount = formattedMessages.length;
+  session.updatedAt = now;
 
   await saveChatSession(session);
 }

@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.6.0';
+export const CURRENT_VERSION = '2.6.1';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.6.0',
+    version: '2.6.1',
     tag: 'LATEST',
-    title: 'Lorebary & Lorebook Dynamic Injection Tracker',
+    title: 'Smart Session Grouping & Character Name Isolation Engine',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Fixed conversation mixing across chats with identical opening starters and eliminated generic system prompt phrases from character naming.',
+    highlights: [
+      'Active History Ground Truth: Grounded session logging in the client\'s active message sequence to prevent cross-chat merging and respect message rewinds.',
+      'Robust Name Extraction: Blacklisted generic roleplay directive phrases ("the Character and NPCs") and added dialogue speaker detection.',
+      'Compound Fingerprinting: Hashed multi-turn sequence and character context so reused starter prompts never collide into the same chat ID.',
+      'Automatic Session Isolation: Starting a new chat or switching stories cleanly logs into its own dedicated session.'
+    ]
+  },
+  {
+    version: '2.6.0',
+    tag: 'MAJOR',
+    title: 'Lorebary & Lorebook Dynamic Injection Tracker',
+    date: 'Aug 26, 2026',
+    commit: '8451a05',
     description: 'Added real-time detection, extraction, and turn-by-turn inspection for Lorebary, Janitor Lorebook, and World Info injections in Logged Chats.',
     highlights: [
       'Lorebary Injection Detection: Automatically parses <lore>, <lorebook>, <world_info>, <memory>, and bracketed lore blocks.',
