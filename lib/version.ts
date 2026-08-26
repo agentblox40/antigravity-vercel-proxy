@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.6.1';
+export const CURRENT_VERSION = '2.7.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.6.1',
+    version: '2.7.0',
     tag: 'LATEST',
-    title: 'Smart Session Grouping & Character Name Isolation Engine',
+    title: 'Strict Model Validation & Zero Silent Fallback Engine',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Eliminated all silent model fallbacks and secret substitutions. Requests with unrecognized or failing models now return immediate, transparent error diagnostics.',
+    highlights: [
+      'Zero Silent Fallbacks: Removed all automatic fallbacks to Gemini 3.7 Flash so developers and testers never get gaslighted.',
+      'Strict Model Validation: Invalid or unrecognized model names return an immediate HTTP 404 Model Not Found error with full catalog suggestions.',
+      'Upstream Error Transparency: If a requested model (e.g. Claude or Pro) fails upstream with 400/404/503, the proxy reports the exact HTTP error directly.',
+      'Explicit Thinking Budget Mapping: Explicitly maps all model suffixes (:high, :max, :low, :off) to exact thinking headroom.'
+    ]
+  },
+  {
+    version: '2.6.1',
+    tag: 'MAJOR',
+    title: 'Smart Session Grouping & Character Name Isolation Engine',
+    date: 'Aug 26, 2026',
+    commit: 'b1a8ddd',
     description: 'Fixed conversation mixing across chats with identical opening starters and eliminated generic system prompt phrases from character naming.',
     highlights: [
       'Active History Ground Truth: Grounded session logging in the client\'s active message sequence to prevent cross-chat merging and respect message rewinds.',

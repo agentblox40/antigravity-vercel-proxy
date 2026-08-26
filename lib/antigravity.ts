@@ -232,9 +232,62 @@ export function pickAccount(): AccountConfig {
   return best;
 }
 
+// Strictly resolve requested model ID to Google Antigravity wire model without silent fallbacks
+export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number } | null {
+  if (!modelId || !modelId.trim()) {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
+  }
+  const clean = modelId.trim().toLowerCase();
+
+  // 1. Gemini 3.7 Flash variants
+  if (clean === 'gemini-3.7-flash' || clean === 'gemini-3.7-flash-tiered') {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
+  }
+  if (clean === 'gemini-3.7-flash-high' || clean === 'gemini-3.7-flash:high') {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 24576 };
+  }
+  if (clean === 'gemini-3.7-flash-max' || clean === 'gemini-3.7-flash:max' || clean === 'gemini-3.7-flash-xhigh') {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 65536 };
+  }
+  if (clean === 'gemini-3.7-flash-medium' || clean === 'gemini-3.7-flash:medium' || clean === 'gemini-3.7-flash:med') {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
+  }
+  if (clean === 'gemini-3.7-flash-low' || clean === 'gemini-3.7-flash:low') {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 2048 };
+  }
+  if (clean === 'gemini-3.7-flash:off' || clean === 'gemini-3.7-flash:fast' || clean === 'gemini-3.7-flash-off' || clean === 'gemini-3.7-flash-fast') {
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 0 };
+  }
+
+  // 2. Gemini 3.1 Pro variants
+  if (clean === 'gemini-3.1-pro' || clean === 'gemini-pro-agent' || clean === 'gemini-3.1-pro-thinking') {
+    return { wireModel: 'gemini-pro-agent', defaultThinkingBudget: 32768 };
+  }
+
+  // 3. Gemini 3.5 Flash / Fast variants (0 thinking)
+  if (clean === 'gemini-3.5-flash' || clean === 'gemini-2.5-flash' || clean === 'gemini-3-flash-agent') {
+    return { wireModel: 'gemini-3-flash-agent', defaultThinkingBudget: 0 };
+  }
+
+  // 4. Claude Models
+  if (clean === 'claude-opus-4-6-thinking' || clean === 'claude-opus-4-6' || clean === 'claude-opus') {
+    return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 16384 };
+  }
+  if (clean === 'claude-sonnet-4-6' || clean === 'claude-sonnet') {
+    return { wireModel: 'claude-sonnet-4-6', defaultThinkingBudget: 16384 };
+  }
+
+  // 5. Exact Google upstream model paths
+  if (clean.startsWith('publishers/google/models/') || clean.startsWith('models/')) {
+    return { wireModel: clean, defaultThinkingBudget: 8192 };
+  }
+
+  return null;
+}
+
 export function transformOpenAIToAntigravity(
   body: any,
-  modelId: string,
+  resolved: { wireModel: string; defaultThinkingBudget: number },
   projectId: string,
   augmentedSystem?: string
 ) {
@@ -288,18 +341,16 @@ export function transformOpenAIToAntigravity(
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
   }
 
-  let thinkingBudget = 8192;
-  const modelClean = modelId.toLowerCase();
+  let thinkingBudget = resolved.defaultThinkingBudget;
+  const modelClean = (body.model || '').toLowerCase();
 
-  if (modelClean.includes('max') || modelClean.includes(':max') || modelClean.includes('xhigh') || body.reasoning_effort === 'max') {
+  if (modelClean.includes(':max') || modelClean.includes('-max') || body.reasoning_effort === 'max') {
     thinkingBudget = 65536;
-  } else if (modelClean.includes('high') || modelClean.includes(':high') || body.reasoning_effort === 'high') {
+  } else if (modelClean.includes(':high') || modelClean.includes('-high') || body.reasoning_effort === 'high') {
     thinkingBudget = 24576;
-  } else if (modelClean.includes('low') || modelClean.includes(':low') || body.reasoning_effort === 'low') {
+  } else if (modelClean.includes(':low') || modelClean.includes('-low') || body.reasoning_effort === 'low') {
     thinkingBudget = 2048;
-  } else if (modelClean.includes('medium') || modelClean.includes(':medium') || modelClean.includes(':med') || body.reasoning_effort === 'medium') {
-    thinkingBudget = 8192;
-  } else if (modelClean.includes('fast') || modelClean.includes(':fast') || modelClean.includes(':off') || modelClean === 'gemini-3.5-flash' || modelClean === 'gemini-2.5-flash') {
+  } else if (modelClean.includes(':off') || modelClean.includes(':fast') || modelClean.includes('-off') || modelClean.includes('-fast')) {
     thinkingBudget = 0;
   } else if (typeof body.thinking_budget === 'number') {
     thinkingBudget = body.thinking_budget;
@@ -339,13 +390,6 @@ export function transformOpenAIToAntigravity(
     systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
 
-  let wireModel = 'gemini-3.7-flash-tiered';
-  if (modelClean.startsWith('gemini-3.7-flash')) wireModel = 'gemini-3.7-flash-tiered';
-  else if (modelClean === 'gemini-3.1-pro' || modelClean === 'gemini-pro-agent') wireModel = 'gemini-pro-agent';
-  else if (modelClean.startsWith('gemini-3.5-flash') || modelClean === 'gemini-3-flash-agent') wireModel = 'gemini-3-flash-agent';
-  else if (modelClean.includes('claude-opus')) wireModel = 'claude-opus-4-6-thinking';
-  else if (modelClean.includes('claude-sonnet')) wireModel = 'claude-sonnet-4-6';
-
   const reqObj: any = {
     sessionId: `-${Date.now()}`,
     contents: merged,
@@ -354,13 +398,12 @@ export function transformOpenAIToAntigravity(
     safetySettings: UNRESTRICTED_SAFETY_SETTINGS
   };
 
-
   return {
     project: projectId,
     requestId: 'agent/' + Date.now() + '/' + crypto.randomUUID().slice(0, 8),
     userAgent: 'antigravity',
     requestType: 'agent',
-    model: wireModel,
+    model: resolved.wireModel,
     request: reqObj
   };
 }

@@ -5,6 +5,7 @@ import {
   pickAccount,
   getAccessToken,
   transformOpenAIToAntigravity,
+  resolveWireModel,
 } from './antigravity';
 import {
   deriveChatFingerprint,
@@ -61,7 +62,36 @@ export async function handleChatCompletions(req: NextRequest) {
   }
 
   const stream = body.stream === true;
-  const modelId = body.model || 'gemini-3.7-flash';
+  const requestedModel = (body.model || 'gemini-3.7-flash').trim();
+  const resolved = resolveWireModel(requestedModel);
+
+  if (!resolved) {
+    return NextResponse.json(
+      {
+        error: {
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.7-flash, gemini-3.7-flash-high, gemini-3.7-flash-max, gemini-3.7-flash-low, gemini-3.1-pro, gemini-3.5-flash, claude-opus-4-6-thinking, claude-sonnet-4-6.`,
+          type: 'invalid_request_error',
+          param: 'model',
+          code: 'model_not_found',
+          requested_model: requestedModel,
+          available_models: [
+            'gemini-3.7-flash',
+            'gemini-3.7-flash-high',
+            'gemini-3.7-flash-max',
+            'gemini-3.7-flash-medium',
+            'gemini-3.7-flash-low',
+            'gemini-3.1-pro',
+            'gemini-3.5-flash',
+            'claude-opus-4-6-thinking',
+            'claude-sonnet-4-6'
+          ]
+        }
+      },
+      { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
+
+  const modelId = requestedModel;
   const accounts = getAccounts();
 
   // Extract raw system text & latest user text for background logging
@@ -164,12 +194,12 @@ export async function handleChatCompletions(req: NextRequest) {
   for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
-      let envelope = transformOpenAIToAntigravity(body, modelId, account.projectId, rawSystemText);
+      const envelope = transformOpenAIToAntigravity(body, resolved, account.projectId, rawSystemText);
 
       let upstreamRes: Response | null = null;
       for (const upstreamUrl of UPSTREAM_URLS) {
         try {
-          let res = await fetch(upstreamUrl, {
+          const res = await fetch(upstreamUrl, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -180,22 +210,6 @@ export async function handleChatCompletions(req: NextRequest) {
             body: JSON.stringify(envelope),
           });
 
-          // If model has no capacity (503) or is unsupported (404/400), fallback to gemini-3.7-flash-tiered
-          if ((res.status === 503 || res.status === 404 || res.status === 400) && envelope.model !== 'gemini-3.7-flash-tiered') {
-            console.warn(`Upstream returned ${res.status} for ${envelope.model}. Auto-falling back to gemini-3.7-flash-tiered...`);
-            envelope = transformOpenAIToAntigravity(body, 'gemini-3.7-flash', account.projectId, rawSystemText);
-            res = await fetch(upstreamUrl, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-                Accept: 'text/event-stream',
-                'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64',
-              },
-              body: JSON.stringify(envelope),
-            });
-          }
-
           if (res.ok) {
             upstreamRes = res;
             break;
@@ -204,8 +218,8 @@ export async function handleChatCompletions(req: NextRequest) {
             continue;
           } else {
             const errText = await res.text();
-            attemptLogs.push({ account: account.name, status: res.status, error: errText.slice(0, 200) });
-            console.warn(`Upstream ${upstreamUrl} returned ${res.status}: ${errText}`);
+            attemptLogs.push({ account: account.name, status: res.status, error: errText.slice(0, 300) });
+            console.warn(`Upstream ${upstreamUrl} returned ${res.status} for model ${resolved.wireModel}: ${errText}`);
           }
         } catch (e: any) {
           attemptLogs.push({ account: account.name, status: 500, error: e.message || 'Connection error' });
@@ -406,6 +420,29 @@ export async function handleChatCompletions(req: NextRequest) {
       attemptLogs.push({ account: account.name, status: 500, error: err.message || 'Execution error' });
       console.error(`Attempt failed on ${account.name}:`, err.message);
     }
+  }
+
+  const lastErr = attemptLogs[attemptLogs.length - 1];
+  const allRateLimits = attemptLogs.length > 0 && attemptLogs.every(l => l.status === 429 || l.status === 503);
+
+  // If upstream explicitly rejected the model/payload with 400, 404, etc., return the exact upstream error
+  if (!allRateLimits && lastErr && lastErr.status !== 429) {
+    return NextResponse.json(
+      {
+        error: {
+          message: `[Upstream Error]: Request for model '${requestedModel}' failed with HTTP ${lastErr.status}: ${lastErr.error}`,
+          type: 'upstream_error',
+          code: lastErr.status,
+          model: requestedModel,
+          wire_model: resolved.wireModel,
+          attempt_history: attemptLogs
+        }
+      },
+      {
+        status: lastErr.status >= 400 && lastErr.status < 600 ? lastErr.status : 502,
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      }
+    );
   }
 
   const endNow = Date.now();
