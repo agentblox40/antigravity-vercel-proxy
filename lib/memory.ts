@@ -694,10 +694,10 @@ export async function recordTurnsIntoSession(
       reasoning_content: prior?.reasoning_content,
       timestamp: prior?.timestamp || (now - (nonSystem.length - idx) * 1000),
       injectedLore: isLastUser
-        ? (injectedLore && injectedLore.length > 0 ? injectedLore : prior?.injectedLore)
+        ? (injectedLore && injectedLore.length > 0 ? injectedLore : undefined)
         : prior?.injectedLore,
       attachedInjections: isLastUser
-        ? (attachedInjections && attachedInjections.length > 0 ? attachedInjections : prior?.attachedInjections)
+        ? (attachedInjections && attachedInjections.length > 0 ? attachedInjections : undefined)
         : prior?.attachedInjections
     };
   });

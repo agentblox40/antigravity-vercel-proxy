@@ -8,16 +8,29 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.1.0';
+export const CURRENT_VERSION = '3.1.1';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.1.0',
+    version: '3.1.1',
     tag: 'LATEST',
-    title: 'Character Name Resolution, Rewind / Deletion Stability & 1-Click DB Wipe',
+    title: 'Strict Injections Isolation & Master Switch Metric Sync',
     date: 'Aug 26, 2026',
     commit: 'latest',
+    description: 'Fixed phantom injection metadata inheritance on new turns and synchronized active count/token metrics when Master Switch is paused.',
+    highlights: [
+      'Eliminated Phantom Metadata Inheritance: Fixed recordTurnsIntoSession so turning off prompt injections immediately zeroes out attached directives on all subsequent turns without inheriting prior session snapshots.',
+      'Master Switch Metric Sync: Updated /api/injections and dashboard state to report activeCount: 0 and 0 tokens overhead whenever Master Injections switch is toggled OFF.',
+      'Playground Wire State Alignment: Bound 3-Stage Playground wire concatenation directly to live masterEnabled state.'
+    ]
+  },
+  {
+    version: '3.1.0',
+    tag: 'MAJOR',
+    title: 'Character Name Resolution, Rewind / Deletion Stability & 1-Click DB Wipe',
+    date: 'Aug 26, 2026',
+    commit: '122489c',
     description: 'Comprehensively rebuilt character name extraction (eliminating "interacting with" and "character ----" artifacts), anchored session IDs to prevent chat breaking when deleting earlier turns, and added 1-click database flush.',
     highlights: [
       'Zero Name Artifacts: Rebuilt character resolution with 12+ Card formats (Janitor AI, SillyTavern, {{char}}, <char>, Dialogue prefixes, Third-person narrative starters) and strict blacklisting to eliminate "interacting with" and "Character-xxxxxx".',

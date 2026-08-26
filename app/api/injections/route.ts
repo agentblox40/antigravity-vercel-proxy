@@ -28,10 +28,11 @@ export async function GET(req: NextRequest) {
   }
 
   const config = await getInjectionsConfig();
-  const totalTokens = (config.injections || []).reduce((acc, inj) => {
+  const isMasterOn = config.masterEnabled !== false;
+  const activeCount = isMasterOn ? (config.injections || []).filter(inj => inj.enabled).length : 0;
+  const totalTokens = isMasterOn ? (config.injections || []).reduce((acc, inj) => {
     return acc + (inj.enabled ? estimateTokens(inj.content) : 0);
-  }, 0);
-  const activeCount = (config.injections || []).filter(inj => inj.enabled).length;
+  }, 0) : 0;
 
   return NextResponse.json(
     {

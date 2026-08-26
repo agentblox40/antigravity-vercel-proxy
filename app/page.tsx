@@ -461,7 +461,11 @@ export default function AntigravityControlCenter() {
   };
 
   const handleToggleMasterInjections = async (newVal: boolean) => {
-    setInjectionsData((prev: any) => ({ ...prev, masterEnabled: newVal }));
+    setInjectionsData((prev: any) => {
+      const activeCount = newVal ? (prev.injections || []).filter((inj: any) => inj.enabled).length : 0;
+      const totalTokens = newVal ? (prev.injections || []).reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
+      return { ...prev, masterEnabled: newVal, activeCount, totalTokens };
+    });
     try {
       await fetch('/api/injections', {
         method: 'POST',
@@ -475,8 +479,9 @@ export default function AntigravityControlCenter() {
     const nextVal = !currentEnabled;
     setInjectionsData((prev: any) => {
       const updated = (prev.injections || []).map((inj: any) => inj.id === id ? { ...inj, enabled: nextVal } : inj);
-      const activeCount = updated.filter((inj: any) => inj.enabled).length;
-      const totalTokens = updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0);
+      const isMasterOn = prev.masterEnabled !== false;
+      const activeCount = isMasterOn ? updated.filter((inj: any) => inj.enabled).length : 0;
+      const totalTokens = isMasterOn ? updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
       return { ...prev, injections: updated, activeCount, totalTokens };
     });
 
@@ -501,8 +506,9 @@ export default function AntigravityControlCenter() {
         const data = await res.json();
         if (data.config) {
           const updated = data.config.injections || [];
-          const activeCount = updated.filter((i: any) => i.enabled).length;
-          const totalTokens = updated.reduce((acc: number, i: any) => acc + (i.enabled ? (i.tokens || 0) : 0), 0);
+          const isMasterOn = data.config.masterEnabled !== false;
+          const activeCount = isMasterOn ? updated.filter((i: any) => i.enabled).length : 0;
+          const totalTokens = isMasterOn ? updated.reduce((acc: number, i: any) => acc + (i.enabled ? (i.tokens || 0) : 0), 0) : 0;
           setInjectionsData({
             masterEnabled: data.config.masterEnabled,
             injections: updated,
@@ -525,8 +531,9 @@ export default function AntigravityControlCenter() {
     if (!confirm('Are you sure you want to delete this prompt injection block?')) return;
     setInjectionsData((prev: any) => {
       const updated = (prev.injections || []).filter((inj: any) => inj.id !== id);
-      const activeCount = updated.filter((inj: any) => inj.enabled).length;
-      const totalTokens = updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0);
+      const isMasterOn = prev.masterEnabled !== false;
+      const activeCount = isMasterOn ? updated.filter((inj: any) => inj.enabled).length : 0;
+      const totalTokens = isMasterOn ? updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
       return { ...prev, injections: updated, activeCount, totalTokens };
     });
 
