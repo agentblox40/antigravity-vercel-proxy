@@ -211,6 +211,11 @@ export default function AntigravityControlCenter() {
   const [isLoadingMemory, setIsLoadingMemory] = useState(false);
   const [memorySearch, setMemorySearch] = useState('');
   const [selectedCharFilter, setSelectedCharFilter] = useState<string>('all');
+  const [expandedLoreMap, setExpandedLoreMap] = useState<Record<string, boolean>>({});
+
+  const toggleLoreExpand = (key: string) => {
+    setExpandedLoreMap(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Deployment & Update Logs Telemetry State
   const [deploymentData, setDeploymentData] = useState<any>(null);
@@ -1322,6 +1327,93 @@ export default function AntigravityControlCenter() {
                                   {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
+
+                              {/* Lorebary & Lorebook Injections Accordion if present */}
+                              {m.injectedLore && m.injectedLore.length > 0 && (
+                                <div style={{
+                                  marginBottom: 8,
+                                  background: isDark ? '#1a1829' : '#f5f3ff',
+                                  border: `1px solid ${isDark ? '#4c1d95' : '#c4b5fd'}`,
+                                  borderRadius: 8,
+                                  padding: '8px 12px'
+                                }}>
+                                  <div 
+                                    onClick={() => toggleLoreExpand(`lore_${idx}`)}
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      cursor: 'pointer',
+                                      userSelect: 'none'
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: isDark ? '#c084fc' : '#7e22ce' }}>
+                                      <span>🔮 Lorebary Injected Lore</span>
+                                      <span style={{
+                                        background: isDark ? '#3b0764' : '#ede9fe',
+                                        border: `1px solid ${isDark ? '#6b21a8' : '#ddd6fe'}`,
+                                        borderRadius: 4,
+                                        padding: '1px 6px',
+                                        fontSize: 10,
+                                        fontWeight: 600
+                                      }}>
+                                        {m.injectedLore.length} {m.injectedLore.length === 1 ? 'entry' : 'entries'} • ~{m.injectedLore.reduce((acc: number, e: any) => acc + (e.tokens || 0), 0)} tok
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: 10, color: isDark ? '#c084fc' : '#7e22ce', fontWeight: 600 }}>
+                                      {expandedLoreMap[`lore_${idx}`] ? '▲ Collapse' : '▼ View Injected Text'}
+                                    </span>
+                                  </div>
+
+                                  {expandedLoreMap[`lore_${idx}`] && (
+                                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${isDark ? '#3b0764' : '#e9d5ff'}`, paddingTop: 8 }}>
+                                      {m.injectedLore.map((entry: any, eIdx: number) => (
+                                        <div key={eIdx} style={{
+                                          background: isDark ? '#0f0c1b' : '#ffffff',
+                                          border: `1px solid ${isDark ? '#2e1065' : '#e0e7ff'}`,
+                                          borderRadius: 6,
+                                          padding: '8px 10px'
+                                        }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                              <span style={{
+                                                background: isDark ? '#581c87' : '#d8b4fe',
+                                                color: isDark ? '#f3e8ff' : '#581c87',
+                                                fontSize: 9,
+                                                fontWeight: 800,
+                                                textTransform: 'uppercase',
+                                                padding: '1px 5px',
+                                                borderRadius: 3
+                                              }}>
+                                                {entry.category || 'LORE'}
+                                              </span>
+                                              <span style={{ fontSize: 11, fontWeight: 700, color: colors.textMain }}>
+                                                {entry.title}
+                                              </span>
+                                            </div>
+                                            <span style={{ fontSize: 10, color: colors.textSub, fontFamily: 'monospace' }}>
+                                              ~{entry.tokens} tok
+                                            </span>
+                                          </div>
+                                          <div style={{
+                                            fontSize: 11,
+                                            color: colors.textSub,
+                                            whiteSpace: 'pre-wrap',
+                                            lineHeight: 1.4,
+                                            maxHeight: 140,
+                                            overflowY: 'auto',
+                                            fontFamily: 'monospace',
+                                            background: isDark ? '#08060f' : '#f8fafc',
+                                            padding: '6px 8px',
+                                            borderRadius: 4
+                                          }}>
+                                            {entry.content}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Thought Reasoning Accordion if present */}
                               {m.reasoning_content && (

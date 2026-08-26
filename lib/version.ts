@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '2.5.0';
+export const CURRENT_VERSION = '2.6.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '2.5.0',
+    version: '2.6.0',
     tag: 'LATEST',
+    title: 'Lorebary & Lorebook Dynamic Injection Tracker',
+    date: 'Aug 26, 2026',
+    commit: 'latest',
+    description: 'Added real-time detection, extraction, and turn-by-turn inspection for Lorebary, Janitor Lorebook, and World Info injections in Logged Chats.',
+    highlights: [
+      'Lorebary Injection Detection: Automatically parses <lore>, <lorebook>, <world_info>, <memory>, and bracketed lore blocks.',
+      'Turn-by-Turn Lore Explorer: Collapsible card in Logged Chats showing titles, categories, token costs, and exact injected text.',
+      'Zero Latency Impact: Lore extraction runs purely in the background during transcript persistence with 0ms impact on TTFT.',
+      'Multi-System Turn Support: Correctly maps and displays secondary system messages injected by Lorebary.'
+    ]
+  },
+  {
+    version: '2.5.0',
+    tag: 'MAJOR',
     title: 'OmniRoute-Standard Pure Pass-Through & Decoupled Thinking Engine',
     date: 'Aug 24, 2026',
-    commit: 'latest',
+    commit: 'a3afc4d',
     description: 'Adopted exact OmniRoute/OpenRouter architecture: pure zero-interference prompt pass-through, decoupled thinking budget, clean summary handling, and 50/50 round-robin account balancing.',
     highlights: [
       'Pure Pass-Through Translation: Zero synthetic prompt injections, passing character cards and jailbreaks with 100% fidelity.',

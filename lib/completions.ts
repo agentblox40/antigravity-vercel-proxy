@@ -10,9 +10,8 @@ import {
   deriveChatFingerprint,
   getOrCreateChatSession,
   saveChatSession,
-  getActiveOOCAnchor,
   recordTurnsIntoSession,
-  stitchLosslessHistory,
+  extractInjectedLore,
 } from './memory';
 
 const UPSTREAM_URLS = [
@@ -331,9 +330,10 @@ export async function handleChatCompletions(req: NextRequest) {
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
 
-              // Record asynchronously into memory
+              // Record asynchronously into memory with dynamic Lorebary injections
               if (session) {
-                recordTurnsIntoSession(session, latestUserText, fullAssistantContent, fullThoughtContent).catch(() => {});
+                const injectedLore = extractInjectedLore(messages, rawSystemText);
+                recordTurnsIntoSession(session, latestUserText, fullAssistantContent, fullThoughtContent, injectedLore).catch(() => {});
               }
             } catch (err) {
               controller.error(err);
@@ -371,9 +371,10 @@ export async function handleChatCompletions(req: NextRequest) {
         }
       }
 
-      // Record asynchronously into memory
+      // Record asynchronously into memory with dynamic Lorebary injections
       if (session) {
-        recordTurnsIntoSession(session, latestUserText, contentText, thoughtText).catch(() => {});
+        const injectedLore = extractInjectedLore(messages, rawSystemText);
+        recordTurnsIntoSession(session, latestUserText, contentText, thoughtText, injectedLore).catch(() => {});
       }
 
       return NextResponse.json(

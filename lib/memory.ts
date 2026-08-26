@@ -1,11 +1,19 @@
 import crypto from 'node:crypto';
 
+export interface InjectedLoreEntry {
+  title: string;
+  category: 'lore' | 'world_info' | 'memory' | 'context' | 'system_block';
+  content: string;
+  tokens: number;
+}
+
 export interface ArchivedMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   reasoning_content?: string;
   timestamp: number;
+  injectedLore?: InjectedLoreEntry[];
 }
 
 export interface ChatSession {
@@ -404,12 +412,115 @@ export function stitchLosslessHistory(
   return incomingMessages;
 }
 
+// Extract all dynamic Lorebook, World Info, Memory, and Context injections from Lorebary / Janitor AI
+export function extractInjectedLore(
+  messages: any[],
+  rawSystemText: string
+): InjectedLoreEntry[] {
+  const entries: InjectedLoreEntry[] = [];
+  const seenContent = new Set<string>();
+
+  const msgContents = (messages || []).map(m => (typeof m?.content === 'string' ? m.content : (Array.isArray(m?.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '')));
+  const fullText = [rawSystemText || '', ...msgContents].join('\n\n');
+
+  // 1. Scan for XML-style lore tags: <lore>, <lorebook>, <world_info>, <entry>, <memory>, <context>
+  const xmlPatterns = [
+    { regex: /<lore(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lore>/gi, cat: 'lore' },
+    { regex: /<lorebook(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lorebook>/gi, cat: 'lore' },
+    { regex: /<world_info(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/world_info>/gi, cat: 'world_info' },
+    { regex: /<entry\s+title=["']([^"']+)["'][^>]*>([\s\S]*?)<\/entry>/gi, cat: 'lore' },
+    { regex: /<memory(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/memory>/gi, cat: 'memory' },
+    { regex: /<context(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/context>/gi, cat: 'context' },
+    { regex: /<lore_entry(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lore_entry>/gi, cat: 'lore' },
+  ];
+
+  for (const { regex, cat } of xmlPatterns) {
+    let match;
+    while ((match = regex.exec(fullText)) !== null) {
+      const title = (match[1] || `${cat.replace('_', ' ').toUpperCase()} Entry`).trim();
+      const content = match[2]?.trim();
+      if (content && !seenContent.has(content) && content.length > 3) {
+        seenContent.add(content);
+        entries.push({
+          title,
+          category: cat as any,
+          content,
+          tokens: Math.max(1, Math.floor(content.length / 4))
+        });
+      }
+    }
+  }
+
+  // 2. Scan for Bracketed World Info / Lore: [World Info: Title\nContent] or [Lore: ...]
+  const bracketPatterns = [
+    { regex: /\[(?:World Info|WorldInfo|Lorebook|Lore|Lore Entry)\s*:\s*([^\]\n]{1,60})\n([\s\S]*?)\]/gi, cat: 'world_info' },
+    { regex: /\[(?:Memory|Chat Memory|Active Memory)\s*:\s*([^\]\n]{1,60})\n([\s\S]*?)\]/gi, cat: 'memory' },
+    { regex: /\[(?:World Info|WorldInfo|Lorebook|Lore)\s*:\s*([\s\S]*?)\]/gi, cat: 'world_info' },
+    { regex: /\[(?:Memory|Chat Memory)\s*:\s*([\s\S]*?)\]/gi, cat: 'memory' }
+  ];
+
+  for (const { regex, cat } of bracketPatterns) {
+    let match;
+    while ((match = regex.exec(fullText)) !== null) {
+      const title = match[2] ? match[1].trim() : `${cat.replace('_', ' ').toUpperCase()}`;
+      const content = (match[2] || match[1]).trim();
+      if (content && !seenContent.has(content) && content.length > 5) {
+        seenContent.add(content);
+        entries.push({
+          title,
+          category: cat as any,
+          content,
+          tokens: Math.max(1, Math.floor(content.length / 4))
+        });
+      }
+    }
+  }
+
+  // 3. Scan for Multi-System Messages (Lorebary passing extra system turns)
+  const systemMessages = (messages || []).filter(m => m && m.role === 'system');
+  if (systemMessages.length > 1) {
+    for (let i = 1; i < systemMessages.length; i++) {
+      const content = typeof systemMessages[i].content === 'string' ? systemMessages[i].content.trim() : '';
+      if (content && !seenContent.has(content) && content.length > 10) {
+        seenContent.add(content);
+        const firstLine = content.split('\n')[0].replace(/^[#\-\*\[\]\s]+/, '').slice(0, 35);
+        entries.push({
+          title: firstLine || `Injected System Context #${i}`,
+          category: 'system_block',
+          content,
+          tokens: Math.max(1, Math.floor(content.length / 4))
+        });
+      }
+    }
+  }
+
+  // 4. Scan for Markdown Lore Section Headers (### Lore / ### World Info / --- LOREBARY ---)
+  const headerRegex = /(?:###|---)\s*(?:Lore|World Info|Active Context|Injected Knowledge|Lorebary|Memory)\s*(?:###|---)?\s*:\s*\n([\s\S]*?)(?=\n(?:###|---)|\n\n\[|$)/gi;
+  let headerMatch;
+  while ((headerMatch = headerRegex.exec(fullText)) !== null) {
+    const content = headerMatch[1]?.trim();
+    if (content && !seenContent.has(content) && content.length > 10) {
+      seenContent.add(content);
+      const firstLine = content.split('\n')[0].replace(/^[#\-\*\[\]\s]+/, '').slice(0, 30);
+      entries.push({
+        title: firstLine || 'Lorebary Injected Block',
+        category: 'lore',
+        content,
+        tokens: Math.max(1, Math.floor(content.length / 4))
+      });
+    }
+  }
+
+  return entries;
+}
+
 // Record turns asynchronously into session history (with smart regeneration overwriting)
 export async function recordTurnsIntoSession(
   session: ChatSession,
   userText: string,
   assistantText: string,
-  reasoningContent?: string
+  reasoningContent?: string,
+  injectedLore?: InjectedLoreEntry[]
 ): Promise<void> {
   const now = Date.now();
   session.messages = session.messages || [];
@@ -424,6 +535,9 @@ export async function recordTurnsIntoSession(
 
   // Case 1: Regeneration (The last message in history is the user message that prompted this regeneration)
   if (len >= 1 && msgs[len - 1].role === 'user' && msgs[len - 1].content.trim() === trimmedUser) {
+    if (injectedLore && injectedLore.length > 0) {
+      msgs[len - 1].injectedLore = injectedLore;
+    }
     // Append the regenerated assistant response
     if (trimmedAssistant) {
       msgs.push({
@@ -437,6 +551,9 @@ export async function recordTurnsIntoSession(
   }
   // Case 2: Overwrite existing assistant response if last turn matches
   else if (len >= 2 && msgs[len - 2].role === 'user' && msgs[len - 2].content.trim() === trimmedUser && msgs[len - 1].role === 'assistant') {
+    if (injectedLore && injectedLore.length > 0) {
+      msgs[len - 2].injectedLore = injectedLore;
+    }
     msgs[len - 1].content = assistantText;
     msgs[len - 1].reasoning_content = reasoningContent;
     msgs[len - 1].timestamp = now;
@@ -448,7 +565,8 @@ export async function recordTurnsIntoSession(
         id: 'msg_' + hashString(trimmedUser + now).slice(0, 8),
         role: 'user',
         content: userText,
-        timestamp: now
+        timestamp: now,
+        injectedLore: (injectedLore && injectedLore.length > 0) ? injectedLore : undefined
       });
     }
     if (trimmedAssistant) {
