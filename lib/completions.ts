@@ -119,7 +119,7 @@ export async function handleChatCompletions(req: NextRequest) {
   }
 
   // Background passive session identification (for Logged Chats dashboard tab only)
-  let session: any = null;
+  let sessionPromise: Promise<any> | null = null;
   const disableMemory = req.headers.get('x-disable-memory') === 'true' || body.disable_memory === true;
 
   if (!disableMemory) {
@@ -129,12 +129,16 @@ export async function handleChatCompletions(req: NextRequest) {
         rawSystemText,
         req.headers
       );
-      session = await getOrCreateChatSession(chatId, characterId, characterName, sessionTitle);
-      if (rawSystemText) {
-        session.systemPrompt = rawSystemText;
-      }
+      // Non-blocking: execute session lookup in the background parallel to Google call
+      sessionPromise = getOrCreateChatSession(chatId, characterId, characterName, sessionTitle).then(s => {
+        if (rawSystemText && s) s.systemPrompt = rawSystemText;
+        return s;
+      }).catch(err => {
+        console.warn('Memory engine non-blocking warning:', err);
+        return null;
+      });
     } catch (memErr) {
-      console.warn('Memory engine non-blocking warning:', memErr);
+      console.warn('Memory fingerprint non-blocking warning:', memErr);
     }
   }
 
@@ -144,8 +148,12 @@ export async function handleChatCompletions(req: NextRequest) {
     const menuOutput = await executeInChatCommand(inChatCmd);
 
     // Record command exchange into session asynchronously for visibility in dashboard
-    if (session) {
-      recordTurnsIntoSession(session, messages, menuOutput, undefined, undefined, undefined).catch(() => {});
+    if (sessionPromise) {
+      sessionPromise.then(session => {
+        if (session) {
+          recordTurnsIntoSession(session, messages, menuOutput, undefined, undefined, undefined).catch(() => {});
+        }
+      }).catch(() => {});
     }
 
     if (body.stream) {
@@ -380,9 +388,13 @@ export async function handleChatCompletions(req: NextRequest) {
               controller.close();
 
               // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
-              if (session) {
-                const injectedLore = extractInjectedLore(messages, rawSystemText);
-                recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore, attachedInjections).catch(() => {});
+              if (sessionPromise) {
+                sessionPromise.then(session => {
+                  if (session) {
+                    const injectedLore = extractInjectedLore(messages, rawSystemText);
+                    recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore, attachedInjections).catch(() => {});
+                  }
+                }).catch(() => {});
               }
             } catch (err) {
               controller.error(err);
@@ -392,8 +404,9 @@ export async function handleChatCompletions(req: NextRequest) {
 
         return new NextResponse(customStream, {
           headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            'X-Accel-Buffering': 'no',
             Connection: 'keep-alive',
             'Access-Control-Allow-Origin': '*',
           },
@@ -421,9 +434,13 @@ export async function handleChatCompletions(req: NextRequest) {
       }
 
       // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
-      if (session) {
-        const injectedLore = extractInjectedLore(messages, rawSystemText);
-        recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore, attachedInjections).catch(() => {});
+      if (sessionPromise) {
+        sessionPromise.then(session => {
+          if (session) {
+            const injectedLore = extractInjectedLore(messages, rawSystemText);
+            recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore, attachedInjections).catch(() => {});
+          }
+        }).catch(() => {});
       }
 
       return NextResponse.json(

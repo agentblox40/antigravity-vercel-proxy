@@ -141,8 +141,14 @@ async function callRedis(command: string, ...args: (string | number)[]): Promise
 }
 
 const REDIS_KEY = 'antigravity:prompt_injections_v1';
+let lastConfigFetch = 0;
+const CONFIG_CACHE_TTL_MS = 30_000; // 30s cache for 0ms completion latency
 
-export async function getInjectionsConfig(): Promise<InjectionsConfig> {
+export async function getInjectionsConfig(forceRefresh = false): Promise<InjectionsConfig> {
+  const now = Date.now();
+  if (!forceRefresh && memoryInjectionsConfig && (now - lastConfigFetch < CONFIG_CACHE_TTL_MS)) {
+    return memoryInjectionsConfig;
+  }
   try {
     const raw = await callRedis('GET', REDIS_KEY);
     if (raw) {
@@ -154,16 +160,19 @@ export async function getInjectionsConfig(): Promise<InjectionsConfig> {
           ...i
         }));
         memoryInjectionsConfig = parsed;
+        lastConfigFetch = now;
         return parsed;
       }
     }
   } catch {}
 
+  lastConfigFetch = now;
   return memoryInjectionsConfig;
 }
 
 export async function saveInjectionsConfig(config: InjectionsConfig): Promise<void> {
   memoryInjectionsConfig = config;
+  lastConfigFetch = Date.now();
   try {
     await callRedis('SET', REDIS_KEY, JSON.stringify(config));
   } catch {}
