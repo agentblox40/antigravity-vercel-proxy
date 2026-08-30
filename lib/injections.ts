@@ -280,17 +280,25 @@ export interface InChatCommand {
   masterEnabled?: boolean;
 }
 
+// Pre-compiled regex patterns for in-chat commands to prevent re-creation on every turn/request
+// Performance Impact: Eliminates regex allocation and compilation overhead in hot completion path
+const CMD_VIEW_PATTERN_1 = /^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i;
+const CMD_VIEW_PATTERN_2 = /^\/settings\s*$/i;
+const CMD_MASTER_PATTERN = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i;
+const CMD_ENABLE_PATTERN = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i;
+const CMD_DISABLE_PATTERN = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i;
+
 export function detectInChatCommand(rawText: string): InChatCommand | null {
   if (!rawText) return null;
   const trimmed = rawText.trim();
 
   // Pattern 1: View menu: <MYSETTINGS>, <SETTINGS>, /settings, <MY_SETTINGS>
-  if (/^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i.test(trimmed) || /^\/settings\s*$/i.test(trimmed)) {
+  if (CMD_VIEW_PATTERN_1.test(trimmed) || CMD_VIEW_PATTERN_2.test(trimmed)) {
     return { type: 'view', rawInput: trimmed };
   }
 
   // Pattern 2: Master Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
-  const masterMatch = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i.exec(trimmed);
+  const masterMatch = CMD_MASTER_PATTERN.exec(trimmed);
   if (masterMatch) {
     const val = masterMatch[1].toUpperCase();
     const enable = val === 'ON' || val === 'RESUME' || val === 'ENABLE';
@@ -298,14 +306,14 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
   }
 
   // Pattern 3: Enable specific modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
-  const enableMatch = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
+  const enableMatch = CMD_ENABLE_PATTERN.exec(trimmed);
   if (enableMatch) {
     const targets = enableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     return { type: 'enable', rawInput: trimmed, targets };
   }
 
   // Pattern 4: Disable specific modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
-  const disableMatch = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
+  const disableMatch = CMD_DISABLE_PATTERN.exec(trimmed);
   if (disableMatch) {
     const targets = disableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     return { type: 'disable', rawInput: trimmed, targets };

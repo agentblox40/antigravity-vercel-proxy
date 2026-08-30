@@ -1,0 +1,3 @@
+## 2025-05-10 - Pre-compiling RegExp instances in Hot Path Logic
+**Learning:** Instantiating multiple regular expression objects inside functions called during every request (such as character extraction, lore tagging, and command detection) causes unnecessary GC pressure and CPU overhead. Hoisting them to top-level module constants avoids re-allocation. For stateful global (`/g`) regular expressions used with `.exec()`, resetting `lastIndex = 0` prior to loop execution guarantees thread-safe/re-entrant behavior across concurrent serverless requests.
+**Action:** When working on text parsing routines in serverless hot paths, pre-compile regular expressions at module top-level and reset `lastIndex` before `.exec()` loops.
