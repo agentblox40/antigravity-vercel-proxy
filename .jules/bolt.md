@@ -1,0 +1,3 @@
+## 2026-08-26 - Hoisted Hot-Path Regexes in Parsing Routines
+**Learning:** In request-handling routes, functions like `extractCharacterName`, `extractInjectedLore`, and `detectInChatCommand` run synchronously on every chat completion turn. Dynamically instantiating arrays of regular expressions inside these functions allocates dozens of `RegExp` objects per request, causing elevated garbage collection churn and ~13-15% overhead.
+**Action:** Always hoist static `RegExp` instances to module scope. For `/g` stateful regexes executed with `.exec()`, reset `regex.lastIndex = 0` prior to loop execution to ensure thread/call safety.

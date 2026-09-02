@@ -80,9 +80,31 @@ function isValidCharacterName(candidate: string): boolean {
   return true;
 }
 
+// Hoisted regular expressions for candidate cleanup and character name extraction
+const CLEAN_CANDIDATE_REGEX = /^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s.,:;!?]+$/g;
+
 function cleanCandidate(raw: string): string {
-  return raw ? raw.replace(/^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s.,:;!?]+$/g, '').trim() : '';
+  return raw ? raw.replace(CLEAN_CANDIDATE_REGEX, '').trim() : '';
 }
+
+const STRICT_CHARACTER_PATTERNS = [
+  /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
+  /<char_persona\s+name=["']([^"']+)["']/i,
+  /\[(?:Character|Char|Persona|Name)\s*:\s*([^\n\r\[\]\(\);:,]{1,30})\]/i,
+  /\[(?:Character|Char)\("([^"]+)"\)\]/i,
+  /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Full Name|Character|Persona|Name)(?:\*\*|\s*):+\s*([^\n\r\[\]\(\);:,]{1,30})/i,
+  /\{\{char\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([^\n\r\[\]\(\);:,]{1,30})/i,
+  /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-\s']{1,25})(?:'s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
+  /([A-Z][a-zA-Z0-9_\-\s']{1,25})'s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
+  /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as)\s+(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?=[.,\n\r\[\]\(\);:\s]|$)/i,
+  /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?:'s|\s+in|\s+with)/i,
+  /\bnamed\s+([A-Z][a-zA-Z0-9_\-]{1,25})\b/i
+];
+
+const SPEAKER_PREFIX_REGEX = /^([A-Z][a-zA-Z0-9_\-]{1,20}):\s+/;
+const ACTION_STARTER_REGEX = /^\*([A-Z][a-zA-Z0-9_\-]{1,20})\s+([a-z]+)\b/;
+const PROPER_NOUNS_REGEX = /\b[A-Z][a-z]{2,20}\b/g;
+const PROMPT_STARTER_REGEX = /(?:^|\n\n)([A-Z][a-zA-Z0-9_\-]{1,20})\s+is\s+(?:a|an|the)\b/;
 
 // Extract Character Name from System Prompt or dialogue cues
 export function extractCharacterName(systemPrompt: string, messages?: any[]): string {
@@ -90,21 +112,7 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
 
   // Tier 1: Explicit metadata declarations in system prompt
   if (cleanPrompt) {
-    const strictPatterns = [
-      /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
-      /<char_persona\s+name=["']([^"']+)["']/i,
-      /\[(?:Character|Char|Persona|Name)\s*:\s*([^\n\r\[\]\(\);:,]{1,30})\]/i,
-      /\[(?:Character|Char)\("([^"]+)"\)\]/i,
-      /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Full Name|Character|Persona|Name)(?:\*\*|\s*):+\s*([^\n\r\[\]\(\);:,]{1,30})/i,
-      /\{\{char\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([^\n\r\[\]\(\);:,]{1,30})/i,
-      /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-\s']{1,25})(?:'s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
-      /([A-Z][a-zA-Z0-9_\-\s']{1,25})'s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
-      /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as)\s+(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?=[.,\n\r\[\]\(\);:\s]|$)/i,
-      /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?:'s|\s+in|\s+with)/i,
-      /\bnamed\s+([A-Z][a-zA-Z0-9_\-]{1,25})\b/i
-    ];
-
-    for (const p of strictPatterns) {
+    for (const p of STRICT_CHARACTER_PATTERNS) {
       const match = cleanPrompt.match(p);
       if (match && match[1]) {
         const candidate = cleanCandidate(match[1]);
@@ -123,14 +131,14 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
         if (!text) continue;
 
         // Speaker prefix "Lily: ..." or "Kars: ..."
-        const speakerMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,20}):\s+/);
+        const speakerMatch = text.match(SPEAKER_PREFIX_REGEX);
         if (speakerMatch && speakerMatch[1]) {
           const spk = cleanCandidate(speakerMatch[1]);
           if (isValidCharacterName(spk)) return spk;
         }
 
         // Action starter "*Lily looks up..." where verb is an action
-        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,20})\s+([a-z]+)\b/);
+        const actionMatch = text.match(ACTION_STARTER_REGEX);
         if (actionMatch && actionMatch[1] && actionMatch[2]) {
           const actName = cleanCandidate(actionMatch[1]);
           const verb = actionMatch[2].toLowerCase();
@@ -140,7 +148,7 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
         }
 
         // Proper noun frequency in the starter text (e.g. Lily mentioned multiple times)
-        const properNouns = text.match(/\b[A-Z][a-z]{2,20}\b/g) || [];
+        const properNouns = text.match(PROPER_NOUNS_REGEX) || [];
         const freqMap = new Map<string, number>();
         for (const word of properNouns) {
           if (isValidCharacterName(word)) {
@@ -164,7 +172,7 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
 
   // Tier 3: Proper noun starter in system prompt: "Lily is an elven princess..."
   if (cleanPrompt) {
-    const starterMatch = cleanPrompt.match(/(?:^|\n\n)([A-Z][a-zA-Z0-9_\-]{1,20})\s+is\s+(?:a|an|the)\b/);
+    const starterMatch = cleanPrompt.match(PROMPT_STARTER_REGEX);
     if (starterMatch && starterMatch[1]) {
       const name = cleanCandidate(starterMatch[1]);
       if (isValidCharacterName(name)) return name;
@@ -173,6 +181,11 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
 
   return 'Character';
 }
+
+// Hoisted regular expressions for session title preview cleaning
+const SYSTEM_NOTE_TAG_REGEX = /\[(?:SYSTEM NOTE|OOC|Active Formatting)[\s\S]*?\]/gi;
+const XML_TAG_REGEX = /<[^>]+>[\s\S]*?<\/[^>]+>/gi;
+const NEWLINE_REGEX = /[\r\n]+/g;
 
 // Derive Character & Chat Fingerprints
 export function deriveChatFingerprint(
@@ -193,9 +206,12 @@ export function deriveChatFingerprint(
   let preview = '';
   for (const m of nonSystem) {
     const raw = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '');
-    const cleaned = raw.replace(/\[(?:SYSTEM NOTE|OOC|Active Formatting)[\s\S]*?\]/gi, '').replace(/<[^>]+>[\s\S]*?<\/[^>]+>/gi, '').trim();
+    SYSTEM_NOTE_TAG_REGEX.lastIndex = 0;
+    XML_TAG_REGEX.lastIndex = 0;
+    NEWLINE_REGEX.lastIndex = 0;
+    const cleaned = raw.replace(SYSTEM_NOTE_TAG_REGEX, '').replace(XML_TAG_REGEX, '').trim();
     if (cleaned.length > 2) {
-      preview = cleaned.slice(0, 45).replace(/[\r\n]+/g, ' ').trim();
+      preview = cleaned.slice(0, 45).replace(NEWLINE_REGEX, ' ').trim();
       break;
     }
   }
@@ -557,6 +573,27 @@ export function stitchLosslessHistory(
   return incomingMessages;
 }
 
+// Hoisted regular expressions for extractInjectedLore scanning
+const XML_LORE_PATTERNS = [
+  { regex: /<lore(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lore>/gi, cat: 'lore' as const },
+  { regex: /<lorebook(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lorebook>/gi, cat: 'lore' as const },
+  { regex: /<world_info(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/world_info>/gi, cat: 'world_info' as const },
+  { regex: /<entry\s+title=["']([^"']+)["'][^>]*>([\s\S]*?)<\/entry>/gi, cat: 'lore' as const },
+  { regex: /<memory(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/memory>/gi, cat: 'memory' as const },
+  { regex: /<context(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/context>/gi, cat: 'context' as const },
+  { regex: /<lore_entry(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lore_entry>/gi, cat: 'lore' as const },
+];
+
+const BRACKET_LORE_PATTERNS = [
+  { regex: /\[(?:World Info|WorldInfo|Lorebook|Lore|Lore Entry)\s*:\s*([^\]\n]{1,60})\n([\s\S]*?)\]/gi, cat: 'world_info' as const },
+  { regex: /\[(?:Memory|Chat Memory|Active Memory)\s*:\s*([^\]\n]{1,60})\n([\s\S]*?)\]/gi, cat: 'memory' as const },
+  { regex: /\[(?:World Info|WorldInfo|Lorebook|Lore)\s*:\s*([\s\S]*?)\]/gi, cat: 'world_info' as const },
+  { regex: /\[(?:Memory|Chat Memory)\s*:\s*([\s\S]*?)\]/gi, cat: 'memory' as const }
+];
+
+const HEADER_LORE_REGEX = /(?:###|---)\s*(?:Lore|World Info|Active Context|Injected Knowledge|Lorebary|Memory)\s*(?:###|---)?\s*:\s*\n([\s\S]*?)(?=\n(?:###|---)|\n\n\[|$)/gi;
+const FIRST_LINE_CLEAN_REGEX = /^[#\-\*\[\]\s]+/;
+
 // Extract all dynamic Lorebook, World Info, Memory, and Context injections from Lorebary / Janitor AI
 export function extractInjectedLore(
   messages: any[],
@@ -565,21 +602,29 @@ export function extractInjectedLore(
   const entries: InjectedLoreEntry[] = [];
   const seenContent = new Set<string>();
 
-  const msgContents = (messages || []).map(m => (typeof m?.content === 'string' ? m.content : (Array.isArray(m?.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '')));
-  const fullText = [rawSystemText || '', ...msgContents].join('\n\n');
+  // Efficient string accumulation without intermediate .map() array allocation
+  let fullText = rawSystemText || '';
+  if (Array.isArray(messages)) {
+    for (const m of messages) {
+      if (!m) continue;
+      let text = '';
+      if (typeof m.content === 'string') {
+        text = m.content;
+      } else if (Array.isArray(m.content)) {
+        for (const p of m.content) {
+          if (typeof p === 'string') text += p;
+          else if (p?.text) text += p.text;
+        }
+      }
+      if (text) {
+        fullText += (fullText ? '\n\n' : '') + text;
+      }
+    }
+  }
 
   // 1. Scan for XML-style lore tags: <lore>, <lorebook>, <world_info>, <entry>, <memory>, <context>
-  const xmlPatterns = [
-    { regex: /<lore(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lore>/gi, cat: 'lore' },
-    { regex: /<lorebook(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lorebook>/gi, cat: 'lore' },
-    { regex: /<world_info(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/world_info>/gi, cat: 'world_info' },
-    { regex: /<entry\s+title=["']([^"']+)["'][^>]*>([\s\S]*?)<\/entry>/gi, cat: 'lore' },
-    { regex: /<memory(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/memory>/gi, cat: 'memory' },
-    { regex: /<context(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/context>/gi, cat: 'context' },
-    { regex: /<lore_entry(?:\s+title=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/lore_entry>/gi, cat: 'lore' },
-  ];
-
-  for (const { regex, cat } of xmlPatterns) {
+  for (const { regex, cat } of XML_LORE_PATTERNS) {
+    regex.lastIndex = 0;
     let match;
     while ((match = regex.exec(fullText)) !== null) {
       const title = (match[1] || `${cat.replace('_', ' ').toUpperCase()} Entry`).trim();
@@ -597,14 +642,8 @@ export function extractInjectedLore(
   }
 
   // 2. Scan for Bracketed World Info / Lore: [World Info: Title\nContent] or [Lore: ...]
-  const bracketPatterns = [
-    { regex: /\[(?:World Info|WorldInfo|Lorebook|Lore|Lore Entry)\s*:\s*([^\]\n]{1,60})\n([\s\S]*?)\]/gi, cat: 'world_info' },
-    { regex: /\[(?:Memory|Chat Memory|Active Memory)\s*:\s*([^\]\n]{1,60})\n([\s\S]*?)\]/gi, cat: 'memory' },
-    { regex: /\[(?:World Info|WorldInfo|Lorebook|Lore)\s*:\s*([\s\S]*?)\]/gi, cat: 'world_info' },
-    { regex: /\[(?:Memory|Chat Memory)\s*:\s*([\s\S]*?)\]/gi, cat: 'memory' }
-  ];
-
-  for (const { regex, cat } of bracketPatterns) {
+  for (const { regex, cat } of BRACKET_LORE_PATTERNS) {
+    regex.lastIndex = 0;
     let match;
     while ((match = regex.exec(fullText)) !== null) {
       const title = match[2] ? match[1].trim() : `${cat.replace('_', ' ').toUpperCase()}`;
@@ -628,7 +667,8 @@ export function extractInjectedLore(
       const content = typeof systemMessages[i].content === 'string' ? systemMessages[i].content.trim() : '';
       if (content && !seenContent.has(content) && content.length > 10) {
         seenContent.add(content);
-        const firstLine = content.split('\n')[0].replace(/^[#\-\*\[\]\s]+/, '').slice(0, 35);
+        FIRST_LINE_CLEAN_REGEX.lastIndex = 0;
+        const firstLine = content.split('\n')[0].replace(FIRST_LINE_CLEAN_REGEX, '').slice(0, 35);
         entries.push({
           title: firstLine || `Injected System Context #${i}`,
           category: 'system_block',
@@ -640,13 +680,14 @@ export function extractInjectedLore(
   }
 
   // 4. Scan for Markdown Lore Section Headers (### Lore / ### World Info / --- LOREBARY ---)
-  const headerRegex = /(?:###|---)\s*(?:Lore|World Info|Active Context|Injected Knowledge|Lorebary|Memory)\s*(?:###|---)?\s*:\s*\n([\s\S]*?)(?=\n(?:###|---)|\n\n\[|$)/gi;
+  HEADER_LORE_REGEX.lastIndex = 0;
   let headerMatch;
-  while ((headerMatch = headerRegex.exec(fullText)) !== null) {
+  while ((headerMatch = HEADER_LORE_REGEX.exec(fullText)) !== null) {
     const content = headerMatch[1]?.trim();
     if (content && !seenContent.has(content) && content.length > 10) {
       seenContent.add(content);
-      const firstLine = content.split('\n')[0].replace(/^[#\-\*\[\]\s]+/, '').slice(0, 30);
+      FIRST_LINE_CLEAN_REGEX.lastIndex = 0;
+      const firstLine = content.split('\n')[0].replace(FIRST_LINE_CLEAN_REGEX, '').slice(0, 30);
       entries.push({
         title: firstLine || 'Lorebary Injected Block',
         category: 'lore',

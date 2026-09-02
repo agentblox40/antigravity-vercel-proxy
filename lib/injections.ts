@@ -280,17 +280,24 @@ export interface InChatCommand {
   masterEnabled?: boolean;
 }
 
+// Hoisted regular expressions to avoid re-compiling and re-allocating on every completion turn
+const VIEW_CMD_REGEX_1 = /^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i;
+const VIEW_CMD_REGEX_2 = /^\/settings\s*$/i;
+const MASTER_TOGGLE_REGEX = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i;
+const ENABLE_CMD_REGEX = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i;
+const DISABLE_CMD_REGEX = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i;
+
 export function detectInChatCommand(rawText: string): InChatCommand | null {
   if (!rawText) return null;
   const trimmed = rawText.trim();
 
   // Pattern 1: View menu: <MYSETTINGS>, <SETTINGS>, /settings, <MY_SETTINGS>
-  if (/^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i.test(trimmed) || /^\/settings\s*$/i.test(trimmed)) {
+  if (VIEW_CMD_REGEX_1.test(trimmed) || VIEW_CMD_REGEX_2.test(trimmed)) {
     return { type: 'view', rawInput: trimmed };
   }
 
   // Pattern 2: Master Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
-  const masterMatch = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i.exec(trimmed);
+  const masterMatch = MASTER_TOGGLE_REGEX.exec(trimmed);
   if (masterMatch) {
     const val = masterMatch[1].toUpperCase();
     const enable = val === 'ON' || val === 'RESUME' || val === 'ENABLE';
@@ -298,14 +305,14 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
   }
 
   // Pattern 3: Enable specific modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
-  const enableMatch = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
+  const enableMatch = ENABLE_CMD_REGEX.exec(trimmed);
   if (enableMatch) {
     const targets = enableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     return { type: 'enable', rawInput: trimmed, targets };
   }
 
   // Pattern 4: Disable specific modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
-  const disableMatch = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
+  const disableMatch = DISABLE_CMD_REGEX.exec(trimmed);
   if (disableMatch) {
     const targets = disableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     return { type: 'disable', rawInput: trimmed, targets };
