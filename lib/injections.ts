@@ -283,6 +283,14 @@ export interface InChatCommand {
 export function detectInChatCommand(rawText: string): InChatCommand | null {
   if (!rawText) return null;
   const trimmed = rawText.trim();
+  if (!trimmed) return null;
+
+  // Fast first-character guard: >99.9% of normal roleplay messages do not start with '<' or '/'.
+  // This bypasses unnecessary regular expression evaluations on standard chat turns.
+  const firstChar = trimmed.charCodeAt(0);
+  if (firstChar !== 60 /* '<' */ && firstChar !== 47 /* '/' */) {
+    return null;
+  }
 
   // Pattern 1: View menu: <MYSETTINGS>, <SETTINGS>, /settings, <MY_SETTINGS>
   if (/^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i.test(trimmed) || /^\/settings\s*$/i.test(trimmed)) {

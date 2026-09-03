@@ -97,8 +97,8 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
       /\[(?:Character|Char)\("([^"]+)"\)\]/i,
       /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Full Name|Character|Persona|Name)(?:\*\*|\s*):+\s*([^\n\r\[\]\(\);:,]{1,30})/i,
       /\{\{char\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([^\n\r\[\]\(\);:,]{1,30})/i,
-      /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-\s']{1,25})(?:'s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
-      /([A-Z][a-zA-Z0-9_\-\s']{1,25})'s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
+      /(?:^|\n)\s*###\s+([A-Z][a-zA-Z0-9_\-]{1,25}(?:\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)(?:['\u2019]s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
+      /(?:^|\n)\s*([A-Z][a-zA-Z0-9_\-]{1,25}(?:\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)['\u2019]s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
       /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as)\s+(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?=[.,\n\r\[\]\(\);:\s]|$)/i,
       /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})(?:'s|\s+in|\s+with)/i,
       /\bnamed\s+([A-Z][a-zA-Z0-9_\-]{1,25})\b/i
