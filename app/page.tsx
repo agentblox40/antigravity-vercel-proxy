@@ -239,7 +239,7 @@ export default function AntigravityControlCenter() {
   // Live Discovered Models & Search
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-3.7-flash-high');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash-high');
   const [isSyncingModels, setIsSyncingModels] = useState(false);
 
   // Playground & 3-Stage Testing Lab State
@@ -3090,7 +3090,7 @@ export default function AntigravityControlCenter() {
                 <div><span style={{ color: colors.textSub }}>API Format: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>OpenAI / Custom OpenAI</code></div>
                 <div><span style={{ color: colors.textSub }}>Reverse Proxy URL: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
                 <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
-                <div><span style={{ color: colors.textSub }}>Recommended Model: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.7-flash-high</code></div>
+                <div><span style={{ color: colors.textSub }}>Recommended Model: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.8-flash-high</code></div>
               </div>
 
               <button

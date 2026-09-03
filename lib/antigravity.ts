@@ -48,6 +48,12 @@ export const UNRESTRICTED_SAFETY_SETTINGS = [
 ];
 
 export const FALLBACK_MODELS: ModelSpec[] = [
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', tier: 'Fast', badge: 'Next-Gen', thinking: 'Auto / 8K', context: '1M Context', desc: 'Google next-gen flagship multimodal reasoning model. Ultra-fast, adaptive, and expressive.' },
+  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget for complex character lore and narrative branching on Gemini 3.8.' },
+  { id: 'gemini-3.8-flash-max', name: 'Gemini 3.8 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom (64k tokens) for extreme world simulation.' },
+  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Med)', tier: 'Reasoning', badge: 'Med Thinking', thinking: '8K Tokens', context: '1M Context', desc: 'Balanced cognitive depth with rapid response turnaround on Gemini 3.8.' },
+  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', tier: 'Reasoning', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Fast, lightweight thinking for quick conversational banter on Gemini 3.8.' },
+  { id: 'gemini-3.8-flash-fast', name: 'Gemini 3.8 Flash (Fast)', tier: 'Fast', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation for fast conversational loops.' },
   { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', tier: 'Fast', badge: 'Standard', thinking: 'Auto / 8K', context: '1M Context', desc: 'Flagship multimodal reasoning model. Fast, articulate, and expressive.' },
   { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget for complex character lore and narrative branching.' },
   { id: 'gemini-3.7-flash-max', name: 'Gemini 3.7 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom for extreme multi-character and world simulation.' },
@@ -240,7 +246,27 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   }
   const clean = modelId.trim().toLowerCase();
 
-  // 1. Gemini 3.7 Flash variants
+  // 1. Gemini 3.8 Flash variants (maps to upstream gemini-3.8-flash-tiered)
+  if (clean === 'gemini-3.8-flash' || clean === 'gemini-3.8-flash-tiered') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 8192 };
+  }
+  if (clean === 'gemini-3.8-flash-high' || clean === 'gemini-3.8-flash:high') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 24576 };
+  }
+  if (clean === 'gemini-3.8-flash-max' || clean === 'gemini-3.8-flash:max' || clean === 'gemini-3.8-flash-xhigh') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 65536 };
+  }
+  if (clean === 'gemini-3.8-flash-medium' || clean === 'gemini-3.8-flash:medium' || clean === 'gemini-3.8-flash:med' || clean === 'gemini-3.8-flash-mid') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 8192 };
+  }
+  if (clean === 'gemini-3.8-flash-low' || clean === 'gemini-3.8-flash:low') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 2048 };
+  }
+  if (clean === 'gemini-3.8-flash:off' || clean === 'gemini-3.8-flash:fast' || clean === 'gemini-3.8-flash-off' || clean === 'gemini-3.8-flash-fast') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 0 };
+  }
+
+  // 2. Gemini 3.7 Flash variants
   if (clean === 'gemini-3.7-flash' || clean === 'gemini-3.7-flash-tiered') {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
   }

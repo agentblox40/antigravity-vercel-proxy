@@ -13,7 +13,7 @@
 `antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, Lorebary, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure**.
 
 ### Key Architectural Pillars (OmniRoute / OpenRouter Standard)
-1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
+1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.8-flash`, `gemini-3.8-flash-high/max`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
 2. **Zero-Tampering Pure Pass-Through**: 100% pure message and system prompt translation without synthetic prompt injections or formatting anchors, guaranteeing perfect instruction following and context memory without context rot.
 3. **Modular Injections & Dynamic Cadence Engine**: Centralized dashboard management for toggleable System Notes, OOC rules, and custom style directives with dynamic trigger cadences (`Always`, `🎲 % Chance Probability`, `⏱️ Every N Texts`, `⚡ First Turn Only`) automatically stacked at Depth-0 terminal user turns with 0 copy-paste friction.
 4. **Turn-Accurate Logged Chats Injections**: Turn-level snapshot isolation displaying the exact active directives that fired on each message directly beneath the user's input bubble.
