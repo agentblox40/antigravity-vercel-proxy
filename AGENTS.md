@@ -3,14 +3,14 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.2.0`  
+> *Current Version*: `v3.3.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
 
 ## 1. System Overview & Core Philosophy
 
-`antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, Lorebary, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure**.
+`antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, Lorebary, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure** and **OpenCode Free Models infrastructure**.
 
 ### Key Architectural Pillars (OmniRoute / OpenRouter Standard)
 1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.8-flash`, `gemini-3.8-flash-high/max`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
@@ -25,6 +25,7 @@
 10. **Lorebary & Lorebook Injection Tracking**: Passively extracts dynamic `<lore>`, `<world_info>`, and `<memory>` entries and renders an interactive turn-by-turn inspection panel in the Logged Chats explorer.
 11. **Passive Cloud Logging & 1-Click DB Wipe**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency and 1-click database flush.
 12. **In-Chat Control Commands & History Sanitization**: In-band control commands (`<MYSETTINGS>`, `<ENABLE: X, Y>`, `<DISABLE: X, Y>`, `<INJECTIONS: ON/OFF>`) allow real-time module inspection and toggling directly inside roleplay chat boxes with 0ms delay, 0 Google API quota cost, and automatic sanitization of past command turns from upstream prompts to ensure 100% character immersion.
+13. **OpenCode Free Models Suite & 16-Account Rotating Pool**: Verified working OpenCode free models (`big-pickle`, `mimo-v2.5-free`, `ling-3.0-flash-fin-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`) with paired `-fast` / no-think variants (0 thinking tokens) and a high-capacity pool of 16 rotating guest sessions (`opencode-cli/1.0.0`) with instant failover on HTTP 429.
 
 ---
 

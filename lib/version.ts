@@ -8,13 +8,28 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.2.0';
+export const CURRENT_VERSION = '3.3.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.2.0',
+    version: '3.3.0',
     tag: 'LATEST',
+    title: 'OpenCode Free Models Suite & 16 Rotating Guest Sessions',
+    date: 'Sep 6, 2026',
+    commit: 'latest',
+    description: 'Integrated verified working OpenCode free models (big-pickle, mimo-v2.5-free, ling-3.0-flash-fin-free, nemotron-3-ultra-free, nemotron-3.5-lightning-free) with dual reasoning/fast no-think variants and 16 rotating guest accounts with automatic failover.',
+    highlights: [
+      '5 Flagship OpenCode Models: Integrated Big Pickle (DeepSeek), Xiaomi MiMo v2.5, Ling 3.0 Flash, NVIDIA Nemotron 3 Ultra (1M Context), and NVIDIA Nemotron 3.5 Lightning (1M Context).',
+      'Dual Fast / No-Think Variants: Every model supports an ultra-low latency -fast/:off variant with reasoning disabled (0 thinking tokens) alongside full reasoning capabilities.',
+      '16 Rotating Guest Sessions: High-capacity pool of 16 persistent guest sessions rotated round-robin with automatic 20s cooldown and instant failover on HTTP 429 quota exhaustion.',
+      'Thinking Token Stream Preservation: Preserved SSE reasoning streaming across both delta.reasoning_content and delta.reasoning formats for seamless Janitor AI and SillyTavern compatibility.',
+      'Full Injections & Memory Parity: OpenCode completions fully inherit all active Depth-0 prompt injections, character formatting anchors, and background Redis memory logging.'
+    ]
+  },
+  {
+    version: '3.2.0',
+    tag: 'MAJOR',
     title: 'In-Chat Roleplay Control Commands & History Sanitization',
     date: 'Aug 26, 2026',
     commit: 'latest',

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { detectInChatCommand } from './injections';
+import { OPENCODE_MODELS } from './opencode';
 
 export interface AccountConfig {
   id: string;
@@ -66,7 +67,16 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
   { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tier: 'Claude', badge: 'Claude Sonnet', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Sonnet with reasoning capabilities.' },
   { id: 'gpt-4o', name: 'GPT-4o (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Maps directly to Gemini 3.7 Flash for Janitor AI / SillyTavern default settings.' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Legacy OpenAI default client alias mapped to Gemini 3.7 Flash.' }
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Legacy OpenAI default client alias mapped to Gemini 3.7 Flash.' },
+  ...OPENCODE_MODELS.map(m => ({
+    id: m.id,
+    name: m.name,
+    tier: m.tier,
+    badge: m.badge,
+    thinking: m.thinking,
+    context: m.context,
+    desc: m.desc,
+  }))
 ];
 
 let cachedLiveModels: ModelSpec[] | null = null;

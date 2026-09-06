@@ -19,6 +19,10 @@ import {
   detectInChatCommand,
   executeInChatCommand
 } from './injections';
+import {
+  resolveOpenCodeModel,
+  executeOpenCodeCompletion,
+} from './opencode';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -68,18 +72,23 @@ export async function handleChatCompletions(req: NextRequest) {
 
   const stream = body.stream === true;
   const requestedModel = (body.model || 'gemini-3.7-flash').trim();
-  const resolved = resolveWireModel(requestedModel);
+  const openCodeResolved = resolveOpenCodeModel(requestedModel);
+  const resolved = openCodeResolved ? null : resolveWireModel(requestedModel);
 
-  if (!resolved) {
+  if (!openCodeResolved && !resolved) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.7-flash, gemini-3.7-flash-high, gemini-3.7-flash-max, gemini-3.7-flash-low, gemini-3.1-pro, gemini-3.5-flash, claude-opus-4-6-thinking, claude-sonnet-4-6.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
           requested_model: requestedModel,
           available_models: [
+            'gemini-3.8-flash',
+            'gemini-3.8-flash-high',
+            'gemini-3.8-flash-max',
+            'gemini-3.8-flash-fast',
             'gemini-3.7-flash',
             'gemini-3.7-flash-high',
             'gemini-3.7-flash-max',
@@ -88,7 +97,17 @@ export async function handleChatCompletions(req: NextRequest) {
             'gemini-3.1-pro',
             'gemini-3.5-flash',
             'claude-opus-4-6-thinking',
-            'claude-sonnet-4-6'
+            'claude-sonnet-4-6',
+            'big-pickle',
+            'big-pickle-fast',
+            'mimo-v2.5-free',
+            'mimo-v2.5-free-fast',
+            'ling-3.0-flash-fin-free',
+            'ling-3.0-flash-fin-free-fast',
+            'nemotron-3-ultra-free',
+            'nemotron-3-ultra-free-fast',
+            'nemotron-3.5-lightning-free',
+            'nemotron-3.5-lightning-free-fast'
           ]
         }
       },
@@ -97,7 +116,6 @@ export async function handleChatCompletions(req: NextRequest) {
   }
 
   const modelId = requestedModel;
-  const accounts = getAccounts();
 
   // Extract raw system text & latest user text for background logging
   const messages = Array.isArray(body.messages) ? body.messages : [];
@@ -163,6 +181,63 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
+  // ROUTE TO OPENCODE FREE MODELS IF MATCHED
+  if (openCodeResolved) {
+    const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
+    const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
+    const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj, attachedInjections: rawAttachedInj } = await getActiveInjectionsFormatted(turnCount);
+    const userInjectionsText = bypassInjections ? '' : rawUserInj;
+    const systemInjectionsText = bypassInjections ? '' : rawSysInj;
+    const attachedInjections = bypassInjections ? [] : rawAttachedInj;
+    const injectedLore = extractInjectedLore(messages, rawSystemText);
+
+    // Apply active prompt injections to messages copy if present
+    let preparedMessages = messages.map(m => ({ ...m }));
+    if (systemInjectionsText && systemInjectionsText.trim()) {
+      const firstSys = preparedMessages.find(m => m.role === 'system');
+      if (firstSys) {
+        firstSys.content = typeof firstSys.content === 'string'
+          ? `${firstSys.content}\n\n${systemInjectionsText.trim()}`
+          : systemInjectionsText.trim();
+      } else {
+        preparedMessages.unshift({ role: 'system', content: systemInjectionsText.trim() });
+      }
+    }
+    if (userInjectionsText && userInjectionsText.trim()) {
+      for (let i = preparedMessages.length - 1; i >= 0; i--) {
+        if (preparedMessages[i].role === 'user') {
+          preparedMessages[i].content = typeof preparedMessages[i].content === 'string'
+            ? `${preparedMessages[i].content}\n\n${userInjectionsText.trim()}`
+            : userInjectionsText.trim();
+          break;
+        }
+      }
+    }
+
+    return executeOpenCodeCompletion({
+      body: { ...body, messages: preparedMessages },
+      modelId: requestedModel,
+      resolvedModel: openCodeResolved,
+      onFinish: (content, thinking) => {
+        if (sessionPromise) {
+          sessionPromise.then(session => {
+            if (session) {
+              recordTurnsIntoSession(
+                session,
+                preparedMessages,
+                content,
+                thinking || undefined,
+                injectedLore,
+                attachedInjections
+              ).catch(() => {});
+            }
+          }).catch(() => {});
+        }
+      }
+    });
+  }
+
+  const accounts = getAccounts();
   const now = Date.now();
   const availableAccounts = accounts.filter(a => a.cooldownUntil <= now);
 

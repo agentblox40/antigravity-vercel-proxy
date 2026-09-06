@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         id: m.id,
         object: 'model',
         created: 1710000000,
-        owned_by: 'google-antigravity',
+        owned_by: m.tier?.includes('OpenCode') ? 'opencode' : 'google-antigravity',
         permission: [],
         root: m.id,
         parent: null,

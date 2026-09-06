@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccounts, getAntigravityLiveModels } from '@/lib/antigravity';
+import { getOpenCodeAccounts } from '@/lib/opencode';
 import { getDeploymentTelemetry, CURRENT_VERSION } from '@/lib/version';
 
 export const runtime = 'nodejs';
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
   }
 
   const accounts = getAccounts();
+  const openCodeAccounts = getOpenCodeAccounts();
   const now = Date.now();
   const models = await getAntigravityLiveModels();
   const deployment = getDeploymentTelemetry();
@@ -50,12 +52,23 @@ export async function GET(req: NextRequest) {
     failCount: acc.failCount,
   }));
 
+  const openCodeStatus = openCodeAccounts.map(acc => ({
+    id: acc.id,
+    name: acc.name,
+    status: acc.cooldownUntil > now ? 'Cooldown' : 'Ready',
+    cooldownRemainingSec: Math.max(0, Math.ceil((acc.cooldownUntil - now) / 1000)),
+    failCount: acc.failCount,
+    successCount: acc.successCount,
+  }));
+
   return NextResponse.json(
     {
       status: 'online',
       timestamp: now,
       accounts: accountStatus,
       totalAccounts: accounts.length,
+      opencodeAccounts: openCodeStatus,
+      totalOpenCodeAccounts: openCodeAccounts.length,
       modelsCount: models.length,
       supportedModels: models,
       version: CURRENT_VERSION,
