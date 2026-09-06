@@ -373,7 +373,7 @@ export async function executeOpenCodeCompletion({
   }
   const candidateAccounts = orderedAccounts.filter(a => a.cooldownUntil <= Date.now());
 
-  const maxAttempts = Math.min(candidateAccounts.length, 5);
+  const maxAttempts = candidateAccounts.length;
   let lastError = '';
   let lastStatus = 500;
 
@@ -399,11 +399,33 @@ export async function executeOpenCodeCompletion({
       });
       clearTimeout(timeoutId);
 
-      if (upstreamRes.status === 429 || upstreamRes.status >= 500) {
+      if (upstreamRes.status === 429) {
         account.cooldownUntil = Date.now() + 20000;
         account.failCount++;
+        lastStatus = 429;
+        lastError = `Rate limited on OpenCode (429)`;
+        continue;
+      }
+
+      if (upstreamRes.status >= 500) {
+        account.failCount++;
         lastStatus = upstreamRes.status;
-        lastError = `Rate limited or server error on OpenCode (${upstreamRes.status})`;
+        const errorText = await upstreamRes.text().catch(() => '');
+        lastError = `Server error on OpenCode (${upstreamRes.status}) - ${errorText.slice(0, 200)}`;
+        if (attempt >= 1) {
+          // Model/provider is failing; return diagnostic rather than burning through the pool
+          return NextResponse.json(
+            {
+              error: {
+                message: `[OpenCode Upstream Error]: ${upstreamRes.status} ${upstreamRes.statusText} - ${errorText.slice(0, 300)}`,
+                type: 'upstream_error',
+                code: upstreamRes.status,
+                model: modelId,
+              }
+            },
+            { status: upstreamRes.status, headers: { 'Access-Control-Allow-Origin': '*' } }
+          );
+        }
         continue;
       }
 

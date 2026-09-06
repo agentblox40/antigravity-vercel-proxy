@@ -368,6 +368,24 @@ export default function AntigravityControlCenter() {
         });
         return changed ? next : prev;
       });
+
+      setOpencodeAccounts(prev => {
+        if (!prev || prev.length === 0) return prev;
+        let changed = false;
+        const next = prev.map(acc => {
+          if (acc.cooldownRemainingSec && acc.cooldownRemainingSec > 0) {
+            changed = true;
+            const remaining = acc.cooldownRemainingSec - 1;
+            return {
+              ...acc,
+              cooldownRemainingSec: Math.max(0, remaining),
+              status: remaining <= 0 ? 'Ready' : 'Cooldown'
+            };
+          }
+          return acc;
+        });
+        return changed ? next : prev;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
