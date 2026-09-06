@@ -224,7 +224,7 @@ export async function handleChatCompletions(req: NextRequest) {
             if (session) {
               recordTurnsIntoSession(
                 session,
-                preparedMessages,
+                messages,
                 content,
                 thinking || undefined,
                 injectedLore,

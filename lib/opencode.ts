@@ -196,9 +196,12 @@ export interface ResolvedOpenCodeModel {
 
 export function resolveOpenCodeModel(modelId?: string): ResolvedOpenCodeModel | null {
   if (!modelId || !modelId.trim()) return null;
-  const clean = modelId.trim().toLowerCase();
+  let clean = modelId.trim().toLowerCase();
 
-  // Exclude non-working models explicitly
+  // Strip common provider prefixes (e.g. opencode/big-pickle, models/mimo-v2.5-free)
+  clean = clean.replace(/^(models\/|opencode\/)/, '');
+
+  // Exclude non-working or delisted models explicitly
   if (clean.includes('deepseek-v4-flash') || clean.includes('muse-spark')) {
     return null;
   }
@@ -213,95 +216,78 @@ export function resolveOpenCodeModel(modelId?: string): ResolvedOpenCodeModel | 
     };
   }
 
+  // Helper to detect fast/no-think suffix variant
+  const isFastSuffix = (suffix: string) => {
+    return /^(fast|off|no-?think|no_think|zero)$/i.test(suffix);
+  };
+
+  // Helper to detect thinking suffix
+  const isThinkingSuffix = (suffix: string) => {
+    return /^(thinking|think|thought|deep)$/i.test(suffix);
+  };
+
+  // Helper to match a base model and its separator
+  const matchModelVariant = (
+    baseNames: string[],
+    wireModel: string,
+    canonicalBase: string
+  ): ResolvedOpenCodeModel | null => {
+    for (const base of baseNames) {
+      if (clean === base) {
+        return { wireModel, isFast: false, canonicalId: canonicalBase };
+      }
+      if (clean.startsWith(base + '-') || clean.startsWith(base + ':')) {
+        const suffix = clean.slice(base.length + 1);
+        if (isFastSuffix(suffix)) {
+          return { wireModel, isFast: true, canonicalId: `${canonicalBase}-fast` };
+        }
+        if (isThinkingSuffix(suffix)) {
+          return { wireModel, isFast: false, canonicalId: canonicalBase };
+        }
+      }
+    }
+    return null;
+  };
+
   // 1. Big Pickle
-  if (clean === 'big-pickle') {
-    return { wireModel: 'big-pickle', isFast: false, canonicalId: 'big-pickle' };
-  }
-  if (
-    clean === 'big-pickle-fast' ||
-    clean === 'big-pickle:fast' ||
-    clean === 'big-pickle-off' ||
-    clean === 'big-pickle:off' ||
-    clean === 'big-pickle-nothink' ||
-    clean === 'big-pickle:nothink' ||
-    clean === 'big-pickle:no-think' ||
-    clean === 'big-pickle-no-think'
-  ) {
-    return { wireModel: 'big-pickle', isFast: true, canonicalId: 'big-pickle-fast' };
-  }
+  const bigPickleMatch = matchModelVariant(
+    ['big-pickle'],
+    'big-pickle',
+    'big-pickle'
+  );
+  if (bigPickleMatch) return bigPickleMatch;
 
   // 2. Xiaomi MiMo v2.5 Free
-  if (clean === 'mimo-v2.5-free' || clean === 'mimo-v2.5' || clean === 'mimo-2.5-free') {
-    return { wireModel: 'mimo-v2.5-free', isFast: false, canonicalId: 'mimo-v2.5-free' };
-  }
-  if (
-    clean === 'mimo-v2.5-free-fast' ||
-    clean === 'mimo-v2.5-free:fast' ||
-    clean === 'mimo-v2.5-free-off' ||
-    clean === 'mimo-v2.5-free:off' ||
-    clean === 'mimo-v2.5-fast' ||
-    clean === 'mimo-v2.5:fast' ||
-    clean === 'mimo-v2.5-off' ||
-    clean === 'mimo-v2.5:off' ||
-    clean.startsWith('mimo-v2.5-free-no') ||
-    clean.startsWith('mimo-v2.5:no')
-  ) {
-    return { wireModel: 'mimo-v2.5-free', isFast: true, canonicalId: 'mimo-v2.5-free-fast' };
-  }
+  const mimoMatch = matchModelVariant(
+    ['mimo-v2.5-free', 'mimo-v2.5', 'mimo-2.5-free', 'mimo-2.5'],
+    'mimo-v2.5-free',
+    'mimo-v2.5-free'
+  );
+  if (mimoMatch) return mimoMatch;
 
   // 3. Ling 3.0 Flash Free
-  if (clean === 'ling-3.0-flash-fin-free' || clean === 'ling-3.0-flash' || clean === 'ling-3.0-flash-free') {
-    return { wireModel: 'ling-3.0-flash-fin-free', isFast: false, canonicalId: 'ling-3.0-flash-fin-free' };
-  }
-  if (
-    clean === 'ling-3.0-flash-fin-free-fast' ||
-    clean === 'ling-3.0-flash-fin-free:fast' ||
-    clean === 'ling-3.0-flash-fin-free-off' ||
-    clean === 'ling-3.0-flash-fin-free:off' ||
-    clean === 'ling-3.0-flash-fast' ||
-    clean === 'ling-3.0-flash:fast' ||
-    clean === 'ling-3.0-flash-off' ||
-    clean === 'ling-3.0-flash:off' ||
-    clean.startsWith('ling-3.0-flash-fin-free-no')
-  ) {
-    return { wireModel: 'ling-3.0-flash-fin-free', isFast: true, canonicalId: 'ling-3.0-flash-fin-free-fast' };
-  }
+  const lingMatch = matchModelVariant(
+    ['ling-3.0-flash-fin-free', 'ling-3.0-flash-free', 'ling-3.0-flash-fin', 'ling-3.0-flash'],
+    'ling-3.0-flash-fin-free',
+    'ling-3.0-flash-fin-free'
+  );
+  if (lingMatch) return lingMatch;
 
   // 4. NVIDIA Nemotron 3 Ultra Free
-  if (clean === 'nemotron-3-ultra-free' || clean === 'nemotron-3-ultra' || clean === 'nemotron-ultra-free') {
-    return { wireModel: 'nemotron-3-ultra-free', isFast: false, canonicalId: 'nemotron-3-ultra-free' };
-  }
-  if (
-    clean === 'nemotron-3-ultra-free-fast' ||
-    clean === 'nemotron-3-ultra-free:fast' ||
-    clean === 'nemotron-3-ultra-free-off' ||
-    clean === 'nemotron-3-ultra-free:off' ||
-    clean === 'nemotron-3-ultra-fast' ||
-    clean === 'nemotron-3-ultra:fast' ||
-    clean === 'nemotron-3-ultra-off' ||
-    clean === 'nemotron-3-ultra:off' ||
-    clean.startsWith('nemotron-3-ultra-free-no')
-  ) {
-    return { wireModel: 'nemotron-3-ultra-free', isFast: true, canonicalId: 'nemotron-3-ultra-free-fast' };
-  }
+  const nemotronUltraMatch = matchModelVariant(
+    ['nemotron-3-ultra-free', 'nemotron-3-ultra', 'nemotron-ultra-free', 'nemotron-ultra'],
+    'nemotron-3-ultra-free',
+    'nemotron-3-ultra-free'
+  );
+  if (nemotronUltraMatch) return nemotronUltraMatch;
 
   // 5. NVIDIA Nemotron 3.5 Lightning Free
-  if (clean === 'nemotron-3.5-lightning-free' || clean === 'nemotron-3.5-lightning' || clean === 'nemotron-lightning-free') {
-    return { wireModel: 'nemotron-3.5-lightning-free', isFast: false, canonicalId: 'nemotron-3.5-lightning-free' };
-  }
-  if (
-    clean === 'nemotron-3.5-lightning-free-fast' ||
-    clean === 'nemotron-3.5-lightning-free:fast' ||
-    clean === 'nemotron-3.5-lightning-free-off' ||
-    clean === 'nemotron-3.5-lightning-free:off' ||
-    clean === 'nemotron-3.5-lightning-fast' ||
-    clean === 'nemotron-3.5-lightning:fast' ||
-    clean === 'nemotron-3.5-lightning-off' ||
-    clean === 'nemotron-3.5-lightning:off' ||
-    clean.startsWith('nemotron-3.5-lightning-free-no')
-  ) {
-    return { wireModel: 'nemotron-3.5-lightning-free', isFast: true, canonicalId: 'nemotron-3.5-lightning-free-fast' };
-  }
+  const nemotronLightningMatch = matchModelVariant(
+    ['nemotron-3.5-lightning-free', 'nemotron-3.5-lightning', 'nemotron-lightning-free', 'nemotron-lightning'],
+    'nemotron-3.5-lightning-free',
+    'nemotron-3.5-lightning-free'
+  );
+  if (nemotronLightningMatch) return nemotronLightningMatch;
 
   return null;
 }
@@ -377,10 +363,15 @@ export async function executeOpenCodeCompletion({
     delete opencodePayload.max_thinking_tokens;
   }
 
-  // Order accounts starting from round-robin pick
+  // Cyclic round-robin order starting from picked account
   const primaryAccount = pickOpenCodeAccount();
-  const otherAccounts = OPENCODE_GUEST_ACCOUNTS.filter(a => a.id !== primaryAccount.id);
-  const candidateAccounts = [primaryAccount, ...otherAccounts].filter(a => a.cooldownUntil <= Date.now());
+  const primaryIdx = OPENCODE_GUEST_ACCOUNTS.findIndex(a => a.id === primaryAccount.id);
+  const orderedAccounts: OpenCodeGuestAccount[] = [];
+  for (let i = 0; i < OPENCODE_GUEST_ACCOUNTS.length; i++) {
+    const idx = (primaryIdx + i) % OPENCODE_GUEST_ACCOUNTS.length;
+    orderedAccounts.push(OPENCODE_GUEST_ACCOUNTS[idx]);
+  }
+  const candidateAccounts = orderedAccounts.filter(a => a.cooldownUntil <= Date.now());
 
   const maxAttempts = Math.min(candidateAccounts.length, 5);
   let lastError = '';
@@ -391,6 +382,9 @@ export async function executeOpenCodeCompletion({
     const requestId = crypto.randomUUID();
 
     try {
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(() => abortCtrl.abort(), 35000);
+
       const upstreamRes = await fetch('https://opencode.ai/zen/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -401,13 +395,15 @@ export async function executeOpenCodeCompletion({
           'x-opencode-request': requestId,
         },
         body: JSON.stringify(opencodePayload),
+        signal: abortCtrl.signal,
       });
+      clearTimeout(timeoutId);
 
-      if (upstreamRes.status === 429 || upstreamRes.status === 503) {
+      if (upstreamRes.status === 429 || upstreamRes.status >= 500) {
         account.cooldownUntil = Date.now() + 20000;
         account.failCount++;
         lastStatus = upstreamRes.status;
-        lastError = `Rate limited or unavailable on OpenCode (${upstreamRes.status})`;
+        lastError = `Rate limited or server error on OpenCode (${upstreamRes.status})`;
         continue;
       }
 
@@ -442,6 +438,7 @@ export async function executeOpenCodeCompletion({
         let buffer = '';
         let fullContent = '';
         let fullThinking = '';
+        let hasTerminated = false;
 
         const customStream = new ReadableStream({
           async start(controller) {
@@ -457,24 +454,41 @@ export async function executeOpenCodeCompletion({
                 for (const line of lines) {
                   const trimmed = line.trim();
                   if (!trimmed) {
-                    controller.enqueue(encoder.encode('\n'));
+                    if (!hasTerminated) {
+                      controller.enqueue(encoder.encode('\n'));
+                    }
                     continue;
                   }
 
                   if (trimmed.startsWith(':')) {
                     // Pass-through SSE comments (e.g. : keep-alive)
-                    controller.enqueue(encoder.encode(line + '\n'));
+                    if (!hasTerminated) {
+                      controller.enqueue(encoder.encode(line + '\n'));
+                    }
                     continue;
                   }
 
                   if (trimmed === 'data: [DONE]') {
-                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    if (!hasTerminated) {
+                      hasTerminated = true;
+                      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    }
+                    continue;
+                  }
+
+                  // Drop any post-[DONE] metadata chunks from upstream
+                  if (hasTerminated) {
                     continue;
                   }
 
                   if (trimmed.startsWith('data: ')) {
                     try {
                       const json = JSON.parse(trimmed.slice(6));
+                      // Skip empty choices chunks without usage data
+                      if (Array.isArray(json.choices) && json.choices.length === 0 && !json.usage) {
+                        continue;
+                      }
+
                       // Normalize model name to client's requested model
                       json.model = modelId;
 
@@ -503,29 +517,38 @@ export async function executeOpenCodeCompletion({
               }
 
               // Flush remaining buffer
-              if (buffer.trim()) {
+              if (buffer.trim() && !hasTerminated) {
                 const trimmed = buffer.trim();
                 if (trimmed === 'data: [DONE]') {
+                  hasTerminated = true;
                   controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 } else if (trimmed.startsWith('data: ')) {
                   try {
                     const json = JSON.parse(trimmed.slice(6));
-                    json.model = modelId;
-                    const delta = json.choices?.[0]?.delta;
-                    if (delta) {
-                      const reasoning = delta.reasoning_content || delta.reasoning || '';
-                      if (reasoning) {
-                        delta.reasoning_content = reasoning;
-                        delta.reasoning = reasoning;
-                        fullThinking += reasoning;
+                    if (!Array.isArray(json.choices) || json.choices.length > 0 || json.usage) {
+                      json.model = modelId;
+                      const delta = json.choices?.[0]?.delta;
+                      if (delta) {
+                        const reasoning = delta.reasoning_content || delta.reasoning || '';
+                        if (reasoning) {
+                          delta.reasoning_content = reasoning;
+                          delta.reasoning = reasoning;
+                          fullThinking += reasoning;
+                        }
+                        if (delta.content) fullContent += delta.content;
                       }
-                      if (delta.content) fullContent += delta.content;
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify(json)}\n\n`));
                     }
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(json)}\n\n`));
                   } catch {
                     controller.enqueue(encoder.encode(buffer + '\n'));
                   }
                 }
+              }
+
+              // Guarantee terminal [DONE] event
+              if (!hasTerminated) {
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                hasTerminated = true;
               }
 
               controller.close();

@@ -265,6 +265,7 @@ export default function AntigravityControlCenter() {
 
   // Status & Accounts State
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [opencodeAccounts, setOpencodeAccounts] = useState<any[]>([]);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [totalTokensServed, setTotalTokensServed] = useState(32400);
   const [requestsCount, setRequestsCount] = useState(38);
@@ -419,6 +420,7 @@ export default function AntigravityControlCenter() {
         localStorage.setItem('proxy_master_key', trimmed);
         setIsAuthenticated(true);
         setAccounts(data.accounts || []);
+        setOpencodeAccounts(data.opencodeAccounts || []);
         if (Array.isArray(data.supportedModels)) setAvailableModels(data.supportedModels);
         if (data.deployment) setDeploymentData(data.deployment);
         setLatencyMs(Date.now() - start);
@@ -650,6 +652,7 @@ export default function AntigravityControlCenter() {
       if (res.ok) {
         const data = await res.json();
         setAccounts(data.accounts || []);
+        setOpencodeAccounts(data.opencodeAccounts || []);
         if (Array.isArray(data.supportedModels) && data.supportedModels.length > 0) {
           setAvailableModels(data.supportedModels);
         }
@@ -3074,6 +3077,52 @@ export default function AntigravityControlCenter() {
                 </div>
               ))}
             </div>
+
+            {/* OpenCode Rotating Guest Pool */}
+            {opencodeAccounts.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px', color: colors.textMain }}>
+                    OpenCode Free Rotating Guest Pool ({opencodeAccounts.length} Accounts)
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>
+                    Dedicated 16-guest session pool for OpenCode free reasoning models with automatic round-robin rotation and 20s cooldown failover.
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+                  {opencodeAccounts.map((acc) => (
+                    <div
+                      key={acc.id}
+                      style={{
+                        background: colors.cardBg,
+                        border: `1px solid ${acc.cooldownRemainingSec > 0 ? 'rgba(239, 68, 68, 0.3)' : colors.border}`,
+                        borderRadius: 8,
+                        padding: 12,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: colors.textMain }}>{acc.name}</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: acc.cooldownRemainingSec > 0 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                            color: acc.cooldownRemainingSec > 0 ? '#ef4444' : '#22c55e',
+                          }}
+                        >
+                          {acc.cooldownRemainingSec > 0 ? `${acc.cooldownRemainingSec}s` : 'Ready'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: colors.textMuted }}>
+                        <div>Success: <span style={{ color: colors.textMain }}>{acc.successCount || 0}</span> | 429s: <span style={{ color: colors.textMain }}>{acc.failCount || 0}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
