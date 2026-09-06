@@ -383,7 +383,8 @@ export async function executeOpenCodeCompletion({
 
     try {
       const abortCtrl = new AbortController();
-      const timeoutId = setTimeout(() => abortCtrl.abort(), 35000);
+      const timeoutMs = modelId.includes('nemotron') ? 95000 : 50000;
+      const timeoutId = setTimeout(() => abortCtrl.abort(), timeoutMs);
 
       const upstreamRes = await fetch('https://opencode.ai/zen/v1/chat/completions', {
         method: 'POST',
@@ -391,6 +392,7 @@ export async function executeOpenCodeCompletion({
           'Content-Type': 'application/json',
           'User-Agent': 'opencode-cli/1.0.0',
           'x-opencode-client': 'cli',
+          'x-opencode-project': 'global',
           'x-opencode-session': account.sessionId,
           'x-opencode-request': requestId,
         },
@@ -412,8 +414,9 @@ export async function executeOpenCodeCompletion({
         lastStatus = upstreamRes.status;
         const errorText = await upstreamRes.text().catch(() => '');
         lastError = `Server error on OpenCode (${upstreamRes.status}) - ${errorText.slice(0, 200)}`;
-        if (attempt >= 1) {
-          // Model/provider is failing; return diagnostic rather than burning through the pool
+
+        // Allow up to 3-4 attempts with backoff before aborting, preventing false lockouts during GPU cold starts
+        if (attempt >= Math.min(candidateAccounts.length - 1, 3)) {
           return NextResponse.json(
             {
               error: {
@@ -426,6 +429,10 @@ export async function executeOpenCodeCompletion({
             { status: upstreamRes.status, headers: { 'Access-Control-Allow-Origin': '*' } }
           );
         }
+
+        // Asynchronous backoff delay (1000ms * (attempt + 1) + jitter) to allow upstream container warm-up
+        const backoffMs = 1000 * (attempt + 1) + Math.floor(Math.random() * 300);
+        await new Promise(r => setTimeout(r, backoffMs));
         continue;
       }
 
