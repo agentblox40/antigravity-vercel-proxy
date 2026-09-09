@@ -197,9 +197,13 @@ export async function handleChatCompletions(req: NextRequest) {
           }
         } catch {}
       };
-      if (typeof after === 'function') {
-        after(recordTask);
-      } else {
+      try {
+        if (typeof after === 'function') {
+          after(recordTask);
+        } else {
+          recordTask().catch(() => {});
+        }
+      } catch {
         recordTask().catch(() => {});
       }
     }
@@ -311,9 +315,13 @@ export async function handleChatCompletions(req: NextRequest) {
               }
             } catch {}
           };
-          if (typeof after === 'function') {
-            after(saveTask);
-          } else {
+          try {
+            if (typeof after === 'function') {
+              after(saveTask);
+            } else {
+              saveTask().catch(() => {});
+            }
+          } catch {
             saveTask().catch(() => {});
           }
         }
@@ -451,6 +459,41 @@ export async function handleChatCompletions(req: NextRequest) {
         let fullAssistantContent = '';
         let fullThoughtContent = '';
 
+        let resolveStreamDone: () => void;
+        const streamDonePromise = new Promise<void>(resolve => {
+          resolveStreamDone = resolve;
+        });
+
+        // Register background save task in active request scope before returning response
+        if (sessionPromise) {
+          const saveTask = async () => {
+            try {
+              await streamDonePromise;
+              const session = await sessionPromise;
+              if (session) {
+                const injectedLore = extractInjectedLore(messages, rawSystemText);
+                await recordTurnsIntoSession(
+                  session,
+                  messages,
+                  fullAssistantContent,
+                  fullThoughtContent,
+                  injectedLore,
+                  attachedInjections
+                );
+              }
+            } catch {}
+          };
+          try {
+            if (typeof after === 'function') {
+              after(saveTask);
+            } else {
+              saveTask().catch(() => {});
+            }
+          } catch {
+            saveTask().catch(() => {});
+          }
+        }
+
         const customStream = new ReadableStream({
           async start(controller) {
             try {
@@ -526,7 +569,8 @@ export async function handleChatCompletions(req: NextRequest) {
                 }
               }
 
-              // Drain any remaining buffer content on stream EOF before closing
+              // Flush TextDecoder & drain any remaining buffer content on stream EOF before closing
+              buffer += decoder.decode();
               if (buffer.trim()) {
                 const remainingLines = buffer.split('\n');
                 for (const line of remainingLines) {
@@ -606,26 +650,10 @@ export async function handleChatCompletions(req: NextRequest) {
               );
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
-
-              // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
-              if (sessionPromise) {
-                const saveTask = async () => {
-                  try {
-                    const session = await sessionPromise;
-                    if (session) {
-                      const injectedLore = extractInjectedLore(messages, rawSystemText);
-                      await recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore, attachedInjections);
-                    }
-                  } catch {}
-                };
-                if (typeof after === 'function') {
-                  after(saveTask);
-                } else {
-                  saveTask().catch(() => {});
-                }
-              }
             } catch (err) {
               controller.error(err);
+            } finally {
+              resolveStreamDone!();
             }
           },
         });
@@ -672,9 +700,13 @@ export async function handleChatCompletions(req: NextRequest) {
             }
           } catch {}
         };
-        if (typeof after === 'function') {
-          after(saveTask);
-        } else {
+        try {
+          if (typeof after === 'function') {
+            after(saveTask);
+          } else {
+            saveTask().catch(() => {});
+          }
+        } catch {
           saveTask().catch(() => {});
         }
       }

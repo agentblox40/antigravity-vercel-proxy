@@ -190,9 +190,17 @@ const proNoThink = resolveWireModel('gemini-3.1-pro-no-think');
 assert.strictEqual(proNoThink?.wireModel, 'gemini-3.1-pro-preview');
 assert.strictEqual(proNoThink?.defaultThinkingBudget, 0);
 
+const proColonNoThink = resolveWireModel('gemini-3.1-pro:no-think');
+assert.strictEqual(proColonNoThink?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proColonNoThink?.defaultThinkingBudget, 0);
+
 const proOff = resolveWireModel('gemini-3.1-pro:off');
 assert.strictEqual(proOff?.wireModel, 'gemini-3.1-pro-preview');
 assert.strictEqual(proOff?.defaultThinkingBudget, 0);
+
+const proColonFast = resolveWireModel('gemini-3.1-pro:fast');
+assert.strictEqual(proColonFast?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proColonFast?.defaultThinkingBudget, 0);
 
 const proLow = resolveWireModel('gemini-3.1-pro-low');
 assert.strictEqual(proLow?.wireModel, 'gemini-3.1-pro-preview');
@@ -203,6 +211,16 @@ const wireProLow = transformOpenAIToAntigravity(
   'proj-123'
 );
 assert.strictEqual(wireProLow.request.generationConfig.thinkingConfig?.thinkingBudget, 2048);
+
+const proColonLow = resolveWireModel('gemini-3.1-pro:low');
+assert.strictEqual(proColonLow?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proColonLow?.defaultThinkingBudget, 2048);
+const wireProColonLow = transformOpenAIToAntigravity(
+  { model: 'gemini-3.1-pro:low' },
+  proColonLow!,
+  'proj-123'
+);
+assert.strictEqual(wireProColonLow.request.generationConfig.thinkingConfig?.thinkingBudget, 2048);
 
 // 4f. Negative Cache Verification for 0ms Hot-Path TTFT
 setCachedSessionGenSettings('chat-negative-test', null);

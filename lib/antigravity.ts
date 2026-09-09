@@ -305,6 +305,7 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     clean === 'gemini-3.1-pro:off' ||
     clean === 'gemini-3.1-pro-off' ||
     clean === 'gemini-3.1-pro-no-think' ||
+    clean === 'gemini-3.1-pro:no-think' ||
     clean === 'gemini-3.1-pro:fast'
   ) {
     return { wireModel: 'gemini-3.1-pro-preview', defaultThinkingBudget: 0 };
