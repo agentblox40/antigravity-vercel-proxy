@@ -23,15 +23,6 @@ import {
   resolveOpenCodeModel,
   executeOpenCodeCompletion,
 } from './opencode';
-import {
-  DEFAULT_GENERATION_SETTINGS,
-  getGlobalGenSettings,
-  getCachedSessionGenSettings,
-  setCachedSessionGenSettings,
-  executeGenSettingsCommand,
-  mergeGenerationSettings,
-  GenerationSettings,
-} from './genSettings';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -176,16 +167,7 @@ export async function handleChatCompletions(req: NextRequest) {
   // Check for In-Chat Roleplay Control Commands (<MYSETTINGS>, <GENSETTINGS>, <SET: ...>, <RESET_SETTINGS>, <ENABLE: ...>, <DISABLE: ...>)
   const inChatCmd = detectInChatCommand(latestUserText);
   if (inChatCmd) {
-    let menuOutput = '';
-    if (inChatCmd.type === 'view_gen' || inChatCmd.type === 'set_gen' || inChatCmd.type === 'reset_gen') {
-      let session: any = null;
-      if (sessionPromise) {
-        session = await sessionPromise.catch(() => null);
-      }
-      menuOutput = await executeGenSettingsCommand(inChatCmd, session);
-    } else {
-      menuOutput = await executeInChatCommand(inChatCmd);
-    }
+    const menuOutput = await executeInChatCommand(inChatCmd);
 
     // Record command exchange into session asynchronously for visibility in dashboard
     if (sessionPromise) {
@@ -215,36 +197,6 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
-  // Resolve effective generation settings (Defaults -> Global Settings -> Client Body -> Session Overrides)
-  const globalGenSettings = await getGlobalGenSettings();
-  let sessionGenSettings: Partial<GenerationSettings> | undefined = undefined;
-  if (currentChatId) {
-    const cached = getCachedSessionGenSettings(currentChatId);
-    if (cached !== undefined) {
-      sessionGenSettings = cached || undefined;
-    }
-  }
-
-  // Populate cache asynchronously in background, NEVER block hot-path inference
-  if (currentChatId && sessionPromise && getCachedSessionGenSettings(currentChatId) === undefined) {
-    sessionPromise.then(session => {
-      if (currentChatId && getCachedSessionGenSettings(currentChatId) === undefined) {
-        setCachedSessionGenSettings(currentChatId, session?.generationSettings || null);
-      }
-    }).catch(() => {});
-  }
-  const effectiveSettings = mergeGenerationSettings(
-    DEFAULT_GENERATION_SETTINGS,
-    globalGenSettings,
-    body,
-    sessionGenSettings
-  );
-
-  const enhancedBody = {
-    ...body,
-    ...effectiveSettings,
-  };
-
   // ROUTE TO OPENCODE FREE MODELS IF MATCHED
   if (openCodeResolved) {
     const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
@@ -264,9 +216,12 @@ export async function handleChatCompletions(req: NextRequest) {
         text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
         text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
         text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]') ||
+        text.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]') ||
+        text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS GUIDE]') ||
         text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
         text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
-        text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]')
+        text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]') ||
+        text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS')
       )) return false;
       return true;
     });
@@ -295,7 +250,7 @@ export async function handleChatCompletions(req: NextRequest) {
     }
 
     return executeOpenCodeCompletion({
-      body: { ...enhancedBody, messages: preparedMessages },
+      body: { ...body, messages: preparedMessages },
       modelId: requestedModel,
       resolvedModel: openCodeResolved,
       onFinish: (content, thinking) => {
@@ -398,7 +353,7 @@ export async function handleChatCompletions(req: NextRequest) {
     try {
       const accessToken = await getAccessToken(account);
       const envelope = transformOpenAIToAntigravity(
-        enhancedBody,
+        body,
         resolved,
         account.projectId,
         rawSystemText,

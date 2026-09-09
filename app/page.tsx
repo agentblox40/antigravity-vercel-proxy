@@ -29,11 +29,7 @@ const Icons = {
       <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
     </svg>
   ),
-  Sliders: () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/>
-    </svg>
-  ),
+
   Server: () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>
@@ -221,7 +217,7 @@ const PRESETS = [
 ];
 
 export default function AntigravityControlCenter() {
-  const [activeTab, setActiveTab] = useState<'models' | 'injections' | 'logs' | 'playground' | 'controls' | 'accounts' | 'clients' | 'updates'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'injections' | 'logs' | 'playground' | 'accounts' | 'clients' | 'updates'>('models');
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('dark');
 
@@ -255,24 +251,6 @@ export default function AntigravityControlCenter() {
   const [playgroundBypassInjections, setPlaygroundBypassInjections] = useState(false);
   const [playgroundLastLatency, setPlaygroundLastLatency] = useState<number | null>(null);
   const [playgroundShowSystem, setPlaygroundShowSystem] = useState(false);
-
-  // Advanced Generation Sampling Controls
-  const [temperature, setTemperature] = useState(0.7);
-  const [thinkingBudget, setThinkingBudget] = useState(24576);
-  const [maxTokens, setMaxTokens] = useState(8192);
-  const [topP, setTopP] = useState(0.95);
-  const [topK, setTopK] = useState(40);
-  const [minP, setMinP] = useState(0.05);
-  const [minK, setMinK] = useState(0);
-  const [topA, setTopA] = useState(0.0);
-  const [typicalP, setTypicalP] = useState(1.0);
-  const [tfs, setTfs] = useState(1.0);
-  const [repetitionPenalty, setRepetitionPenalty] = useState(1.05);
-  const [frequencyPenalty, setFrequencyPenalty] = useState(0.0);
-  const [presencePenalty, setPresencePenalty] = useState(0.0);
-  const [uncensoredMode, setUncensoredMode] = useState(true);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
 
   // Status & Accounts State
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -459,10 +437,9 @@ export default function AntigravityControlCenter() {
           window.history.replaceState({}, document.title, cleanUrl);
         }
 
-        // Fetch memory overview & prompt injections & generation settings
+        // Fetch memory overview & prompt injections
         fetchMemoryOverview(trimmed);
         fetchInjectionsData(trimmed);
-        fetchGenSettings(trimmed);
       } else {
         setLoginError('Invalid Key. Access Denied.');
         setIsAuthenticated(false);
@@ -472,114 +449,6 @@ export default function AntigravityControlCenter() {
       setIsAuthenticated(false);
     } finally {
       setIsVerifying(false);
-    }
-  };
-
-  const fetchGenSettings = async (currentKey = apiKey) => {
-    if (!currentKey) return;
-    try {
-      const res = await fetch('/api/settings', {
-        headers: { 'Authorization': `Bearer ${currentKey}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.settings) {
-          const s = data.settings;
-          if (typeof s.temperature === 'number') setTemperature(s.temperature);
-          if (typeof s.thinking_budget === 'number') setThinkingBudget(s.thinking_budget);
-          if (typeof s.max_tokens === 'number') setMaxTokens(s.max_tokens);
-          if (typeof s.top_p === 'number') setTopP(s.top_p);
-          if (typeof s.top_k === 'number') setTopK(s.top_k);
-          if (typeof s.min_p === 'number') setMinP(s.min_p);
-          if (typeof s.min_k === 'number') setMinK(s.min_k);
-          if (typeof s.top_a === 'number') setTopA(s.top_a);
-          if (typeof s.typical_p === 'number') setTypicalP(s.typical_p);
-          if (typeof s.tfs === 'number') setTfs(s.tfs);
-          if (typeof s.repetition_penalty === 'number') setRepetitionPenalty(s.repetition_penalty);
-          if (typeof s.frequency_penalty === 'number') setFrequencyPenalty(s.frequency_penalty);
-          if (typeof s.presence_penalty === 'number') setPresencePenalty(s.presence_penalty);
-        }
-      }
-    } catch {}
-  };
-
-  const handleSaveGenSettings = async () => {
-    setIsSavingSettings(true);
-    setSettingsNotice(null);
-    try {
-      const payload = {
-        temperature,
-        thinking_budget: thinkingBudget,
-        max_tokens: maxTokens,
-        top_p: topP,
-        top_k: topK,
-        min_p: minP,
-        min_k: minK,
-        top_a: topA,
-        typical_p: typicalP,
-        tfs,
-        repetition_penalty: repetitionPenalty,
-        frequency_penalty: frequencyPenalty,
-        presence_penalty: presencePenalty,
-      };
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({ settings: payload })
-      });
-      if (res.ok) {
-        setSettingsNotice('✨ Global Generation Settings saved successfully!');
-        setTimeout(() => setSettingsNotice(null), 4000);
-      } else {
-        setSettingsNotice('⚠️ Failed to save settings to server.');
-      }
-    } catch (err: any) {
-      setSettingsNotice(`⚠️ Error: ${err.message || 'Network error'}`);
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  const handleResetGenSettings = async () => {
-    setIsSavingSettings(true);
-    setSettingsNotice(null);
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({ action: 'reset' })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.settings) {
-          const s = data.settings;
-          setTemperature(s.temperature ?? 0.7);
-          setThinkingBudget(s.thinking_budget ?? 24576);
-          setMaxTokens(s.max_tokens ?? 8192);
-          setTopP(s.top_p ?? 0.95);
-          setTopK(s.top_k ?? 40);
-          setMinP(s.min_p ?? 0.05);
-          setMinK(s.min_k ?? 0);
-          setTopA(s.top_a ?? 0.0);
-          setTypicalP(s.typical_p ?? 1.0);
-          setTfs(s.tfs ?? 1.0);
-          setRepetitionPenalty(s.repetition_penalty ?? 1.05);
-          setFrequencyPenalty(s.frequency_penalty ?? 0.0);
-          setPresencePenalty(s.presence_penalty ?? 0.0);
-        }
-        setSettingsNotice('🔄 Reset all generation parameters to default values.');
-        setTimeout(() => setSettingsNotice(null), 4000);
-      }
-    } catch (err: any) {
-      setSettingsNotice(`⚠️ Error: ${err.message || 'Network error'}`);
-    } finally {
-      setIsSavingSettings(false);
     }
   };
 
@@ -922,19 +791,6 @@ export default function AntigravityControlCenter() {
         body: JSON.stringify({
           model: selectedModel,
           messages: formattedMessages,
-          temperature,
-          max_tokens: maxTokens,
-          top_p: topP,
-          top_k: topK,
-          min_p: minP,
-          min_k: minK,
-          top_a: topA,
-          typical_p: typicalP,
-          tfs,
-          repetition_penalty: repetitionPenalty,
-          frequency_penalty: frequencyPenalty,
-          presence_penalty: presencePenalty,
-          thinking_budget: thinkingBudget,
           bypass_injections: playgroundBypassInjections,
           stream: true
         })
@@ -1199,7 +1055,6 @@ export default function AntigravityControlCenter() {
               { id: 'injections', label: 'Injections', icon: <Icons.Syringe /> },
               { id: 'logs', label: 'Logged Chats', icon: <Icons.FileText /> },
               { id: 'playground', label: 'Roleplay Studio', icon: <Icons.Chat /> },
-              { id: 'controls', label: 'Gen Settings', icon: <Icons.Sliders /> },
               { id: 'accounts', label: 'Accounts & Quota', icon: <Icons.Server /> },
               { id: 'clients', label: 'Janitor / Tavern', icon: <Icons.Terminal /> },
               { id: 'updates', label: 'Update Logs', icon: <Icons.Rocket /> }
@@ -1208,7 +1063,6 @@ export default function AntigravityControlCenter() {
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id as any);
-                  if (tab.id === 'controls') fetchGenSettings();
                   if (tab.id === 'injections') fetchInjectionsData();
                   if (tab.id === 'logs') fetchMemoryOverview();
                   if (tab.id === 'updates') fetchStatusAndModels();
@@ -3045,461 +2899,7 @@ export default function AntigravityControlCenter() {
           );
         })()}
 
-        {/* TAB 5: GENERATION SETTINGS & ADVANCED SAMPLING */}
-        {activeTab === 'controls' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Action Bar & Notification */}
-            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '18px 24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, boxShadow: colors.cardShadow }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: colors.textMain, letterSpacing: '-0.02em' }}>Generation & Sampling Settings</h2>
-                  <span style={{ fontSize: 10, background: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.3)', padding: '2px 8px', borderRadius: 20, fontWeight: 700, letterSpacing: '0.04em' }}>
-                    IN-CHAT CONTROL READY
-                  </span>
-                </div>
-                <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>
-                  Full advanced sampling suite (Min-P, Min-K, Top-A, TFS, Typical-P, Penalties, CoT Thinking) applied across Janitor AI, SillyTavern, and API requests.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button
-                  onClick={handleResetGenSettings}
-                  disabled={isSavingSettings}
-                  style={{
-                    background: colors.cardInner,
-                    color: colors.textMain,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 8,
-                    padding: '8px 16px',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: isSavingSettings ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}>
-                  <Icons.Refresh /> Reset Defaults
-                </button>
-                <button
-                  onClick={handleSaveGenSettings}
-                  disabled={isSavingSettings}
-                  style={{
-                    background: colors.btnPrimaryBg,
-                    color: colors.btnPrimaryText,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 8,
-                    padding: '8px 20px',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: isSavingSettings ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                  }}>
-                  {isSavingSettings ? 'Saving...' : '💾 Save Global Defaults'}
-                </button>
-              </div>
-            </div>
-
-            {settingsNotice && (
-              <div style={{
-                background: settingsNotice.startsWith('✨') || settingsNotice.startsWith('🔄') ? (isDark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.1)') : (isDark ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.1)'),
-                border: `1px solid ${settingsNotice.startsWith('✨') || settingsNotice.startsWith('🔄') ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                color: settingsNotice.startsWith('✨') || settingsNotice.startsWith('🔄') ? (isDark ? '#34d399' : '#059669') : (isDark ? '#f87171' : '#dc2626'),
-                padding: '12px 18px',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8
-              }}>
-                {settingsNotice}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
-              {/* Card 1: CoT Reasoning & Thinking Token Budget */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.textMain }}>Thinking Token Budget</h3>
-                  <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 700, color: colors.textMain, background: colors.cardInner, padding: '2px 8px', borderRadius: 6, border: `1px solid ${colors.border}` }}>
-                    {thinkingBudget === 0 ? 'Disabled (0 tok)' : `${thinkingBudget.toLocaleString()} tok`}
-                  </span>
-                </div>
-                <p style={{ fontSize: 12, color: colors.textMuted, margin: '0 0 16px' }}>Chain-of-Thought reasoning depth for Gemini 3.7/3.8 and OpenCode reasoning models.</p>
-
-                <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
-                  {[
-                    { label: 'Off', budget: 0 },
-                    { label: '2K', budget: 2048 },
-                    { label: '8K', budget: 8192 },
-                    { label: '24K', budget: 24576 },
-                    { label: '64K', budget: 65536 }
-                  ].map(p => (
-                    <button
-                      key={p.budget}
-                      onClick={() => setThinkingBudget(p.budget)}
-                      style={{
-                        flex: 1,
-                        background: thinkingBudget === p.budget ? colors.btnPrimaryBg : colors.cardInner,
-                        color: thinkingBudget === p.budget ? colors.btnPrimaryText : colors.textMain,
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: 6,
-                        padding: '7px 2px',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <span style={{ color: colors.textMuted }}>Custom Token Budget:</span>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{thinkingBudget.toLocaleString()} tokens</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="65536"
-                    step="1024"
-                    value={thinkingBudget}
-                    onChange={e => setThinkingBudget(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-              </div>
-
-              {/* Card 2: Core Sampling & Probability Truncation */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
-                <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>Core Sampling & Cutoffs</h3>
-                <p style={{ fontSize: 12, color: colors.textMuted, margin: '0 0 16px' }}>Primary creativity and probability mass truncation filters.</p>
-
-                {/* Temperature */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Temperature</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Creativity & Variance)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{temperature.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="2.0"
-                    step="0.05"
-                    value={temperature}
-                    onChange={e => setTemperature(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Min-P Sampling */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Min-P Sampling</span>
-                      <span style={{ color: '#3b82f6', marginLeft: 6, fontSize: 11, fontWeight: 600 }}>[Janitor AI Enhancer]</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{minP.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="1.0"
-                    step="0.01"
-                    value={minP}
-                    onChange={e => setMinP(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Top-P */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Top-P (Nucleus)</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Mass Distribution)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{topP.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="1.0"
-                    step="0.05"
-                    value={topP}
-                    onChange={e => setTopP(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Top-K */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Top-K Filtering</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Candidate Pool Size)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{topK}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    step="1"
-                    value={topK}
-                    onChange={e => setTopK(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Min-K */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Min-K Sampling</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Guaranteed Candidates)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{minK}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="50"
-                    step="1"
-                    value={minK}
-                    onChange={e => setMinK(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Top-A */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Top-A Sampling</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Adaptive Squared Cutoff)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{topA.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="1.0"
-                    step="0.02"
-                    value={topA}
-                    onChange={e => setTopA(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-              </div>
-
-              {/* Card 3: Tail Truncation, Information Density & Penalties */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
-                <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: colors.textMain }}>Tail Truncation & Penalties</h3>
-                <p style={{ fontSize: 12, color: colors.textMuted, margin: '0 0 16px' }}>Curvature filtering, entropy tuning, and repetition penalties.</p>
-
-                {/* Tail-Free Sampling (TFS) */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Tail-Free Sampling (TFS)</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(2nd Derivative)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{tfs.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="1.0"
-                    step="0.02"
-                    value={tfs}
-                    onChange={e => setTfs(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Typical-P Sampling */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Locally Typical (Typical-P)</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Entropy Match)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{typicalP.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.0"
-                    max="1.0"
-                    step="0.02"
-                    value={typicalP}
-                    onChange={e => setTypicalP(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Repetition Penalty */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Repetition Penalty</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Multiplicative)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{repetitionPenalty.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1.0"
-                    max="2.0"
-                    step="0.02"
-                    value={repetitionPenalty}
-                    onChange={e => setRepetitionPenalty(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Frequency Penalty */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Frequency Penalty</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Count Linear)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{frequencyPenalty.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-2.0"
-                    max="2.0"
-                    step="0.05"
-                    value={frequencyPenalty}
-                    onChange={e => setFrequencyPenalty(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Presence Penalty */}
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Presence Penalty</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(New Topic Intro)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{presencePenalty.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-2.0"
-                    max="2.0"
-                    step="0.05"
-                    value={presencePenalty}
-                    onChange={e => setPresencePenalty(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-
-                {/* Max Tokens */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-                    <div>
-                      <span style={{ color: colors.textMain, fontWeight: 600 }}>Max Output Tokens</span>
-                      <span style={{ color: colors.textMuted, marginLeft: 6, fontSize: 11 }}>(Length Ceiling)</span>
-                    </div>
-                    <span style={{ color: colors.textMain, fontWeight: 700, fontFamily: 'monospace' }}>{maxTokens.toLocaleString()}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="512"
-                    max="32768"
-                    step="512"
-                    value={maxTokens}
-                    onChange={e => setMaxTokens(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: isDark ? '#ffffff' : '#000000' }}
-                  />
-                </div>
-              </div>
-
-              {/* Card 4: In-Chat Roleplay Commands Cheatsheet */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, boxShadow: colors.cardShadow }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.textMain }}>In-Chat Roleplay Commands</h3>
-                  <span style={{ fontSize: 10, background: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>
-                    0ms • 0 API Quota
-                  </span>
-                </div>
-                <p style={{ fontSize: 12, color: colors.textMuted, margin: '0 0 16px' }}>
-                  Send these directly inside your Janitor AI or SillyTavern chat box to inspect or modify sampling parameters in real-time.
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 12 }}>
-                  <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>View Sampling Settings Menu:</div>
-                    <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;GENSETTINGS&gt;</code> or <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;SETTINGS&gt;</code>
-                  </div>
-
-                  <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>Update Values (Applied to Chat Session):</div>
-                    <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;SET: min_p=0.05, top_k=40, temp=0.9&gt;</code>
-                  </div>
-
-                  <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>Configure Thinking Budget / CoT:</div>
-                    <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;SET: thinking=off&gt;</code> or <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;SET: thinking=24k&gt;</code>
-                  </div>
-
-                  <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>Configure Repetition & Presence:</div>
-                    <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;SET: rep_penalty=1.1, freq_penalty=0.2&gt;</code>
-                  </div>
-
-                  <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>Reset Chat Session Settings to Defaults:</div>
-                    <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;RESET_SETTINGS&gt;</code>
-                  </div>
-
-                  <div style={{ background: colors.cardInner, border: `1px solid ${colors.border}`, borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>Prompt Injections &amp; Directives Menu:</div>
-                    <code style={{ fontFamily: 'monospace', color: colors.textMain, fontWeight: 700 }}>&lt;MYSETTINGS&gt;</code>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 5: Uncensored Roleplay Bypass */}
-              <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 22, gridColumn: '1 / -1', boxShadow: colors.cardShadow }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: colors.textMain }}>Safety Override (BLOCK_NONE)</h3>
-                    <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>Bypasses content moderation filters across all categories for unrestricted creative writing.</p>
-                  </div>
-                  <button
-                    onClick={() => setUncensoredMode(!uncensoredMode)}
-                    style={{
-                      background: uncensoredMode ? colors.btnPrimaryBg : colors.cardInner,
-                      color: uncensoredMode ? colors.btnPrimaryText : colors.textMuted,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: 6,
-                      padding: '8px 14px',
-                      fontWeight: 700,
-                      fontSize: 12,
-                      cursor: 'pointer'
-                    }}>
-                    {uncensoredMode ? 'ENABLED' : 'DISABLED'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: ACCOUNTS & QUOTA */}
+        {/* TAB 5: ACCOUNTS & QUOTA */}
         {activeTab === 'accounts' && (
           <div style={{ display: 'grid', gap: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

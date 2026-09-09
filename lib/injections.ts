@@ -273,16 +273,11 @@ export async function getActiveInjectionsFormatted(turnCount = 1): Promise<{
   };
 }
 
-import type { GenerationSettings } from './genSettings';
-import { parseGenerationSettingsString } from './genSettings';
-
 export interface InChatCommand {
   type: 'view' | 'enable' | 'disable' | 'master_toggle' | 'view_gen' | 'set_gen' | 'reset_gen' | 'view_help';
   rawInput: string;
   targets?: string[];
   masterEnabled?: boolean;
-  genSettings?: Partial<GenerationSettings>;
-  setNotice?: string;
 }
 
 export function detectInChatCommand(rawText: string): InChatCommand | null {
@@ -313,12 +308,9 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
   const setGenMatch = /^<(?:SET|SET_GEN|GEN_SET|SAMPLING|CONFIG)\s*:\s*([\s\S]+)>\s*$/i.exec(trimmed) ||
                       /^\/set\s+(.+)$/i.exec(trimmed);
   if (setGenMatch) {
-    const { settings, parsedSummary } = parseGenerationSettingsString(setGenMatch[1]);
     return {
       type: 'set_gen',
       rawInput: trimmed,
-      genSettings: settings,
-      setNotice: parsedSummary.join(', ')
     };
   }
 
@@ -421,10 +413,27 @@ export function generateSettingsMenu(config: InjectionsConfig, notice?: string):
   lines.push('• To disable: <DISABLE: 5, 6>  or  <DISABLE: Slow Romance>');
   lines.push('• Master switch: <INJECTIONS: ON>  or  <INJECTIONS: OFF>');
   lines.push('• View injections menu: <MYSETTINGS>');
-  lines.push('• Generation sampling menu: <GENSETTINGS> (Min-P, Top-K, Temp, Thinking...)');
+  lines.push('• Sampling status: <SETTINGS> (Controlled directly by your client)');
   lines.push('────────────────────────────────────────');
   lines.push('✨ To continue your roleplay, simply send your character dialogue normally!');
 
+  return lines.join('\n');
+}
+
+export function generateGenNotice(): string {
+  const lines: string[] = [];
+  lines.push('⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]');
+  lines.push('');
+  lines.push('✨ Pure Client Pass-Through Active:');
+  lines.push('Generation and sampling parameters (Temperature, Top-P, Top-K, Min-P, Max Tokens, Repetition Penalty) are directly controlled by your Janitor AI or SillyTavern sliders.');
+  lines.push('The proxy passes your client\'s exact values directly to the model with zero tampering or overriding.');
+  lines.push('');
+  lines.push('• To manage active prompt directives & System Notes: <MYSETTINGS>');
+  lines.push('• Quick Injections toggle: <INJECTIONS: ON> or <INJECTIONS: OFF>');
+  lines.push('• Enable or disable directives: <ENABLE: 1, 2> or <DISABLE: 3>');
+  lines.push('• Full commands cheatsheet: <HELP>');
+  lines.push('────────────────────────────────────────');
+  lines.push('✨ To continue your roleplay, simply send your character dialogue normally!');
   return lines.join('\n');
 }
 
@@ -434,6 +443,10 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
 
   if (cmd.type === 'view') {
     return generateSettingsMenu(config);
+  }
+
+  if (cmd.type === 'view_gen' || cmd.type === 'set_gen' || cmd.type === 'reset_gen') {
+    return generateGenNotice();
   }
 
   if (cmd.type === 'master_toggle') {
@@ -489,18 +502,20 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
 export function generateHelpMenu(): string {
   const lines: string[] = [];
   lines.push('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]');
-  lines.push('\n[1. GENERATION & SAMPLING PARAMETERS]:');
-  lines.push('• View settings:     <GENSETTINGS> or <SETTINGS> or /settings');
-  lines.push('• Update parameters: <SET: min_p=0.05, top_k=40, temp=0.9>');
-  lines.push('• Control thinking:  <SET: thinking=off> or <SET: thinking=24k>');
-  lines.push('• Control penalties: <SET: rep=1.1, freq=0.2, pres=0.1>');
-  lines.push('• Advanced samplers: <SET: top_a=0.1, typical_p=0.95, tfs=0.98>');
-  lines.push('• Reset defaults:    <RESET_SETTINGS>');
+  lines.push('\n[1. GENERATION & SAMPLING]:');
+  lines.push('• Sampling parameters (Temp, Top-P, Top-K, Min-P, etc.) are directly controlled by your Janitor AI / SillyTavern sliders.');
+  lines.push('• Check sampling status: <SETTINGS> or <GENSETTINGS>');
   lines.push('\n[2. PROMPT INJECTIONS & ROLEPLAY DIRECTIVES]:');
-  lines.push('• View injections:   <MYSETTINGS> or /injections');
-  lines.push('• Enable modules:    <ENABLE: 1, 3> or <ENABLE: Slow Romance>');
-  lines.push('• Disable modules:   <DISABLE: 5, 6>');
-  lines.push('• Master switch:     <INJECTIONS: ON> or <INJECTIONS: OFF>');
+  lines.push('• View directives menu:  <MYSETTINGS> or /injections');
+  lines.push('• Enable directives:     <ENABLE: 1, 3> or <ENABLE: Slow Romance>');
+  lines.push('• Disable directives:    <DISABLE: 5, 6>');
+  lines.push('• Master switch:         <INJECTIONS: ON> or <INJECTIONS: OFF>');
+  lines.push('\n[3. MODEL THINKING TIERS (SELECT VIA MODEL NAME)]:');
+  lines.push('• Zero thinking (Instant): gemini-3.8-flash-fast, gemini-3.1-pro-fast, big-pickle-fast');
+  lines.push('• Snappy thinking (2K):    gemini-3.8-flash-low, gemini-3.1-pro-low');
+  lines.push('• Standard thinking (8K):  gemini-3.8-flash, gemini-3.7-flash');
+  lines.push('• High thinking (24K):     gemini-3.8-flash-high, gemini-3.7-flash-high');
+  lines.push('• Max thinking (64K):      gemini-3.8-flash-max, gemini-3.7-flash-max');
   lines.push('\n────────────────────────────────────────');
   lines.push('⚡ 0ms Response • 0 Upstream API Quota Cost • Commands 100% Sanitized from Character Memory');
   lines.push('✨ To resume roleplay, simply type your dialogue normally!');

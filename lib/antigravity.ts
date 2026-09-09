@@ -370,9 +370,12 @@ export function transformOpenAIToAntigravity(
       text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
       text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
       text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]') ||
+      text.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]') ||
+      text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS GUIDE]') ||
       text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
       text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
-      text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]')
+      text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]') ||
+      text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS')
     )) continue;
 
     if (role === 'system') {

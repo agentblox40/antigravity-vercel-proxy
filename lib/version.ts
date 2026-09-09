@@ -15,18 +15,21 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
     version: '3.5.0',
     tag: 'MAJOR',
-    title: 'Architecture & Latency Boost: Zero-Wait TTFT, Dual Reasoning Stream, Next.js 15 after() & Gemini 3.1 Pro Variants',
+    title: 'Streamlined Roleplay Core: Pure Client Pass-Through & Cockpit De-clutter',
     date: 'Sep 9, 2026',
     commit: 'latest',
-    description: 'P0 & P1 architectural improvements: dual reasoning tokens mapping, non-blocking 0ms hot-path TTFT with negative caching, memory API overview payload split, Next.js 15 native after() background save lifecycles, Gemini SSE stream EOF buffer drain, OpenCode 50s timeout clamp, Redis REST batch pipelining, and Gemini 3.1 Pro Fast/Low variants.',
+    description: 'De-cluttered proxy dashboard by removing the 15-slider generation settings cockpit tab. Enforced pure pass-through for client sampling parameters (temperature, top_p, top_k, max_tokens, penalties) directly from Janitor AI and SillyTavern. Kept model ID presets as the single source of truth for thinking token budgets (-fast, -low, standard, -high, -max).',
     highlights: [
+      'De-cluttered Dashboard Cockpit: Removed the overcomplicated Generation Settings tab and 15 sliders from the proxy dashboard, returning the interface to a fast, clean, intuitive roleplay core.',
+      'Pure Client Pass-Through: Completely removed global and per-session parameter overrides from the completion pipeline; Janitor AI and SillyTavern sampling sliders pass directly to upstream Google CloudCode PA and OpenCode without interference.',
+      'Model Presets Single Source of Truth: Preserved thinking token budgets directly via model naming conventions (-fast/:off -> 0 tok, -low/:low -> 2,048 tok, standard -> 8,192 tok, -high/:high -> 24,576 tok, -max/:max -> 65,536 tok).',
+      'In-Chat Commands Streamlined: Preserved <MYSETTINGS>, <ENABLE: ...>, <DISABLE: ...>, <INJECTIONS: ON/OFF>. In-chat <SETTINGS> and <GENSETTINGS> commands now inform users that client sliders control sampling directly.',
       'Dual-Mapped Gemini Reasoning: Mapped Gemini thinking tokens to both delta.reasoning_content and delta.reasoning across streaming and non-streaming responses for universal SillyTavern and Janitor AI parser compatibility.',
-      'Zero-Wait TTFT Hot-Path Latency: Cached negative lookups (null) in setCachedSessionGenSettings and ensured sessionPromise is never awaited synchronously before inference, eliminating cold transcript download latency on normal turns.',
+      'Zero-Wait TTFT Hot-Path Latency: Completely unblocked hot-path inference from Redis reads, eliminating cold transcript download latency on normal turns.',
       'Memory API Overview Payload Split: Omitted bulky message transcripts from /api/memory list overview to prevent Vercel HTTP 500 FUNCTION_PAYLOAD_TOO_LARGE crashes while loading full chat transcripts on-demand via ?chatId=.',
       'Serverless Background Save Lifecycles: Wrapped background session persistence in Next.js 15 native after() from next/server so Vercel Serverless does not freeze lambda containers before Upstash Redis writes finish.',
       'Gemini SSE Stream EOF Buffer Drain: Implemented residual buffer flush on SSE stream completion to prevent truncated sentence or markdown endings.',
       'OpenCode 50s Safe Timeout: Clamped Nemotron timeout from 95s down to 50s to guarantee requests complete within Vercel 60s maxDuration.',
-      'Redis REST Batch Pipelining: Batched saveChatSession and deleteChatSession multi-command operations into single HTTP calls via callRedisPipeline.',
       'Gemini 3.1 Pro Fast & Low Variants: Added gemini-3.1-pro-fast / gemini-3.1-pro:off / gemini-3.1-pro-no-think (wireModel: gemini-3.1-pro-preview, 0 thinking tokens) and gemini-3.1-pro-low (2,048 thinking tokens).'
     ]
   },

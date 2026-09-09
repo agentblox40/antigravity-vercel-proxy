@@ -1,314 +1,327 @@
 import assert from 'node:assert';
 import {
-  DEFAULT_GENERATION_SETTINGS,
-  parseGenerationSettingsString,
-  generateGenSettingsMenu,
-  mergeGenerationSettings,
-  sanitizeGenSettings,
-  getCachedSessionGenSettings,
-  setCachedSessionGenSettings,
-} from '../lib/genSettings';
-import { detectInChatCommand, generateHelpMenu } from '../lib/injections';
-import { resolveWireModel, transformOpenAIToAntigravity } from '../lib/antigravity';
+  detectInChatCommand,
+  executeInChatCommand,
+  generateGenNotice,
+  generateHelpMenu,
+  generateSettingsMenu,
+  getInjectionsConfig,
+} from '../lib/injections';
+import {
+  resolveWireModel,
+  transformOpenAIToAntigravity,
+} from '../lib/antigravity';
+import {
+  OPENCODE_MODELS,
+  resolveOpenCodeModel,
+} from '../lib/opencode';
 
-console.log('🧪 RUNNING COMPREHENSIVE GENERATION SETTINGS TEST SUITE\n');
+async function main() {
+  console.log('🧪 RUNNING STREAMLINED ROLEPLAY CORE VERIFICATION SUITE\n');
 
-// ==========================================
-// 1. In-Chat Command Detection Tests
-// ==========================================
-console.log('Test 1: In-Chat Command Detection');
-const viewCmds = ['<GENSETTINGS>', '<GEN_SETTINGS>', '<SETTINGS>', '<SAMPLING>', '/gensettings', '/sampling', '/settings'];
-for (const cmd of viewCmds) {
-  const detected = detectInChatCommand(cmd);
-  assert.strictEqual(detected?.type, 'view_gen', `Expected view_gen for "${cmd}", got ${detected?.type}`);
+  // ==========================================
+  // 1. In-Chat Command Detection Tests
+  // ==========================================
+  console.log('Test 1: In-Chat Command Detection');
+  const samplingCmds = ['<GENSETTINGS>', '<GEN_SETTINGS>', '<SETTINGS>', '<SAMPLING>', '/gensettings', '/sampling', '/settings'];
+  for (const cmd of samplingCmds) {
+    const detected = detectInChatCommand(cmd);
+    assert.strictEqual(detected?.type, 'view_gen', `Expected view_gen for "${cmd}", got ${detected?.type}`);
+  }
+
+  const resetCmds = ['<RESET_SETTINGS>', '<RESET_GENSETTINGS>', '<RESET_GEN>', '/reset_settings'];
+  for (const cmd of resetCmds) {
+    const detected = detectInChatCommand(cmd);
+    assert.strictEqual(detected?.type, 'reset_gen', `Expected reset_gen for "${cmd}", got ${detected?.type}`);
+  }
+
+  const setCmds = ['<SET: min_p=0.05, temp=0.9>', '<SET_GEN: top_k=40>', '/set temp 0.8'];
+  for (const cmd of setCmds) {
+    const detected = detectInChatCommand(cmd);
+    assert.strictEqual(detected?.type, 'set_gen', `Expected set_gen for "${cmd}", got ${detected?.type}`);
+  }
+
+  const helpCmds = ['<HELP>', '<COMMANDS>', '<MENU>', '/help', '/commands'];
+  for (const cmd of helpCmds) {
+    const detected = detectInChatCommand(cmd);
+    assert.strictEqual(detected?.type, 'view_help', `Expected view_help for "${cmd}", got ${detected?.type}`);
+  }
+
+  const injectionsCmds = ['<MYSETTINGS>', '<MY_SETTINGS>', '<INJECTIONS>', '/injections', '/mysettings'];
+  for (const cmd of injectionsCmds) {
+    const detected = detectInChatCommand(cmd);
+    assert.strictEqual(detected?.type, 'view', `Expected view for "${cmd}", got ${detected?.type}`);
+  }
+
+  // Ensure normal roleplay dialogue is NEVER intercepted as a command
+  const normalTurns = [
+    'Lily, what should we do next?',
+    '*She looks down nervously* "I don\'t know..."',
+    '123 < 456 is a basic comparison',
+    'Can you help me?',
+    '/home/user/path/is/valid',
+    '<think>Internal character thought</think> "Hello!"'
+  ];
+  for (const turn of normalTurns) {
+    const detected = detectInChatCommand(turn);
+    assert.strictEqual(detected, null, `Normal turn "${turn}" was incorrectly intercepted as a command!`);
+  }
+  console.log('✅ In-Chat Command Detection passed.\n');
+
+  // ==========================================
+  // 2. Pure Client Pass-Through In-Chat Command Responses
+  // ==========================================
+  console.log('Test 2: Pure Client Pass-Through In-Chat Command Responses');
+  const genNotice = generateGenNotice();
+  assert.ok(genNotice.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]'));
+  assert.ok(genNotice.includes('Pure Client Pass-Through Active'));
+  assert.ok(genNotice.includes('controlled by your Janitor AI or SillyTavern sliders'));
+  assert.ok(genNotice.includes('<MYSETTINGS>'));
+
+  // When user executes <GENSETTINGS> or <SETTINGS>
+  const resView = await executeInChatCommand({ type: 'view_gen', rawInput: '<GENSETTINGS>' });
+  assert.ok(resView.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]'));
+  assert.ok(resView.includes('Pure Client Pass-Through Active'));
+
+  // When user executes <SET: ...>
+  const resSet = await executeInChatCommand({ type: 'set_gen', rawInput: '<SET: temp=0.9>' });
+  assert.ok(resSet.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]'));
+
+  // When user executes <RESET_SETTINGS>
+  const resReset = await executeInChatCommand({ type: 'reset_gen', rawInput: '<RESET_SETTINGS>' });
+  assert.ok(resReset.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]'));
+
+  // When user executes <HELP>
+  const helpMenu = generateHelpMenu();
+  assert.ok(helpMenu.includes('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]'));
+  assert.ok(helpMenu.includes('Sampling parameters (Temp, Top-P, Top-K, Min-P, etc.) are directly controlled by your Janitor AI / SillyTavern sliders.'));
+  assert.ok(helpMenu.includes('gemini-3.8-flash-fast'));
+  assert.ok(helpMenu.includes('gemini-3.1-pro-fast'));
+  assert.ok(helpMenu.includes('gemini-3.8-flash-low'));
+  assert.ok(helpMenu.includes('gemini-3.1-pro-low'));
+
+  // When user executes <MYSETTINGS>
+  const injectionsMenu = await executeInChatCommand({ type: 'view', rawInput: '<MYSETTINGS>' });
+  assert.ok(injectionsMenu.includes('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]'));
+  assert.ok(injectionsMenu.includes('Master Switch:'));
+  console.log('✅ Pure Client Pass-Through In-Chat Command Responses passed.\n');
+
+  // ==========================================
+  // 3. Model Thinking Resolution - Model Presets as Single Source of Truth
+  // ==========================================
+  console.log('Test 3: Model Presets as Single Source of Truth for Thinking Tiers');
+
+  // 3a. Fast / No-think models (0 thinking tokens)
+  const fastModels = [
+    'gemini-3.8-flash-fast',
+    'gemini-3.8-flash:off',
+    'gemini-3.7-flash-fast',
+    'gemini-3.7-flash:off',
+    'gemini-3.1-pro-fast',
+    'gemini-3.1-pro:off',
+    'gemini-3.1-pro-no-think',
+    'gemini-3.1-pro:no-think',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash'
+  ];
+
+  for (const modelId of fastModels) {
+    const resolved = resolveWireModel(modelId);
+    assert.ok(resolved, `Model ${modelId} failed to resolve`);
+    assert.strictEqual(resolved.defaultThinkingBudget, 0, `Model ${modelId} must have defaultThinkingBudget === 0`);
+
+    const wire = transformOpenAIToAntigravity(
+      { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
+      resolved,
+      'test-proj'
+    );
+    assert.strictEqual(
+      wire.request.generationConfig.thinkingConfig,
+      undefined,
+      `Model ${modelId} must NOT include thinkingConfig on wire!`
+    );
+  }
+
+  // 3b. Snappy / Low thinking models (2,048 tokens)
+  const lowModels = [
+    'gemini-3.8-flash-low',
+    'gemini-3.8-flash:low',
+    'gemini-3.7-flash-low',
+    'gemini-3.7-flash:low',
+    'gemini-3.1-pro-low',
+    'gemini-3.1-pro:low'
+  ];
+
+  for (const modelId of lowModels) {
+    const resolved = resolveWireModel(modelId);
+    assert.ok(resolved, `Model ${modelId} failed to resolve`);
+    assert.strictEqual(resolved.defaultThinkingBudget, 2048, `Model ${modelId} must have 2048 thinking budget`);
+
+    const wire = transformOpenAIToAntigravity(
+      { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
+      resolved,
+      'test-proj'
+    );
+    assert.strictEqual(
+      wire.request.generationConfig.thinkingConfig?.thinkingBudget,
+      2048,
+      `Model ${modelId} must produce thinkingBudget 2048 on wire`
+    );
+  }
+
+  // 3c. Standard thinking models (8,192 tokens)
+  const standardModels = ['gemini-3.8-flash', 'gemini-3.7-flash'];
+  for (const modelId of standardModels) {
+    const resolved = resolveWireModel(modelId);
+    assert.ok(resolved, `Model ${modelId} failed to resolve`);
+    assert.strictEqual(resolved.defaultThinkingBudget, 8192, `Model ${modelId} must have 8192 thinking budget`);
+
+    const wire = transformOpenAIToAntigravity(
+      { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
+      resolved,
+      'test-proj'
+    );
+    assert.strictEqual(
+      wire.request.generationConfig.thinkingConfig?.thinkingBudget,
+      8192,
+      `Model ${modelId} must produce thinkingBudget 8192 on wire`
+    );
+  }
+
+  // 3d. High thinking models (24,576 tokens)
+  const highModels = ['gemini-3.8-flash-high', 'gemini-3.7-flash-high'];
+  for (const modelId of highModels) {
+    const resolved = resolveWireModel(modelId);
+    assert.ok(resolved, `Model ${modelId} failed to resolve`);
+    assert.strictEqual(resolved.defaultThinkingBudget, 24576, `Model ${modelId} must have 24576 thinking budget`);
+
+    const wire = transformOpenAIToAntigravity(
+      { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
+      resolved,
+      'test-proj'
+    );
+    assert.strictEqual(
+      wire.request.generationConfig.thinkingConfig?.thinkingBudget,
+      24576,
+      `Model ${modelId} must produce thinkingBudget 24576 on wire`
+    );
+  }
+
+  // 3e. Max thinking models (65,536 tokens)
+  const maxModels = ['gemini-3.8-flash-max', 'gemini-3.7-flash-max'];
+  for (const modelId of maxModels) {
+    const resolved = resolveWireModel(modelId);
+    assert.ok(resolved, `Model ${modelId} failed to resolve`);
+    assert.strictEqual(resolved.defaultThinkingBudget, 65536, `Model ${modelId} must have 65536 thinking budget`);
+
+    const wire = transformOpenAIToAntigravity(
+      { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
+      resolved,
+      'test-proj'
+    );
+    assert.strictEqual(
+      wire.request.generationConfig.thinkingConfig?.thinkingBudget,
+      65536,
+      `Model ${modelId} must produce thinkingBudget 65536 on wire`
+    );
+  }
+  console.log('✅ Model Presets as Single Source of Truth for Thinking Tiers passed.\n');
+
+  // ==========================================
+  // 4. Pure Client Pass-Through Wire Parameter Mapping
+  // ==========================================
+  console.log('Test 4: Pure Client Pass-Through Wire Parameter Mapping');
+  const clientRequest = {
+    model: 'gemini-3.7-flash',
+    messages: [{ role: 'user', content: 'Hello' }],
+    temperature: 1.15,
+    top_p: 0.85,
+    top_k: 65,
+    max_tokens: 4096,
+    presence_penalty: 0.45,
+    frequency_penalty: -0.25,
+  };
+
+  const resolvedStd = resolveWireModel(clientRequest.model);
+  const wireConfig = transformOpenAIToAntigravity(clientRequest, resolvedStd!, 'proj-123').request.generationConfig;
+
+  assert.strictEqual(wireConfig.temperature, 1.15, 'Client temperature must pass through unmodified');
+  assert.strictEqual(wireConfig.topP, 0.85, 'Client top_p must pass through unmodified');
+  assert.strictEqual(wireConfig.topK, 65, 'Client top_k must pass through unmodified');
+  assert.strictEqual(wireConfig.presencePenalty, 0.45, 'Client presence_penalty must pass through unmodified');
+  assert.strictEqual(wireConfig.frequencyPenalty, -0.25, 'Client frequency_penalty must pass through unmodified');
+  // Upstream maxOutputTokens decouples thinking tokens: max(16384, 4096 + 8192) = 16384
+  assert.strictEqual(wireConfig.maxOutputTokens, 16384, 'Decoupled maxOutputTokens headroom must be preserved');
+  console.log('✅ Pure Client Pass-Through Wire Parameter Mapping passed.\n');
+
+  // ==========================================
+  // 5. Upstream Wire History Sanitization
+  // ==========================================
+  console.log('Test 5: Upstream Wire History Sanitization');
+  const dirtyMessages = [
+    { role: 'system', content: 'You are an elf.' },
+    { role: 'user', content: 'Hello!' },
+    { role: 'assistant', content: '*smiles* "Greetings."' },
+    { role: 'user', content: '<GENSETTINGS>' },
+    { role: 'assistant', content: '⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]\n\n✨ Pure Client Pass-Through Active...' },
+    { role: 'user', content: '<SETTINGS>' },
+    { role: 'assistant', content: '⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]\n\n✨ Pure Client Pass-Through Active...' },
+    { role: 'user', content: '<SET: temp=0.9>' },
+    { role: 'assistant', content: '⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]\n\n✨ Pure Client Pass-Through Active...' },
+    { role: 'user', content: '<HELP>' },
+    { role: 'assistant', content: '📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]\n...' },
+    { role: 'user', content: '<MYSETTINGS>' },
+    { role: 'assistant', content: '⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]\n...' },
+    { role: 'user', content: 'Where should we travel today?' },
+  ];
+
+  const wirePayload = transformOpenAIToAntigravity(
+    { model: 'gemini-3.7-flash', messages: dirtyMessages },
+    resolvedStd!,
+    'proj-123'
+  );
+
+  const wireTurns = wirePayload.request.contents;
+  for (const turn of wireTurns) {
+    const text = turn.parts[0]?.text || '';
+    assert.ok(!text.includes('<GENSETTINGS>'), 'Past <GENSETTINGS> command leaked into wire history!');
+    assert.ok(!text.includes('<SETTINGS>'), 'Past <SETTINGS> command leaked into wire history!');
+    assert.ok(!text.includes('<SET:'), 'Past <SET: ...> command leaked into wire history!');
+    assert.ok(!text.includes('<HELP>'), 'Past <HELP> command leaked into wire history!');
+    assert.ok(!text.includes('<MYSETTINGS>'), 'Past <MYSETTINGS> command leaked into wire history!');
+    assert.ok(!text.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]'), 'Sampling notice leaked into wire history!');
+    assert.ok(!text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS'), 'Help guide leaked into wire history!');
+    assert.ok(!text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]'), 'Proxy menu leaked into wire history!');
+  }
+  console.log('✅ Upstream Wire History Sanitization passed.\n');
+
+  // ==========================================
+  // 6. OpenCode Free Models Verification
+  // ==========================================
+  console.log('Test 6: OpenCode Free Models Verification');
+  const openCodeFast = resolveOpenCodeModel('big-pickle-fast');
+  assert.ok(openCodeFast, 'big-pickle-fast should resolve');
+  assert.strictEqual(openCodeFast.isFast, true);
+  assert.strictEqual(openCodeFast.wireModel, 'big-pickle');
+
+  const openCodeThink = resolveOpenCodeModel('big-pickle');
+  assert.ok(openCodeThink, 'big-pickle should resolve');
+  assert.strictEqual(openCodeThink.isFast, false);
+  assert.strictEqual(openCodeThink.wireModel, 'big-pickle');
+
+  const nemotronFast = resolveOpenCodeModel('nemotron-3-ultra-free-fast');
+  assert.ok(nemotronFast, 'nemotron-3-ultra-free-fast should resolve');
+  assert.strictEqual(nemotronFast.isFast, true);
+
+  const nemotronThink = resolveOpenCodeModel('nemotron-3-ultra-free');
+  assert.ok(nemotronThink, 'nemotron-3-ultra-free should resolve');
+  assert.strictEqual(nemotronThink.isFast, false);
+  console.log('✅ OpenCode Free Models Verification passed.\n');
+
+  console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }
 
-const resetCmds = ['<RESET_SETTINGS>', '<RESET_GENSETTINGS>', '<RESET_GEN>', '/reset_settings'];
-for (const cmd of resetCmds) {
-  const detected = detectInChatCommand(cmd);
-  assert.strictEqual(detected?.type, 'reset_gen', `Expected reset_gen for "${cmd}", got ${detected?.type}`);
-}
-
-const helpCmds = ['<HELP>', '<COMMANDS>', '<MENU>', '/help', '/commands'];
-for (const cmd of helpCmds) {
-  const detected = detectInChatCommand(cmd);
-  assert.strictEqual(detected?.type, 'view_help', `Expected view_help for "${cmd}", got ${detected?.type}`);
-}
-
-const injectionsCmds = ['<MYSETTINGS>', '<MY_SETTINGS>', '<INJECTIONS>', '/injections', '/mysettings'];
-for (const cmd of injectionsCmds) {
-  const detected = detectInChatCommand(cmd);
-  assert.strictEqual(detected?.type, 'view', `Expected view for "${cmd}", got ${detected?.type}`);
-}
-
-// Ensure normal dialogue is NEVER intercepted
-const normalTurns = [
-  'Lily, what should we do next?',
-  '*She looks down nervously* "I don\'t know..."',
-  '123 < 456 is a basic comparison',
-  'Can you help me?',
-  '/home/user/path/is/valid'
-];
-for (const turn of normalTurns) {
-  const detected = detectInChatCommand(turn);
-  assert.strictEqual(detected, null, `Normal turn "${turn}" was incorrectly intercepted as a command!`);
-}
-console.log('✅ In-Chat Command Detection passed.\n');
-
-// ==========================================
-// 2. <SET: ...> Parser Robustness Tests
-// ==========================================
-console.log('Test 2: <SET: ...> Parser Robustness');
-
-// Standard comma-separated
-const p1 = parseGenerationSettingsString('min_p=0.08, top_k=50, temp=1.1, thinking=off');
-assert.strictEqual(p1.settings.min_p, 0.08);
-assert.strictEqual(p1.settings.top_k, 50);
-assert.strictEqual(p1.settings.temperature, 1.1);
-assert.strictEqual(p1.settings.thinking_budget, 0);
-assert.strictEqual(p1.settings.reasoning_effort, 'off');
-
-// Space-separated key-value pairs without commas
-const p2 = parseGenerationSettingsString('min_p=0.08 top_k=50 temp=1.1 thinking=24k');
-assert.strictEqual(p2.settings.min_p, 0.08);
-assert.strictEqual(p2.settings.top_k, 50);
-assert.strictEqual(p2.settings.temperature, 1.1);
-assert.strictEqual(p2.settings.thinking_budget, 24576);
-assert.strictEqual(p2.settings.reasoning_effort, 'high');
-
-// Space instead of equals sign
-const p3 = parseGenerationSettingsString('temp 0.95, min_p 0.05, top_k 45');
-assert.strictEqual(p3.settings.temperature, 0.95);
-assert.strictEqual(p3.settings.min_p, 0.05);
-assert.strictEqual(p3.settings.top_k, 45);
-
-// Aliases for penalties
-const p4 = parseGenerationSettingsString('rep=1.15, rep_penalty=1.2, repeat=1.1, freq=0.25, pres=0.15');
-assert.strictEqual(p4.settings.repetition_penalty, 1.1); // last one wins
-assert.strictEqual(p4.settings.frequency_penalty, 0.25);
-assert.strictEqual(p4.settings.presence_penalty, 0.15);
-
-// Turning off penalties
-const p5 = parseGenerationSettingsString('rep=off, freq=off, pres=off');
-assert.strictEqual(p5.settings.repetition_penalty, 1.0);
-assert.strictEqual(p5.settings.frequency_penalty, 0.0);
-assert.strictEqual(p5.settings.presence_penalty, 0.0);
-
-// Advanced samplers: top_a, typical_p, tfs, dynatemp, mirostat, seed
-const p6 = parseGenerationSettingsString('top_a=0.15, typical_p=0.92, tfs=0.97, dynatemp_low=0.6, dynatemp_high=1.2, mirostat=2, tau=5.0, eta=0.1, seed=1337');
-assert.strictEqual(p6.settings.top_a, 0.15);
-assert.strictEqual(p6.settings.typical_p, 0.92);
-assert.strictEqual(p6.settings.tfs, 0.97);
-assert.strictEqual(p6.settings.dynatemp_low, 0.6);
-assert.strictEqual(p6.settings.dynatemp_high, 1.2);
-assert.strictEqual(p6.settings.mirostat, 2);
-assert.strictEqual(p6.settings.mirostat_tau, 5.0);
-assert.strictEqual(p6.settings.mirostat_eta, 0.1);
-assert.strictEqual(p6.settings.seed, 1337);
-
-// Nested angle brackets inside <SET: ...>
-const nestedCmd = detectInChatCommand('<SET: prompt=<think>test reasoning</think>, temp=0.8>');
-assert.ok(nestedCmd);
-assert.strictEqual(nestedCmd.type, 'set_gen');
-assert.strictEqual(nestedCmd.genSettings?.temperature, 0.8);
-console.log('✅ <SET: ...> Parser Robustness passed.\n');
-
-// ==========================================
-// 3. Hierarchical Override Precedence Tests
-// ==========================================
-console.log('Test 3: Hierarchical Override Precedence');
-const defaults = { ...DEFAULT_GENERATION_SETTINGS };
-const globalSettings = { temperature: 0.8, min_p: 0.1, top_k: 60 };
-const clientBody = { temperature: 0.9, max_tokens: 2000 };
-const sessionOverrides = { temperature: 1.05, top_k: 35 };
-
-const merged = mergeGenerationSettings(defaults, globalSettings, clientBody, sessionOverrides);
-// temperature: session override (1.05) > client body (0.9) > global (0.8) > default (0.7)
-assert.strictEqual(merged.temperature, 1.05);
-// min_p: global (0.1) > default (0.05)
-assert.strictEqual(merged.min_p, 0.1);
-// max_tokens: client body (2000) > default (8192)
-assert.strictEqual(merged.max_tokens, 2000);
-// top_k: session override (35) > global (60) > default (40)
-assert.strictEqual(merged.top_k, 35);
-console.log('✅ Hierarchical Override Precedence passed.\n');
-
-// ==========================================
-// 4. Google Antigravity Wire Model Thinking Resolution
-// ==========================================
-console.log('Test 4: Google Antigravity Wire Model Thinking Resolution');
-
-// 4a. Fast model: gemini-3.8-flash-fast MUST have thinkingBudget = 0 even if reasoning_effort = 'high'
-const fastModel = resolveWireModel('gemini-3.8-flash-fast');
-assert.strictEqual(fastModel?.defaultThinkingBudget, 0);
-const wireFast = transformOpenAIToAntigravity(
-  { model: 'gemini-3.8-flash-fast', reasoning_effort: 'high' },
-  fastModel!,
-  'proj-123'
-);
-assert.strictEqual(wireFast.request.generationConfig.thinkingConfig, undefined, 'Fast model must NOT have thinkingConfig!');
-
-// 4b. Non-thinking model: gemini-3.5-flash MUST have thinkingBudget = 0
-const nonThinkModel = resolveWireModel('gemini-3.5-flash');
-assert.strictEqual(nonThinkModel?.defaultThinkingBudget, 0);
-const wireNonThink = transformOpenAIToAntigravity(
-  { model: 'gemini-3.5-flash', reasoning_effort: 'high' },
-  nonThinkModel!,
-  'proj-123'
-);
-assert.strictEqual(wireNonThink.request.generationConfig.thinkingConfig, undefined, 'gemini-3.5-flash must NOT have thinkingConfig!');
-
-// 4c. Thinking model with <SET: thinking=off>
-const thinkModel = resolveWireModel('gemini-3.7-flash');
-const wireDisabled = transformOpenAIToAntigravity(
-  { model: 'gemini-3.7-flash', reasoning_effort: 'off', thinking_budget: 0 },
-  thinkModel!,
-  'proj-123'
-);
-assert.strictEqual(wireDisabled.request.generationConfig.thinkingConfig, undefined, 'thinking=off must disable thinkingConfig!');
-
-// 4d. Thinking model with explicit thinking budget
-const wireCustomBudget = transformOpenAIToAntigravity(
-  { model: 'gemini-3.7-flash', thinking_budget: 12000 },
-  thinkModel!,
-  'proj-123'
-);
-assert.strictEqual(wireCustomBudget.request.generationConfig.thinkingConfig?.thinkingBudget, 12000);
-
-// 4e. Gemini 3.1 Pro Variants: Fast / No-Think / Low
-const proFast = resolveWireModel('gemini-3.1-pro-fast');
-assert.strictEqual(proFast?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proFast?.defaultThinkingBudget, 0);
-const wireProFast = transformOpenAIToAntigravity(
-  { model: 'gemini-3.1-pro-fast', reasoning_effort: 'high' },
-  proFast!,
-  'proj-123'
-);
-assert.strictEqual(wireProFast.request.generationConfig.thinkingConfig, undefined, 'gemini-3.1-pro-fast must NOT have thinkingConfig!');
-
-const proNoThink = resolveWireModel('gemini-3.1-pro-no-think');
-assert.strictEqual(proNoThink?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proNoThink?.defaultThinkingBudget, 0);
-
-const proColonNoThink = resolveWireModel('gemini-3.1-pro:no-think');
-assert.strictEqual(proColonNoThink?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proColonNoThink?.defaultThinkingBudget, 0);
-
-const proOff = resolveWireModel('gemini-3.1-pro:off');
-assert.strictEqual(proOff?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proOff?.defaultThinkingBudget, 0);
-
-const proColonFast = resolveWireModel('gemini-3.1-pro:fast');
-assert.strictEqual(proColonFast?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proColonFast?.defaultThinkingBudget, 0);
-
-const proLow = resolveWireModel('gemini-3.1-pro-low');
-assert.strictEqual(proLow?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proLow?.defaultThinkingBudget, 2048);
-const wireProLow = transformOpenAIToAntigravity(
-  { model: 'gemini-3.1-pro-low' },
-  proLow!,
-  'proj-123'
-);
-assert.strictEqual(wireProLow.request.generationConfig.thinkingConfig?.thinkingBudget, 2048);
-
-const proColonLow = resolveWireModel('gemini-3.1-pro:low');
-assert.strictEqual(proColonLow?.wireModel, 'gemini-3.1-pro-preview');
-assert.strictEqual(proColonLow?.defaultThinkingBudget, 2048);
-const wireProColonLow = transformOpenAIToAntigravity(
-  { model: 'gemini-3.1-pro:low' },
-  proColonLow!,
-  'proj-123'
-);
-assert.strictEqual(wireProColonLow.request.generationConfig.thinkingConfig?.thinkingBudget, 2048);
-
-// 4f. Negative Cache Verification for 0ms Hot-Path TTFT
-setCachedSessionGenSettings('chat-negative-test', null);
-assert.strictEqual(getCachedSessionGenSettings('chat-negative-test'), null);
-console.log('✅ Google Antigravity Wire Model Thinking Resolution passed.\n');
-
-// ==========================================
-// 5. Upstream Wire History Sanitization Tests
-// ==========================================
-console.log('Test 5: Upstream Wire History Sanitization');
-const dirtyMessages = [
-  { role: 'system', content: 'You are Lily, an elf.' },
-  { role: 'user', content: 'Hello Lily!' },
-  { role: 'assistant', content: '*smiles* "Greetings traveller."' },
-  { role: 'user', content: '<GENSETTINGS>' },
-  { role: 'assistant', content: '⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]\n• Temperature: 0.70' },
-  { role: 'user', content: '<SET: min_p=0.05, temp=0.9>' },
-  { role: 'assistant', content: '⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]\n✨ Updated: [min_p = 0.05, temp = 0.9]' },
-  { role: 'user', content: '<HELP>' },
-  { role: 'assistant', content: '📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]\n...' },
-  { role: 'user', content: 'Shall we head towards the mountain?' }
-];
-
-const wirePayload = transformOpenAIToAntigravity(
-  { model: 'gemini-3.7-flash', messages: dirtyMessages },
-  thinkModel!,
-  'proj-123'
-);
-
-const wireTurns = wirePayload.request.contents;
-for (const turn of wireTurns) {
-  const text = turn.parts[0]?.text || '';
-  assert.ok(!text.includes('<GENSETTINGS>'), 'Past <GENSETTINGS> command leaked into wire history!');
-  assert.ok(!text.includes('<SET:'), 'Past <SET: ...> command leaked into wire history!');
-  assert.ok(!text.includes('<HELP>'), 'Past <HELP> command leaked into wire history!');
-  assert.ok(!text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]'), 'Generation settings menu leaked into wire history!');
-  assert.ok(!text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]'), 'Help guide leaked into wire history!');
-}
-console.log('✅ Upstream Wire History Sanitization passed.\n');
-
-// ==========================================
-// 6. Menu Generation & Defensive Fallback Tests
-// ==========================================
-console.log('Test 6: Menu Generation & Defensive Fallback');
-// Should not throw even with completely empty or undefined object
-const menu1 = generateGenSettingsMenu({});
-assert.ok(menu1.includes('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]'));
-assert.ok(menu1.includes('• Temperature:          0.70'));
-
-const menu2 = generateGenSettingsMenu({
-  temperature: undefined,
-  min_p: null as any,
-  dynatemp_low: 0.5,
-  dynatemp_high: 1.2,
-  mirostat: 2,
-  seed: 42
+main().catch(err => {
+  console.error('❌ Test execution failed:', err);
+  process.exit(1);
 });
-assert.ok(menu2.includes('• Temperature:          0.70'));
-assert.ok(menu2.includes('• DynaTemp Range:       0.50 - 1.20'));
-assert.ok(menu2.includes('• Mirostat Mode:        Mode 2'));
-assert.ok(menu2.includes('• Generation Seed:      42'));
-
-const helpMenu = generateHelpMenu();
-assert.ok(helpMenu.includes('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]'));
-assert.ok(helpMenu.includes('<GENSETTINGS>'));
-assert.ok(helpMenu.includes('<MYSETTINGS>'));
-console.log('✅ Menu Generation & Defensive Fallback passed.\n');
-
-// ==========================================
-// 7. Sanitization Function Tests
-// ==========================================
-console.log('Test 7: sanitizeGenSettings Constraints');
-const clamped = sanitizeGenSettings({
-  temperature: 5.0,       // should clamp to 2.0
-  max_tokens: 100000,     // should clamp to 65536
-  top_p: 1.5,             // should clamp to 1.0
-  top_k: 999,             // should clamp to 500
-  min_p: -0.5,            // should clamp to 0.0
-  repetition_penalty: 10, // should clamp to 3.0
-  frequency_penalty: -5,  // should clamp to -2.0
-});
-assert.strictEqual(clamped.temperature, 2.0);
-assert.strictEqual(clamped.max_tokens, 65536);
-assert.strictEqual(clamped.top_p, 1.0);
-assert.strictEqual(clamped.top_k, 500);
-assert.strictEqual(clamped.min_p, 0.0);
-assert.strictEqual(clamped.repetition_penalty, 3.0);
-assert.strictEqual(clamped.frequency_penalty, -2.0);
-console.log('✅ sanitizeGenSettings Constraints passed.\n');
-
-console.log('🎉 ALL TESTS PASSED SUCCESSFULLY!');
