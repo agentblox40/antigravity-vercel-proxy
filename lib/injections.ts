@@ -277,7 +277,7 @@ import type { GenerationSettings } from './genSettings';
 import { parseGenerationSettingsString } from './genSettings';
 
 export interface InChatCommand {
-  type: 'view' | 'enable' | 'disable' | 'master_toggle' | 'view_gen' | 'set_gen' | 'reset_gen';
+  type: 'view' | 'enable' | 'disable' | 'master_toggle' | 'view_gen' | 'set_gen' | 'reset_gen' | 'view_help';
   rawInput: string;
   targets?: string[];
   masterEnabled?: boolean;
@@ -297,9 +297,9 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
     return null;
   }
 
-  // Pattern 1: View Generation Settings Menu: <GENSETTINGS>, <GEN_SETTINGS>, <SAMPLING>, <SETTINGS>, /gensettings, /sampling
+  // Pattern 1: View Generation Settings Menu: <GENSETTINGS>, <GEN_SETTINGS>, <SAMPLING>, <SETTINGS>, /gensettings, /sampling, /settings
   if (/^<(?:GENSETTINGS|GEN_SETTINGS|GENERATION_SETTINGS|GENERATION|SAMPLING|SAMPLING_SETTINGS|SETTINGS)>\s*$/i.test(trimmed) ||
-      /^\/(?:gensettings|sampling|genset)\s*$/i.test(trimmed)) {
+      /^\/(?:gensettings|sampling|genset|settings)\s*$/i.test(trimmed)) {
     return { type: 'view_gen', rawInput: trimmed };
   }
 
@@ -310,7 +310,7 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
   }
 
   // Pattern 3: Update Generation Settings: <SET: min_p=0.05, top_k=40, temp=0.9>, <SET_GEN: ...>, <CONFIG: ...>, /set ...
-  const setGenMatch = /^<(?:SET|SET_GEN|GEN_SET|SAMPLING|CONFIG)\s*:\s*([^>]+)>\s*$/i.exec(trimmed) ||
+  const setGenMatch = /^<(?:SET|SET_GEN|GEN_SET|SAMPLING|CONFIG)\s*:\s*([\s\S]+)>\s*$/i.exec(trimmed) ||
                       /^\/set\s+(.+)$/i.exec(trimmed);
   if (setGenMatch) {
     const { settings, parsedSummary } = parseGenerationSettingsString(setGenMatch[1]);
@@ -322,12 +322,17 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
     };
   }
 
-  // Pattern 4: View Injections Menu: <MYSETTINGS>, <MY_SETTINGS>, <MY_CONFIG>, <INJECTIONS>, /injections
-  if (/^<(?:MYSETTINGS|MY_SETTINGS|MY_CONFIG|INJECTIONS)>\s*$/i.test(trimmed) || /^\/(?:settings|injections)\s*$/i.test(trimmed)) {
+  // Pattern 4: View Injections Menu: <MYSETTINGS>, <MY_SETTINGS>, <MY_CONFIG>, <INJECTIONS>, /injections, /mysettings
+  if (/^<(?:MYSETTINGS|MY_SETTINGS|MY_CONFIG|INJECTIONS)>\s*$/i.test(trimmed) || /^\/(?:injections|mysettings)\s*$/i.test(trimmed)) {
     return { type: 'view', rawInput: trimmed };
   }
 
-  // Pattern 5: Master Injections Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
+  // Pattern 5: In-Chat Help Cheatsheet: <HELP>, <COMMANDS>, <MENU>, /help, /commands
+  if (/^<(?:HELP|COMMANDS|MENU)>\s*$/i.test(trimmed) || /^\/(?:help|commands)\s*$/i.test(trimmed)) {
+    return { type: 'view_help', rawInput: trimmed };
+  }
+
+  // Pattern 6: Master Injections Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
   const masterMatch = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i.exec(trimmed);
   if (masterMatch) {
     const val = masterMatch[1].toUpperCase();
@@ -335,14 +340,14 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
     return { type: 'master_toggle', rawInput: trimmed, masterEnabled: enable };
   }
 
-  // Pattern 6: Enable specific injection modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
+  // Pattern 7: Enable specific injection modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
   const enableMatch = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
   if (enableMatch) {
     const targets = enableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     return { type: 'enable', rawInput: trimmed, targets };
   }
 
-  // Pattern 7: Disable specific injection modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
+  // Pattern 8: Disable specific injection modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
   const disableMatch = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
   if (disableMatch) {
     const targets = disableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
@@ -474,5 +479,30 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
     }
   }
 
+  if (cmd.type === 'view_help') {
+    return generateHelpMenu();
+  }
+
   return generateSettingsMenu(config);
+}
+
+export function generateHelpMenu(): string {
+  const lines: string[] = [];
+  lines.push('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]');
+  lines.push('\n[1. GENERATION & SAMPLING PARAMETERS]:');
+  lines.push('• View settings:     <GENSETTINGS> or <SETTINGS> or /settings');
+  lines.push('• Update parameters: <SET: min_p=0.05, top_k=40, temp=0.9>');
+  lines.push('• Control thinking:  <SET: thinking=off> or <SET: thinking=24k>');
+  lines.push('• Control penalties: <SET: rep=1.1, freq=0.2, pres=0.1>');
+  lines.push('• Advanced samplers: <SET: top_a=0.1, typical_p=0.95, tfs=0.98>');
+  lines.push('• Reset defaults:    <RESET_SETTINGS>');
+  lines.push('\n[2. PROMPT INJECTIONS & ROLEPLAY DIRECTIVES]:');
+  lines.push('• View injections:   <MYSETTINGS> or /injections');
+  lines.push('• Enable modules:    <ENABLE: 1, 3> or <ENABLE: Slow Romance>');
+  lines.push('• Disable modules:   <DISABLE: 5, 6>');
+  lines.push('• Master switch:     <INJECTIONS: ON> or <INJECTIONS: OFF>');
+  lines.push('\n────────────────────────────────────────');
+  lines.push('⚡ 0ms Response • 0 Upstream API Quota Cost • Commands 100% Sanitized from Character Memory');
+  lines.push('✨ To resume roleplay, simply type your dialogue normally!');
+  return lines.join('\n');
 }

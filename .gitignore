@@ -5,6 +5,8 @@
 
 # Testing
 /coverage
+scripts/*.js
+lib/*.js
 
 # Next.js
 /.next/

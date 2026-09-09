@@ -240,8 +240,10 @@ export async function handleChatCompletions(req: NextRequest) {
       if (m.role === 'assistant' && (
         text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
         text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+        text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]') ||
         text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
-        text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]')
+        text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+        text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]')
       )) return false;
       return true;
     });

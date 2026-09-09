@@ -354,6 +354,8 @@ export async function executeOpenCodeCompletion({
   const shouldDisableThinking =
     resolvedModel.isFast ||
     body.reasoning_effort === 'none' ||
+    body.reasoning_effort === 'off' ||
+    body.thinking_budget === 0 ||
     body.thinking?.type === 'disabled' ||
     body.max_thinking_tokens === 0;
 
@@ -361,6 +363,18 @@ export async function executeOpenCodeCompletion({
     opencodePayload.reasoning_effort = 'none';
     opencodePayload.thinking = { type: 'disabled' };
     delete opencodePayload.max_thinking_tokens;
+  } else {
+    if (body.reasoning_effort && body.reasoning_effort !== 'off') {
+      opencodePayload.reasoning_effort = body.reasoning_effort;
+    }
+    if (typeof body.thinking_budget === 'number' && body.thinking_budget > 0) {
+      opencodePayload.max_thinking_tokens = body.thinking_budget;
+    }
+  }
+
+  // Parameter alias normalization for vLLM / llama.cpp / Aphrodite
+  if (typeof opencodePayload.tfs === 'number' && opencodePayload.tfs_z === undefined) {
+    opencodePayload.tfs_z = opencodePayload.tfs;
   }
 
   // Cyclic round-robin order starting from picked account

@@ -8,13 +8,28 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.4.0';
+export const CURRENT_VERSION = '3.4.1';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.4.0',
+    version: '3.4.1',
     tag: 'LATEST',
+    title: 'Hardened Generation Settings Engine & Advanced Sampling Expansion',
+    date: 'Sep 9, 2026',
+    commit: 'latest',
+    description: 'Resolved thinking token bleed into fast/no-think models, enabled OpenCode thinking=off support, hardened <SET: ...> parser with space-separated pair handling and nested angle bracket support, added in-chat <HELP> guide, and expanded samplers (dynatemp, mirostat, seed).',
+    highlights: [
+      'Fast Model Thinking Isolation: Fixed critical precedence bug where fast/no-think models (gemini-3.8-flash-fast, gemini-3.7-flash-fast, gemini-3.5-flash) were assigned unwanted 24k reasoning tokens.',
+      'OpenCode thinking=off Support: Correctly disable chain-of-thought tokens on OpenCode free models when reasoning_effort is off or thinking_budget is 0.',
+      'Parser Space & Bracket Hardening: Support space-separated key-value pairs (<SET: min_p=0.05 top_k=40 temp=0.9>), space delimiters without equals (<SET: temp 0.8>), and nested angle brackets (<SET: prompt=<think>...</think>>).',
+      'Unified /settings & <HELP>: Mapped /settings directly to generation sampling menu and added in-band <HELP> / /help command cheatsheet.',
+      'Expanded Modern Samplers: Added support for DynaTemp (dynatemp_low, dynatemp_high), Mirostat (modes 1 & 2, tau, eta), and deterministic RNG seeds across parser, storage, and wire pipelines.'
+    ]
+  },
+  {
+    version: '3.4.0',
+    tag: 'MAJOR',
     title: 'Roleplay Generation Settings Menu & In-Band Advanced Sampling Suite',
     date: 'Sep 9, 2026',
     commit: 'latest',

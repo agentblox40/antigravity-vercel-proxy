@@ -353,8 +353,10 @@ export function transformOpenAIToAntigravity(
     if (role === 'assistant' && (
       text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
       text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+      text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]') ||
       text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
-      text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]')
+      text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+      text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]')
     )) continue;
 
     if (role === 'system') {
@@ -403,19 +405,34 @@ export function transformOpenAIToAntigravity(
 
   let thinkingBudget = resolved.defaultThinkingBudget;
   const modelClean = (body.model || '').toLowerCase();
+  const isFastOrOffModel =
+    resolved.defaultThinkingBudget === 0 ||
+    modelClean.includes(':off') ||
+    modelClean.includes(':fast') ||
+    modelClean.includes('-off') ||
+    modelClean.includes('-fast');
 
-  if (modelClean.includes(':max') || modelClean.includes('-max') || body.reasoning_effort === 'max') {
-    thinkingBudget = 65536;
-  } else if (modelClean.includes(':high') || modelClean.includes('-high') || body.reasoning_effort === 'high') {
-    thinkingBudget = 24576;
-  } else if (modelClean.includes(':low') || modelClean.includes('-low') || body.reasoning_effort === 'low') {
-    thinkingBudget = 2048;
-  } else if (modelClean.includes(':off') || modelClean.includes(':fast') || modelClean.includes('-off') || modelClean.includes('-fast')) {
+  if (isFastOrOffModel) {
     thinkingBudget = 0;
-  } else if (typeof body.thinking_budget === 'number') {
+  } else if (
+    body.reasoning_effort === 'off' ||
+    body.reasoning_effort === 'none' ||
+    body.thinking_budget === 0 ||
+    body.thinking?.type === 'disabled'
+  ) {
+    thinkingBudget = 0;
+  } else if (typeof body.thinking_budget === 'number' && body.thinking_budget >= 0) {
     thinkingBudget = body.thinking_budget;
   } else if (body.thinking?.budget_tokens) {
     thinkingBudget = body.thinking.budget_tokens;
+  } else if (modelClean.includes(':max') || modelClean.includes('-max') || body.reasoning_effort === 'max') {
+    thinkingBudget = 65536;
+  } else if (modelClean.includes(':high') || modelClean.includes('-high') || body.reasoning_effort === 'high') {
+    thinkingBudget = 24576;
+  } else if (modelClean.includes(':medium') || modelClean.includes('-medium') || body.reasoning_effort === 'medium') {
+    thinkingBudget = 8192;
+  } else if (modelClean.includes(':low') || modelClean.includes('-low') || body.reasoning_effort === 'low') {
+    thinkingBudget = 2048;
   }
 
   const clientMaxTokens = typeof body.max_tokens === 'number' && body.max_tokens > 0 
@@ -434,10 +451,10 @@ export function transformOpenAIToAntigravity(
     topP: typeof body.top_p === 'number' ? body.top_p : 1
   };
 
-  if (typeof body.presence_penalty === 'number') {
+  if (typeof body.presence_penalty === 'number' && body.presence_penalty !== 0) {
     generationConfig.presencePenalty = body.presence_penalty;
   }
-  if (typeof body.frequency_penalty === 'number') {
+  if (typeof body.frequency_penalty === 'number' && body.frequency_penalty !== 0) {
     generationConfig.frequencyPenalty = body.frequency_penalty;
   }
 
