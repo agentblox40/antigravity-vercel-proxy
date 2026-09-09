@@ -148,14 +148,14 @@ export async function resetGlobalGenSettings(): Promise<GenerationSettings> {
   return memoryGenSettings;
 }
 
-// Session-level in-memory cache for instantaneous 0ms turn lookups
-const sessionSettingsCache = new Map<string, Partial<GenerationSettings>>();
+// Session-level in-memory cache for instantaneous 0ms turn lookups (caches null for negative lookups)
+const sessionSettingsCache = new Map<string, Partial<GenerationSettings> | null>();
 
-export function getCachedSessionGenSettings(chatId: string): Partial<GenerationSettings> | undefined {
+export function getCachedSessionGenSettings(chatId: string): Partial<GenerationSettings> | null | undefined {
   return sessionSettingsCache.get(chatId);
 }
 
-export function setCachedSessionGenSettings(chatId: string, settings: Partial<GenerationSettings>) {
+export function setCachedSessionGenSettings(chatId: string, settings: Partial<GenerationSettings> | null) {
   sessionSettingsCache.set(chatId, settings);
 }
 

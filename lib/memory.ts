@@ -351,27 +351,38 @@ export async function saveChatSession(session: ChatSession): Promise<void> {
   if (isRedisConfigured()) {
     try {
       const json = JSON.stringify(session);
-      await callRedis('SET', `antigravity:session:${session.id}`, json);
-      // Also register session ID in active sessions set
-      await callRedis('SADD', 'antigravity:active_sessions', session.id);
-      await callRedis('SADD', `antigravity:char_sessions:${session.characterId}`, session.id);
+      await callRedisPipeline([
+        ['SET', `antigravity:session:${session.id}`, json],
+        ['SADD', 'antigravity:active_sessions', session.id],
+        ['SADD', `antigravity:char_sessions:${session.characterId}`, session.id]
+      ]);
     } catch {}
   }
 }
 
 // Delete single session
 export async function deleteChatSession(chatId: string): Promise<boolean> {
+  let characterId = memoryStore.get(chatId)?.characterId;
   memoryStore.delete(chatId);
 
   if (isRedisConfigured()) {
     try {
-      const raw = await callRedis('GET', `antigravity:session:${chatId}`);
-      if (raw) {
-        const parsed: ChatSession = typeof raw === 'string' ? JSON.parse(raw) : raw;
-        await callRedis('SREM', `antigravity:char_sessions:${parsed.characterId}`, chatId);
+      if (!characterId) {
+        const raw = await callRedis('GET', `antigravity:session:${chatId}`);
+        if (raw) {
+          const parsed: ChatSession = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          characterId = parsed.characterId;
+        }
       }
-      await callRedis('DEL', `antigravity:session:${chatId}`);
-      await callRedis('SREM', 'antigravity:active_sessions', chatId);
+
+      const pipeline: (string | number)[][] = [
+        ['DEL', `antigravity:session:${chatId}`],
+        ['SREM', 'antigravity:active_sessions', chatId]
+      ];
+      if (characterId) {
+        pipeline.push(['SREM', `antigravity:char_sessions:${characterId}`, chatId]);
+      }
+      await callRedisPipeline(pipeline);
       return true;
     } catch {
       return false;

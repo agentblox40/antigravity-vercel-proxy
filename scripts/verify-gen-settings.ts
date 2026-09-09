@@ -5,6 +5,8 @@ import {
   generateGenSettingsMenu,
   mergeGenerationSettings,
   sanitizeGenSettings,
+  getCachedSessionGenSettings,
+  setCachedSessionGenSettings,
 } from '../lib/genSettings';
 import { detectInChatCommand, generateHelpMenu } from '../lib/injections';
 import { resolveWireModel, transformOpenAIToAntigravity } from '../lib/antigravity';
@@ -172,6 +174,39 @@ const wireCustomBudget = transformOpenAIToAntigravity(
   'proj-123'
 );
 assert.strictEqual(wireCustomBudget.request.generationConfig.thinkingConfig?.thinkingBudget, 12000);
+
+// 4e. Gemini 3.1 Pro Variants: Fast / No-Think / Low
+const proFast = resolveWireModel('gemini-3.1-pro-fast');
+assert.strictEqual(proFast?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proFast?.defaultThinkingBudget, 0);
+const wireProFast = transformOpenAIToAntigravity(
+  { model: 'gemini-3.1-pro-fast', reasoning_effort: 'high' },
+  proFast!,
+  'proj-123'
+);
+assert.strictEqual(wireProFast.request.generationConfig.thinkingConfig, undefined, 'gemini-3.1-pro-fast must NOT have thinkingConfig!');
+
+const proNoThink = resolveWireModel('gemini-3.1-pro-no-think');
+assert.strictEqual(proNoThink?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proNoThink?.defaultThinkingBudget, 0);
+
+const proOff = resolveWireModel('gemini-3.1-pro:off');
+assert.strictEqual(proOff?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proOff?.defaultThinkingBudget, 0);
+
+const proLow = resolveWireModel('gemini-3.1-pro-low');
+assert.strictEqual(proLow?.wireModel, 'gemini-3.1-pro-preview');
+assert.strictEqual(proLow?.defaultThinkingBudget, 2048);
+const wireProLow = transformOpenAIToAntigravity(
+  { model: 'gemini-3.1-pro-low' },
+  proLow!,
+  'proj-123'
+);
+assert.strictEqual(wireProLow.request.generationConfig.thinkingConfig?.thinkingBudget, 2048);
+
+// 4f. Negative Cache Verification for 0ms Hot-Path TTFT
+setCachedSessionGenSettings('chat-negative-test', null);
+assert.strictEqual(getCachedSessionGenSettings('chat-negative-test'), null);
 console.log('✅ Google Antigravity Wire Model Thinking Resolution passed.\n');
 
 // ==========================================

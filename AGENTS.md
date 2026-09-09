@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.4.1`  
+> *Current Version*: `v3.5.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -13,7 +13,7 @@
 `antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, Lorebary, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure** and **OpenCode Free Models infrastructure**.
 
 ### Key Architectural Pillars (OmniRoute / OpenRouter Standard)
-1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.8-flash`, `gemini-3.8-flash-high/max`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
+1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.8-flash`, `gemini-3.8-flash-high/max`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.1-pro-low/fast`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-sonnet-4-6`) with `BLOCK_NONE` safety filters across all 5 harm categories.
 2. **Zero-Tampering Pure Pass-Through**: 100% pure message and system prompt translation without synthetic prompt injections or formatting anchors, guaranteeing perfect instruction following and context memory without context rot.
 3. **Modular Injections & Dynamic Cadence Engine**: Centralized dashboard management for toggleable System Notes, OOC rules, and custom style directives with dynamic trigger cadences (`Always`, `🎲 % Chance Probability`, `⏱️ Every N Texts`, `⚡ First Turn Only`) automatically stacked at Depth-0 terminal user turns with 0 copy-paste friction.
 4. **Turn-Accurate Logged Chats Injections**: Turn-level snapshot isolation displaying the exact active directives that fired on each message directly beneath the user's input bubble.
@@ -27,6 +27,7 @@
 12. **In-Chat Control Commands & History Sanitization**: In-band control commands (`<MYSETTINGS>`, `<ENABLE: X, Y>`, `<DISABLE: X, Y>`, `<INJECTIONS: ON/OFF>`) allow real-time module inspection and toggling directly inside roleplay chat boxes with 0ms delay, 0 Google API quota cost, and automatic sanitization of past command turns from upstream prompts to ensure 100% character immersion.
 13. **OpenCode Free Models Suite & 16-Account Rotating Pool**: Verified working OpenCode free models (`big-pickle`, `mimo-v2.5-free`, `ling-3.0-flash-fin-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`) with paired `-fast` / no-think variants (0 thinking tokens) and a high-capacity pool of 16 rotating guest sessions (`opencode-cli/1.0.0`) with instant failover on HTTP 429.
 14. **In-Chat Generation Settings Menu & Advanced Sampling**: In-band sampling commands (`<GENSETTINGS>`, `<SETTINGS>`, `<SET: min_p=0.05, top_k=40, temp=0.9>`, `<RESET_SETTINGS>`) enable Janitor AI and SillyTavern users to access advanced parameters (Min-P, Min-K, Top-A, TFS, Typical-P, Penalties, CoT Thinking) with 0ms delay, 0 API quota cost, per-chat Redis persistence, and 100% upstream wire history sanitization.
+15. **Zero-Wait TTFT & Native Serverless Lifecycle**: Hot-path TTFT unblocked from database calls via negative caching, Next.js 15 native after() lifecycle preservation, dual-mapped reasoning tokens (reasoning_content + reasoning), and Gemini 3.1 Pro Fast/Low variants.
 
 ---
 

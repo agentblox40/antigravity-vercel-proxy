@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import crypto from 'node:crypto';
 import {
   getAccounts,
@@ -30,6 +30,7 @@ import {
   setCachedSessionGenSettings,
   executeGenSettingsCommand,
   mergeGenerationSettings,
+  GenerationSettings,
 } from './genSettings';
 
 const UPSTREAM_URLS = [
@@ -87,7 +88,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -103,6 +104,8 @@ export async function handleChatCompletions(req: NextRequest) {
             'gemini-3.7-flash-medium',
             'gemini-3.7-flash-low',
             'gemini-3.1-pro',
+            'gemini-3.1-pro-low',
+            'gemini-3.1-pro-fast',
             'gemini-3.5-flash',
             'claude-opus-4-6-thinking',
             'claude-sonnet-4-6',
@@ -186,11 +189,19 @@ export async function handleChatCompletions(req: NextRequest) {
 
     // Record command exchange into session asynchronously for visibility in dashboard
     if (sessionPromise) {
-      sessionPromise.then(session => {
-        if (session) {
-          recordTurnsIntoSession(session, messages, menuOutput, undefined, undefined, undefined).catch(() => {});
-        }
-      }).catch(() => {});
+      const recordTask = async () => {
+        try {
+          const session = await sessionPromise;
+          if (session) {
+            await recordTurnsIntoSession(session, messages, menuOutput, undefined, undefined, undefined);
+          }
+        } catch {}
+      };
+      if (typeof after === 'function') {
+        after(recordTask);
+      } else {
+        recordTask().catch(() => {});
+      }
     }
 
     if (body.stream) {
@@ -202,13 +213,21 @@ export async function handleChatCompletions(req: NextRequest) {
 
   // Resolve effective generation settings (Defaults -> Global Settings -> Client Body -> Session Overrides)
   const globalGenSettings = await getGlobalGenSettings();
-  let sessionGenSettings = currentChatId ? getCachedSessionGenSettings(currentChatId) : undefined;
-  if (!sessionGenSettings && sessionPromise) {
-    const session = await sessionPromise.catch(() => null);
-    if (session?.generationSettings) {
-      sessionGenSettings = session.generationSettings;
-      if (currentChatId) setCachedSessionGenSettings(currentChatId, sessionGenSettings);
+  let sessionGenSettings: Partial<GenerationSettings> | undefined = undefined;
+  if (currentChatId) {
+    const cached = getCachedSessionGenSettings(currentChatId);
+    if (cached !== undefined) {
+      sessionGenSettings = cached || undefined;
     }
+  }
+
+  // Populate cache asynchronously in background, NEVER block hot-path inference
+  if (currentChatId && sessionPromise && getCachedSessionGenSettings(currentChatId) === undefined) {
+    sessionPromise.then(session => {
+      if (currentChatId && getCachedSessionGenSettings(currentChatId) === undefined) {
+        setCachedSessionGenSettings(currentChatId, session?.generationSettings || null);
+      }
+    }).catch(() => {});
   }
   const effectiveSettings = mergeGenerationSettings(
     DEFAULT_GENERATION_SETTINGS,
@@ -277,18 +296,26 @@ export async function handleChatCompletions(req: NextRequest) {
       resolvedModel: openCodeResolved,
       onFinish: (content, thinking) => {
         if (sessionPromise) {
-          sessionPromise.then(session => {
-            if (session) {
-              recordTurnsIntoSession(
-                session,
-                messages,
-                content,
-                thinking || undefined,
-                injectedLore,
-                attachedInjections
-              ).catch(() => {});
-            }
-          }).catch(() => {});
+          const saveTask = async () => {
+            try {
+              const session = await sessionPromise;
+              if (session) {
+                await recordTurnsIntoSession(
+                  session,
+                  messages,
+                  content,
+                  thinking || undefined,
+                  injectedLore,
+                  attachedInjections
+                );
+              }
+            } catch {}
+          };
+          if (typeof after === 'function') {
+            after(saveTask);
+          } else {
+            saveTask().catch(() => {});
+          }
         }
       }
     });
@@ -466,7 +493,7 @@ export async function handleChatCompletions(req: NextRequest) {
                                 choices: [
                                   {
                                     index: 0,
-                                    delta: { reasoning_content: text },
+                                    delta: { reasoning_content: text, reasoning: text },
                                     finish_reason: null,
                                   },
                                 ],
@@ -499,6 +526,67 @@ export async function handleChatCompletions(req: NextRequest) {
                 }
               }
 
+              // Drain any remaining buffer content on stream EOF before closing
+              if (buffer.trim()) {
+                const remainingLines = buffer.split('\n');
+                for (const line of remainingLines) {
+                  if (line.startsWith('data: ')) {
+                    try {
+                      const parsed = JSON.parse(line.slice(6));
+                      const cand = parsed.response?.candidates?.[0];
+                      const parts = cand?.content?.parts || [];
+
+                      for (const part of parts) {
+                        const isThought = part.thought === true;
+                        const text = part.text || '';
+                        if (!text) continue;
+
+                        if (isThought) {
+                          fullThoughtContent += text;
+                          controller.enqueue(
+                            encoder.encode(
+                              `data: ${JSON.stringify({
+                                id: chatcmplId,
+                                object: 'chat.completion.chunk',
+                                created: Math.floor(Date.now() / 1000),
+                                model: modelId,
+                                choices: [
+                                  {
+                                    index: 0,
+                                    delta: { reasoning_content: text, reasoning: text },
+                                    finish_reason: null,
+                                  },
+                                ],
+                              })}\n\n`
+                            )
+                          );
+                        } else {
+                          fullAssistantContent += text;
+                          controller.enqueue(
+                            encoder.encode(
+                              `data: ${JSON.stringify({
+                                id: chatcmplId,
+                                object: 'chat.completion.chunk',
+                                created: Math.floor(Date.now() / 1000),
+                                model: modelId,
+                                choices: [
+                                  {
+                                    index: 0,
+                                    delta: { content: text },
+                                    finish_reason: null,
+                                  },
+                                ],
+                              })}\n\n`
+                            )
+                          );
+                        }
+                      }
+                    } catch {}
+                  }
+                }
+                buffer = '';
+              }
+
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
@@ -521,12 +609,20 @@ export async function handleChatCompletions(req: NextRequest) {
 
               // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
               if (sessionPromise) {
-                sessionPromise.then(session => {
-                  if (session) {
-                    const injectedLore = extractInjectedLore(messages, rawSystemText);
-                    recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore, attachedInjections).catch(() => {});
-                  }
-                }).catch(() => {});
+                const saveTask = async () => {
+                  try {
+                    const session = await sessionPromise;
+                    if (session) {
+                      const injectedLore = extractInjectedLore(messages, rawSystemText);
+                      await recordTurnsIntoSession(session, messages, fullAssistantContent, fullThoughtContent, injectedLore, attachedInjections);
+                    }
+                  } catch {}
+                };
+                if (typeof after === 'function') {
+                  after(saveTask);
+                } else {
+                  saveTask().catch(() => {});
+                }
               }
             } catch (err) {
               controller.error(err);
@@ -567,12 +663,20 @@ export async function handleChatCompletions(req: NextRequest) {
 
       // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections
       if (sessionPromise) {
-        sessionPromise.then(session => {
-          if (session) {
-            const injectedLore = extractInjectedLore(messages, rawSystemText);
-            recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore, attachedInjections).catch(() => {});
-          }
-        }).catch(() => {});
+        const saveTask = async () => {
+          try {
+            const session = await sessionPromise;
+            if (session) {
+              const injectedLore = extractInjectedLore(messages, rawSystemText);
+              await recordTurnsIntoSession(session, messages, contentText, thoughtText, injectedLore, attachedInjections);
+            }
+          } catch {}
+        };
+        if (typeof after === 'function') {
+          after(saveTask);
+        } else {
+          saveTask().catch(() => {});
+        }
       }
 
       return NextResponse.json(
@@ -588,6 +692,7 @@ export async function handleChatCompletions(req: NextRequest) {
                 role: 'assistant',
                 content: contentText,
                 reasoning_content: thoughtText.trim() || undefined,
+                reasoning: thoughtText.trim() || undefined,
               },
               finish_reason: 'stop',
             },

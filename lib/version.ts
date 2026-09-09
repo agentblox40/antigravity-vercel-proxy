@@ -8,13 +8,31 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.4.1';
+export const CURRENT_VERSION = '3.5.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
+    version: '3.5.0',
+    tag: 'MAJOR',
+    title: 'Architecture & Latency Boost: Zero-Wait TTFT, Dual Reasoning Stream, Next.js 15 after() & Gemini 3.1 Pro Variants',
+    date: 'Sep 9, 2026',
+    commit: 'latest',
+    description: 'P0 & P1 architectural improvements: dual reasoning tokens mapping, non-blocking 0ms hot-path TTFT with negative caching, memory API overview payload split, Next.js 15 native after() background save lifecycles, Gemini SSE stream EOF buffer drain, OpenCode 50s timeout clamp, Redis REST batch pipelining, and Gemini 3.1 Pro Fast/Low variants.',
+    highlights: [
+      'Dual-Mapped Gemini Reasoning: Mapped Gemini thinking tokens to both delta.reasoning_content and delta.reasoning across streaming and non-streaming responses for universal SillyTavern and Janitor AI parser compatibility.',
+      'Zero-Wait TTFT Hot-Path Latency: Cached negative lookups (null) in setCachedSessionGenSettings and ensured sessionPromise is never awaited synchronously before inference, eliminating cold transcript download latency on normal turns.',
+      'Memory API Overview Payload Split: Omitted bulky message transcripts from /api/memory list overview to prevent Vercel HTTP 500 FUNCTION_PAYLOAD_TOO_LARGE crashes while loading full chat transcripts on-demand via ?chatId=.',
+      'Serverless Background Save Lifecycles: Wrapped background session persistence in Next.js 15 native after() from next/server so Vercel Serverless does not freeze lambda containers before Upstash Redis writes finish.',
+      'Gemini SSE Stream EOF Buffer Drain: Implemented residual buffer flush on SSE stream completion to prevent truncated sentence or markdown endings.',
+      'OpenCode 50s Safe Timeout: Clamped Nemotron timeout from 95s down to 50s to guarantee requests complete within Vercel 60s maxDuration.',
+      'Redis REST Batch Pipelining: Batched saveChatSession and deleteChatSession multi-command operations into single HTTP calls via callRedisPipeline.',
+      'Gemini 3.1 Pro Fast & Low Variants: Added gemini-3.1-pro-fast / gemini-3.1-pro:off / gemini-3.1-pro-no-think (wireModel: gemini-3.1-pro-preview, 0 thinking tokens) and gemini-3.1-pro-low (2,048 thinking tokens).'
+    ]
+  },
+  {
     version: '3.4.1',
-    tag: 'LATEST',
+    tag: 'PATCH',
     title: 'Hardened Generation Settings Engine & Advanced Sampling Expansion',
     date: 'Sep 9, 2026',
     commit: 'latest',

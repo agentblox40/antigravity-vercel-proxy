@@ -397,7 +397,7 @@ export async function executeOpenCodeCompletion({
 
     try {
       const abortCtrl = new AbortController();
-      const timeoutMs = modelId.includes('nemotron') ? 95000 : 50000;
+      const timeoutMs = 50000;
       const timeoutId = setTimeout(() => abortCtrl.abort(), timeoutMs);
 
       const upstreamRes = await fetch('https://opencode.ai/zen/v1/chat/completions', {

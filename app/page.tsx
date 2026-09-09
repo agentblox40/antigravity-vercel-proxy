@@ -715,13 +715,19 @@ export default function AntigravityControlCenter() {
         setMemorySessions(incomingSessions);
         setMemoryStats(data.stats || {});
 
-        // Immediately select the first session from local memory with 0ms delay
+        // Immediately select the first session from local memory with 0ms delay and fetch full detail
         if (!selectedChatId && incomingSessions.length > 0) {
           setSelectedChatId(incomingSessions[0].id);
           setSelectedSession(incomingSessions[0]);
+          fetchSingleSession(incomingSessions[0].id, currentKey);
         } else if (selectedChatId) {
           const active = incomingSessions.find((s: any) => s.id === selectedChatId);
-          if (active) setSelectedSession(active);
+          if (active) {
+            setSelectedSession(active);
+            if (!active.messages || active.messages.length === 0) {
+              fetchSingleSession(selectedChatId, currentKey);
+            }
+          }
         }
       }
     } catch {}

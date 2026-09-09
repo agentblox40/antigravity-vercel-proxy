@@ -62,6 +62,8 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'gemini-3.7-flash-low', name: 'Gemini 3.7 Flash (Low)', tier: 'Reasoning', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Fast, lightweight thinking for quick conversational banter.' },
   { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', tier: 'Pro Agent', badge: 'Deep Logic', thinking: '32K Tokens', context: '1M Context', desc: 'Heavyweight creative writing, world-building, and long-range coherence.' },
   { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro Agent', tier: 'Pro Agent', badge: 'Agent Core', thinking: '32K Tokens', context: '1M Context', desc: 'Google Antigravity native Pro Agent engine.' },
+  { id: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro (Low)', tier: 'Pro Agent', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Snappy lightweight reasoning budget (2k tokens) on Gemini 3.1 Pro for quick turnarounds.' },
+  { id: 'gemini-3.1-pro-fast', name: 'Gemini 3.1 Pro (Fast)', tier: 'Pro Agent', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation for fast conversational loops on Gemini 3.1 Pro.' },
   { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', tier: 'Flash', badge: 'Lightweight', thinking: 'None', context: '1M Context', desc: 'Instantaneous response speed with full 1M context support.' },
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', tier: 'Flash', badge: 'Legacy High-Q', thinking: 'None', context: '1M Context', desc: 'Ultra-stable high-throughput flash architecture.' },
   { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
@@ -78,6 +80,7 @@ export const FALLBACK_MODELS: ModelSpec[] = [
     desc: m.desc,
   }))
 ];
+export const ANTIGRAVITY_MODELS = FALLBACK_MODELS;
 
 let cachedLiveModels: ModelSpec[] | null = null;
 let lastLiveModelsFetch = 0;
@@ -297,7 +300,19 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   }
 
   // 2. Gemini 3.1 Pro variants
-  if (clean === 'gemini-3.1-pro' || clean === 'gemini-pro-agent' || clean === 'gemini-3.1-pro-thinking') {
+  if (
+    clean === 'gemini-3.1-pro-fast' ||
+    clean === 'gemini-3.1-pro:off' ||
+    clean === 'gemini-3.1-pro-off' ||
+    clean === 'gemini-3.1-pro-no-think' ||
+    clean === 'gemini-3.1-pro:fast'
+  ) {
+    return { wireModel: 'gemini-3.1-pro-preview', defaultThinkingBudget: 0 };
+  }
+  if (clean === 'gemini-3.1-pro-low' || clean === 'gemini-3.1-pro:low') {
+    return { wireModel: 'gemini-3.1-pro-preview', defaultThinkingBudget: 2048 };
+  }
+  if (clean === 'gemini-3.1-pro' || clean === 'gemini-pro-agent' || clean === 'gemini-3.1-pro-thinking' || clean === 'gemini-3.1-pro-preview') {
     return { wireModel: 'gemini-pro-agent', defaultThinkingBudget: 32768 };
   }
 
@@ -410,7 +425,9 @@ export function transformOpenAIToAntigravity(
     modelClean.includes(':off') ||
     modelClean.includes(':fast') ||
     modelClean.includes('-off') ||
-    modelClean.includes('-fast');
+    modelClean.includes('-fast') ||
+    modelClean.includes('-no-think') ||
+    modelClean.includes(':no-think');
 
   if (isFastOrOffModel) {
     thinkingBudget = 0;
