@@ -350,7 +350,12 @@ export function transformOpenAIToAntigravity(
 
     // Sanitize past in-chat settings commands and proxy menu outputs from upstream wire history
     if (role === 'user' && detectInChatCommand(text)) continue;
-    if (role === 'assistant' && (text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') || text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]'))) continue;
+    if (role === 'assistant' && (
+      text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
+      text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+      text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
+      text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]')
+    )) continue;
 
     if (role === 'system') {
       if (!userSystemText.includes(text)) {
@@ -428,6 +433,13 @@ export function transformOpenAIToAntigravity(
     topK: typeof body.top_k === 'number' ? body.top_k : 40,
     topP: typeof body.top_p === 'number' ? body.top_p : 1
   };
+
+  if (typeof body.presence_penalty === 'number') {
+    generationConfig.presencePenalty = body.presence_penalty;
+  }
+  if (typeof body.frequency_penalty === 'number') {
+    generationConfig.frequencyPenalty = body.frequency_penalty;
+  }
 
   if (thinkingBudget > 0) {
     generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };

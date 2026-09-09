@@ -273,11 +273,16 @@ export async function getActiveInjectionsFormatted(turnCount = 1): Promise<{
   };
 }
 
+import type { GenerationSettings } from './genSettings';
+import { parseGenerationSettingsString } from './genSettings';
+
 export interface InChatCommand {
-  type: 'view' | 'enable' | 'disable' | 'master_toggle';
+  type: 'view' | 'enable' | 'disable' | 'master_toggle' | 'view_gen' | 'set_gen' | 'reset_gen';
   rawInput: string;
   targets?: string[];
   masterEnabled?: boolean;
+  genSettings?: Partial<GenerationSettings>;
+  setNotice?: string;
 }
 
 export function detectInChatCommand(rawText: string): InChatCommand | null {
@@ -292,12 +297,37 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
     return null;
   }
 
-  // Pattern 1: View menu: <MYSETTINGS>, <SETTINGS>, /settings, <MY_SETTINGS>
-  if (/^<(?:MYSETTINGS|SETTINGS|MY_SETTINGS|MY_CONFIG)>\s*$/i.test(trimmed) || /^\/settings\s*$/i.test(trimmed)) {
+  // Pattern 1: View Generation Settings Menu: <GENSETTINGS>, <GEN_SETTINGS>, <SAMPLING>, <SETTINGS>, /gensettings, /sampling
+  if (/^<(?:GENSETTINGS|GEN_SETTINGS|GENERATION_SETTINGS|GENERATION|SAMPLING|SAMPLING_SETTINGS|SETTINGS)>\s*$/i.test(trimmed) ||
+      /^\/(?:gensettings|sampling|genset)\s*$/i.test(trimmed)) {
+    return { type: 'view_gen', rawInput: trimmed };
+  }
+
+  // Pattern 2: Reset Generation Settings: <RESET_SETTINGS>, <RESET_GENSETTINGS>, <RESET_GEN>, <RESET_SAMPLING>
+  if (/^<(?:RESET_SETTINGS|RESET_GENSETTINGS|RESET_GEN|RESET_SAMPLING|RESET_CONFIG)>\s*$/i.test(trimmed) ||
+      /^\/(?:reset_settings|reset_gensettings|reset_sampling)\s*$/i.test(trimmed)) {
+    return { type: 'reset_gen', rawInput: trimmed };
+  }
+
+  // Pattern 3: Update Generation Settings: <SET: min_p=0.05, top_k=40, temp=0.9>, <SET_GEN: ...>, <CONFIG: ...>, /set ...
+  const setGenMatch = /^<(?:SET|SET_GEN|GEN_SET|SAMPLING|CONFIG)\s*:\s*([^>]+)>\s*$/i.exec(trimmed) ||
+                      /^\/set\s+(.+)$/i.exec(trimmed);
+  if (setGenMatch) {
+    const { settings, parsedSummary } = parseGenerationSettingsString(setGenMatch[1]);
+    return {
+      type: 'set_gen',
+      rawInput: trimmed,
+      genSettings: settings,
+      setNotice: parsedSummary.join(', ')
+    };
+  }
+
+  // Pattern 4: View Injections Menu: <MYSETTINGS>, <MY_SETTINGS>, <MY_CONFIG>, <INJECTIONS>, /injections
+  if (/^<(?:MYSETTINGS|MY_SETTINGS|MY_CONFIG|INJECTIONS)>\s*$/i.test(trimmed) || /^\/(?:settings|injections)\s*$/i.test(trimmed)) {
     return { type: 'view', rawInput: trimmed };
   }
 
-  // Pattern 2: Master Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
+  // Pattern 5: Master Injections Switch toggle: <INJECTIONS: ON>, <INJECTIONS: OFF>, <INJECTIONS: PAUSE>, <INJECTIONS: RESUME>
   const masterMatch = /^<INJECTIONS\s*:\s*(ON|OFF|PAUSE|RESUME|ENABLE|DISABLE)>\s*$/i.exec(trimmed);
   if (masterMatch) {
     const val = masterMatch[1].toUpperCase();
@@ -305,14 +335,14 @@ export function detectInChatCommand(rawText: string): InChatCommand | null {
     return { type: 'master_toggle', rawInput: trimmed, masterEnabled: enable };
   }
 
-  // Pattern 3: Enable specific modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
+  // Pattern 6: Enable specific injection modules: <ENABLE: 1, 3, Slow Romance>, <ENABLED: ...>, <ACTIVATE: ...>
   const enableMatch = /^<(?:ENABLE|ENABLED|ACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
   if (enableMatch) {
     const targets = enableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
     return { type: 'enable', rawInput: trimmed, targets };
   }
 
-  // Pattern 4: Disable specific modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
+  // Pattern 7: Disable specific injection modules: <DISABLE: 5, 6>, <DISABLED: ...>, <DEACTIVATE: ...>
   const disableMatch = /^<(?:DISABLE|DISABLED|DEACTIVATE)\s*:\s*([^>]+)>\s*$/i.exec(trimmed);
   if (disableMatch) {
     const targets = disableMatch[1].split(',').map(s => s.trim()).filter(Boolean);
@@ -385,7 +415,8 @@ export function generateSettingsMenu(config: InjectionsConfig, notice?: string):
   lines.push('• To enable:  <ENABLE: 1, 3>   or  <ENABLE: Slow Romance>');
   lines.push('• To disable: <DISABLE: 5, 6>  or  <DISABLE: Slow Romance>');
   lines.push('• Master switch: <INJECTIONS: ON>  or  <INJECTIONS: OFF>');
-  lines.push('• View menu:  <MYSETTINGS>');
+  lines.push('• View injections menu: <MYSETTINGS>');
+  lines.push('• Generation sampling menu: <GENSETTINGS> (Min-P, Top-K, Temp, Thinking...)');
   lines.push('────────────────────────────────────────');
   lines.push('✨ To continue your roleplay, simply send your character dialogue normally!');
 

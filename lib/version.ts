@@ -8,13 +8,28 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.3.0';
+export const CURRENT_VERSION = '3.4.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.3.0',
+    version: '3.4.0',
     tag: 'LATEST',
+    title: 'Roleplay Generation Settings Menu & In-Band Advanced Sampling Suite',
+    date: 'Sep 9, 2026',
+    commit: 'latest',
+    description: 'Added full in-chat Generation Settings Menu (<GENSETTINGS>, <SET: ...>, <RESET_SETTINGS>) and dashboard controls supporting Min-P, Min-K, Top-A, TFS, Typical-P, Penalties, and CoT Reasoning with per-session persistence and automatic wire history sanitization.',
+    highlights: [
+      'In-Chat Generation Menu (<GENSETTINGS> / <SETTINGS>): View full active sampling status (Min-P, Min-K, Top-K, Top-P, Top-A, Typical-P, TFS, Penalties, Max Tokens, CoT Thinking) directly inside Janitor AI and SillyTavern with 0ms delay and 0 Google API quota cost.',
+      'Dynamic Parameter Tuning (<SET: ...>): Update any parameter on the fly (e.g. <SET: min_p=0.05, top_k=40, temp=0.9, thinking=24k>) with automatic instant confirmation and per-session Redis persistence.',
+      'Comprehensive Advanced Sampling: Overcomes Janitor AI UI limitations by provisioning Min-P (dynamic probability floor cutoff), Min-K (candidate guarantees), Top-A (adaptive cutoff), TFS (tail-free sampling), and Typical-P locally.',
+      '100% Immersion Wire Sanitization: Past in-chat settings commands (<GENSETTINGS>, <SET: ...>, <RESET_SETTINGS>) and proxy menu outputs are automatically stripped from upstream Google and OpenCode conversation history.',
+      'Dashboard Generation Matrix: Dedicated Generation & Sampling settings tab in the control center with live sliders, instant Redis persistence, and 1-click default restoration.'
+    ]
+  },
+  {
+    version: '3.3.0',
+    tag: 'MAJOR',
     title: 'OpenCode Free Models Suite & 16 Rotating Guest Sessions',
     date: 'Sep 6, 2026',
     commit: 'latest',

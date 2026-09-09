@@ -23,6 +23,14 @@ import {
   resolveOpenCodeModel,
   executeOpenCodeCompletion,
 } from './opencode';
+import {
+  DEFAULT_GENERATION_SETTINGS,
+  getGlobalGenSettings,
+  getCachedSessionGenSettings,
+  setCachedSessionGenSettings,
+  executeGenSettingsCommand,
+  mergeGenerationSettings,
+} from './genSettings';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -137,6 +145,7 @@ export async function handleChatCompletions(req: NextRequest) {
   }
 
   // Background passive session identification (for Logged Chats dashboard tab only)
+  let currentChatId: string | null = null;
   let sessionPromise: Promise<any> | null = null;
   const disableMemory = req.headers.get('x-disable-memory') === 'true' || body.disable_memory === true;
 
@@ -147,6 +156,7 @@ export async function handleChatCompletions(req: NextRequest) {
         rawSystemText,
         req.headers
       );
+      currentChatId = chatId;
       // Non-blocking: execute session lookup in the background parallel to Google call
       sessionPromise = getOrCreateChatSession(chatId, characterId, characterName, sessionTitle).then(s => {
         if (rawSystemText && s) s.systemPrompt = rawSystemText;
@@ -160,10 +170,19 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
-  // Check for In-Chat Roleplay Control Commands (<MYSETTINGS>, <ENABLE: ...>, <DISABLE: ...>)
+  // Check for In-Chat Roleplay Control Commands (<MYSETTINGS>, <GENSETTINGS>, <SET: ...>, <RESET_SETTINGS>, <ENABLE: ...>, <DISABLE: ...>)
   const inChatCmd = detectInChatCommand(latestUserText);
   if (inChatCmd) {
-    const menuOutput = await executeInChatCommand(inChatCmd);
+    let menuOutput = '';
+    if (inChatCmd.type === 'view_gen' || inChatCmd.type === 'set_gen' || inChatCmd.type === 'reset_gen') {
+      let session: any = null;
+      if (sessionPromise) {
+        session = await sessionPromise.catch(() => null);
+      }
+      menuOutput = await executeGenSettingsCommand(inChatCmd, session);
+    } else {
+      menuOutput = await executeInChatCommand(inChatCmd);
+    }
 
     // Record command exchange into session asynchronously for visibility in dashboard
     if (sessionPromise) {
@@ -181,6 +200,28 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
+  // Resolve effective generation settings (Defaults -> Global Settings -> Client Body -> Session Overrides)
+  const globalGenSettings = await getGlobalGenSettings();
+  let sessionGenSettings = currentChatId ? getCachedSessionGenSettings(currentChatId) : undefined;
+  if (!sessionGenSettings && sessionPromise) {
+    const session = await sessionPromise.catch(() => null);
+    if (session?.generationSettings) {
+      sessionGenSettings = session.generationSettings;
+      if (currentChatId) setCachedSessionGenSettings(currentChatId, sessionGenSettings);
+    }
+  }
+  const effectiveSettings = mergeGenerationSettings(
+    DEFAULT_GENERATION_SETTINGS,
+    globalGenSettings,
+    body,
+    sessionGenSettings
+  );
+
+  const enhancedBody = {
+    ...body,
+    ...effectiveSettings,
+  };
+
   // ROUTE TO OPENCODE FREE MODELS IF MATCHED
   if (openCodeResolved) {
     const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
@@ -191,8 +232,22 @@ export async function handleChatCompletions(req: NextRequest) {
     const attachedInjections = bypassInjections ? [] : rawAttachedInj;
     const injectedLore = extractInjectedLore(messages, rawSystemText);
 
+    // Sanitize past in-chat settings commands and proxy menu outputs from upstream wire history
+    const sanitizedMessages = messages.filter(m => {
+      if (!m) return false;
+      const text = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '');
+      if (m.role === 'user' && detectInChatCommand(text)) return false;
+      if (m.role === 'assistant' && (
+        text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
+        text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+        text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
+        text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]')
+      )) return false;
+      return true;
+    });
+
     // Apply active prompt injections to messages copy if present
-    let preparedMessages = messages.map(m => ({ ...m }));
+    let preparedMessages = sanitizedMessages.map(m => ({ ...m }));
     if (systemInjectionsText && systemInjectionsText.trim()) {
       const firstSys = preparedMessages.find(m => m.role === 'system');
       if (firstSys) {
@@ -215,7 +270,7 @@ export async function handleChatCompletions(req: NextRequest) {
     }
 
     return executeOpenCodeCompletion({
-      body: { ...body, messages: preparedMessages },
+      body: { ...enhancedBody, messages: preparedMessages },
       modelId: requestedModel,
       resolvedModel: openCodeResolved,
       onFinish: (content, thinking) => {
@@ -306,7 +361,7 @@ export async function handleChatCompletions(req: NextRequest) {
     try {
       const accessToken = await getAccessToken(account);
       const envelope = transformOpenAIToAntigravity(
-        body,
+        enhancedBody,
         resolved,
         account.projectId,
         rawSystemText,

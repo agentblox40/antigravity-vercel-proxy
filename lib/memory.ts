@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { AttachedInjectionEntry } from './injections';
+import type { GenerationSettings } from './genSettings';
 
 export interface InjectedLoreEntry {
   title: string;
@@ -26,6 +27,7 @@ export interface ChatSession {
   createdAt: number;
   updatedAt: number;
   systemPrompt?: string;
+  generationSettings?: Partial<GenerationSettings>;
   messages: ArchivedMessage[];
   messageCount: number;
 }
