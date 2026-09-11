@@ -21,6 +21,7 @@ import {
   listSessionOverviews,
   getSessionById,
   deleteChatSession,
+  deleteAllChatSessions,
   recordTurnsIntoSession,
   ChatSession,
 } from '../lib/memory';
@@ -430,6 +431,15 @@ async function main() {
 
   // Clean up array session
   await deleteChatSession('chat_array_456');
+
+  // 7.5 deleteAllChatSessions complete flush
+  await saveChatSession(emptySession);
+  const beforeFlush = await listSessionOverviews(10);
+  assert.ok(beforeFlush.length >= 1, 'Session should exist before flush');
+  const flushed = await deleteAllChatSessions();
+  assert.strictEqual(flushed, true);
+  const afterFlush = await listSessionOverviews(10);
+  assert.strictEqual(afterFlush.length, 0, 'deleteAllChatSessions must flush all sessions');
   console.log('✅ Memory & Chat Logs Architecture Verification passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');

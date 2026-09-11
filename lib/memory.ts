@@ -425,6 +425,13 @@ export async function deleteChatSession(chatId: string): Promise<boolean> {
   if (isRedisConfigured()) {
     try {
       if (!characterId) {
+        const rawMeta = await callRedis('GET', `antigravity:meta:${chatId}`);
+        if (rawMeta) {
+          const parsedMeta = typeof rawMeta === 'string' ? JSON.parse(rawMeta) : rawMeta;
+          characterId = parsedMeta.characterId;
+        }
+      }
+      if (!characterId) {
         const raw = await callRedis('GET', `antigravity:session:${chatId}`);
         if (raw) {
           const parsed: ChatSession = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -457,10 +464,16 @@ export async function deleteAllChatSessions(): Promise<boolean> {
 
   if (isRedisConfigured()) {
     try {
-      const ids: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
+      const idsSet = new Set<string>();
+      const rawIds: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
+      const zIds: string[] = (await callRedis('ZRANGE', 'antigravity:active_sessions_z', 0, -1)) || [];
+      for (const id of [...rawIds, ...zIds]) {
+        if (id) idsSet.add(id);
+      }
+
       const pipeline: (string | number)[][] = [];
 
-      for (const id of ids) {
+      for (const id of idsSet) {
         pipeline.push(['DEL', `antigravity:session:${id}`]);
         pipeline.push(['DEL', `antigravity:meta:${id}`]);
       }
@@ -505,11 +518,23 @@ export async function listSessionOverviews(limit = 100): Promise<SessionOverview
 
   if (isRedisConfigured()) {
     try {
-      // 1. Get recent IDs from sorted set (ZREVRANGE) or fallback to SMEMBERS
+      // 1. Get recent IDs from sorted set (ZREVRANGE)
       let ids: string[] = (await callRedis('ZREVRANGE', 'antigravity:active_sessions_z', 0, limit - 1)) || [];
-      if (!ids || ids.length === 0) {
+      if (!Array.isArray(ids)) ids = [];
+
+      // If sorted set has room, discover any unindexed legacy sessions from active_sessions set
+      if (ids.length < limit) {
         const rawIds: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
-        ids = (rawIds || []).slice(0, limit);
+        if (Array.isArray(rawIds) && rawIds.length > 0) {
+          const idSet = new Set(ids);
+          for (const rawId of rawIds) {
+            if (rawId && !idSet.has(rawId)) {
+              ids.push(rawId);
+              idSet.add(rawId);
+              if (ids.length >= limit) break;
+            }
+          }
+        }
       }
 
       if (ids && ids.length > 0) {
@@ -533,14 +558,16 @@ export async function listSessionOverviews(limit = 100): Promise<SessionOverview
           missingIds.push(ids[i]);
         }
 
-        // 3. For legacy sessions missing metadata key, fetch full sessions in small safe chunk (max 20) and backfill metadata
+        // 3. For sessions missing metadata key, fetch full sessions in small safe chunk (max 20) and backfill metadata, or prune if dead
         if (missingIds.length > 0) {
           const batchToFetch = missingIds.slice(0, 20);
           const sessionCommands = batchToFetch.map(id => ['GET', `antigravity:session:${id}`]);
           const sessionResults = await callRedisPipeline(sessionCommands);
-          const backfillCommands: (string | number)[][] = [];
+          const maintenanceCommands: (string | number)[][] = [];
 
-          for (const raw of sessionResults) {
+          for (let j = 0; j < batchToFetch.length; j++) {
+            const raw = sessionResults[j];
+            const id = batchToFetch[j];
             if (raw) {
               try {
                 const fullSession: ChatSession = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -548,12 +575,12 @@ export async function listSessionOverviews(limit = 100): Promise<SessionOverview
                   const overview = extractSessionOverview(fullSession);
                   overviews.push(overview);
                   seenIds.add(fullSession.id);
-                  backfillCommands.push([
+                  maintenanceCommands.push([
                     'SET',
                     `antigravity:meta:${fullSession.id}`,
                     JSON.stringify(overview)
                   ]);
-                  backfillCommands.push([
+                  maintenanceCommands.push([
                     'ZADD',
                     'antigravity:active_sessions_z',
                     overview.updatedAt || Date.now(),
@@ -561,11 +588,18 @@ export async function listSessionOverviews(limit = 100): Promise<SessionOverview
                   ]);
                 }
               } catch {}
+            } else {
+              // Dead or orphaned session key: prune from active sets to avoid repeating failed lookups
+              maintenanceCommands.push(
+                ['ZREM', 'antigravity:active_sessions_z', id],
+                ['SREM', 'antigravity:active_sessions', id],
+                ['DEL', `antigravity:meta:${id}`]
+              );
             }
           }
 
-          if (backfillCommands.length > 0) {
-            callRedisPipeline(backfillCommands).catch(() => {});
+          if (maintenanceCommands.length > 0) {
+            callRedisPipeline(maintenanceCommands).catch(() => {});
           }
         }
       }

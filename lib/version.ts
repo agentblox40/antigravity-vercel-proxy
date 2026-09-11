@@ -8,10 +8,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.1';
+export const CURRENT_VERSION = '3.5.2';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.2',
+    tag: 'PATCH',
+    title: 'Chat Logs UI Reactivity, Seamless Session Switch & Lifecycle Hang Elimination',
+    date: 'Sep 11, 2026',
+    commit: 'latest',
+    description: 'Fixed session selection freeze where switching sessions kept showing previous transcript during fetch. Hardened OpenCode and Google CloudCode stream after() lifecycles against infinite promise hangs, ensured complete legacy Redis session discovery, and added orphaned key pruning.',
+    highlights: [
+      'Instant Session Switching: Immediately updates selectedSession header and turn count when clicking sessions in Logged Chats, displaying the active loading spinner instead of stale transcripts.',
+      'OpenCode & Google after() Hang Elimination: Wrapped background recording in a 55-second safety timeout race and guaranteed resolve on error/non-streaming responses so serverless Lambdas never hang indefinitely.',
+      'Full Legacy Redis Discovery: Added supplemental active_sessions scanning when sorted set has room, ensuring all legacy sessions are discovered and migrated.',
+      'Orphaned Key Auto-Pruning: Automatically cleans deleted or corrupted session IDs from sorted set and active sessions index during overview retrieval.',
+      'Optimized Session Deletion: Uses lightweight meta keys to look up character IDs during delete operations, avoiding expensive multi-megabyte session downloads.'
+    ]
+  },
   {
     version: '3.5.1',
     tag: 'PATCH',

@@ -260,9 +260,10 @@ export async function handleChatCompletions(req: NextRequest) {
     if (sessionPromise) {
       const saveTask = async () => {
         try {
-          await openCodeDonePromise;
+          const timeoutPromise = new Promise<void>(r => setTimeout(r, 55000));
+          await Promise.race([openCodeDonePromise, timeoutPromise]);
           const session = await sessionPromise;
-          if (session) {
+          if (session && (openCodeContent || openCodeThinking)) {
             await recordTurnsIntoSession(
               session,
               messages,
@@ -285,18 +286,28 @@ export async function handleChatCompletions(req: NextRequest) {
       }
     }
 
-    return executeOpenCodeCompletion({
-      body: { ...body, messages: preparedMessages },
-      modelId: requestedModel,
-      resolvedModel: openCodeResolved,
-      onFinish: (content, thinking) => {
-        openCodeContent = content;
-        openCodeThinking = thinking;
-      },
-      onStreamDone: () => {
+    try {
+      const res = await executeOpenCodeCompletion({
+        body: { ...body, messages: preparedMessages },
+        modelId: requestedModel,
+        resolvedModel: openCodeResolved,
+        onFinish: (content, thinking) => {
+          openCodeContent = content;
+          openCodeThinking = thinking;
+        },
+        onStreamDone: () => {
+          resolveOpenCodeDone!();
+        }
+      });
+      // If response is not an active SSE stream (e.g. upstream error or non-streaming json), unblock saveTask immediately
+      if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream')) {
         resolveOpenCodeDone!();
       }
-    });
+      return res;
+    } catch (err) {
+      resolveOpenCodeDone!();
+      throw err;
+    }
   }
 
   const accounts = getAccounts();
@@ -438,9 +449,10 @@ export async function handleChatCompletions(req: NextRequest) {
         if (sessionPromise) {
           const saveTask = async () => {
             try {
-              await streamDonePromise;
+              const timeoutPromise = new Promise<void>(r => setTimeout(r, 55000));
+              await Promise.race([streamDonePromise, timeoutPromise]);
               const session = await sessionPromise;
-              if (session) {
+              if (session && (fullAssistantContent || fullThoughtContent)) {
                 const injectedLore = extractInjectedLore(messages, rawSystemText);
                 await recordTurnsIntoSession(
                   session,

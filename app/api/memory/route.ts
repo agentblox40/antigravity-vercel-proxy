@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth } from '@/lib/completions';
 import {
   listSessionOverviews,
-  listAllSessions,
   getSessionById,
   getOrCreateChatSession,
   saveChatSession,

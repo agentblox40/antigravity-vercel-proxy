@@ -607,11 +607,16 @@ export default function AntigravityControlCenter() {
     if (!chatId) return;
     setSelectedChatId(chatId);
 
-    // Instant 0ms render from cached state if full messages already loaded
+    // Instant UI switch: update selectedSession immediately so header switches to clicked session
+    // and displays "Loading transcript turns..." spinner instead of stale previous session transcript
     const local = memorySessions.find(s => s.id === chatId);
-    if (local && local.messages && local.messages.length > 0) {
-      setSelectedSession(local);
-      return;
+    if (local) {
+      setSelectedSession((prev: any) => (prev && prev.id === chatId && prev.messages ? prev : local));
+      if (local.messages && local.messages.length > 0) {
+        return;
+      }
+    } else {
+      setSelectedSession((prev: any) => (prev && prev.id === chatId ? prev : { id: chatId, characterName: 'Character', title: 'Loading transcript...', messageCount: 1 }));
     }
 
     if (!currentKey) return;
