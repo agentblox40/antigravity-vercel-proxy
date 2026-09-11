@@ -15,6 +15,15 @@ import {
   OPENCODE_MODELS,
   resolveOpenCodeModel,
 } from '../lib/opencode';
+import {
+  extractSessionOverview,
+  saveChatSession,
+  listSessionOverviews,
+  getSessionById,
+  deleteChatSession,
+  recordTurnsIntoSession,
+  ChatSession,
+} from '../lib/memory';
 
 async function main() {
   console.log('🧪 RUNNING STREAMLINED ROLEPLAY CORE VERIFICATION SUITE\n');
@@ -317,6 +326,111 @@ async function main() {
   assert.ok(nemotronThink, 'nemotron-3-ultra-free should resolve');
   assert.strictEqual(nemotronThink.isFast, false);
   console.log('✅ OpenCode Free Models Verification passed.\n');
+
+  // ==========================================
+  // 7. Memory & Chat Logs Architecture Tests
+  // ==========================================
+  console.log('Test 7: Memory & Chat Logs Architecture Verification');
+
+  // 7.1 extractSessionOverview robustness tests
+  const testSession: ChatSession = {
+    id: 'chat_test_123',
+    characterId: 'char_lily',
+    characterName: 'Lily',
+    title: 'Lily • "Adventure"',
+    createdAt: 1000,
+    updatedAt: 2000,
+    messages: [
+      { id: 'm1', role: 'user', content: 'Hello Lily!', timestamp: 1000 },
+      { id: 'm2', role: 'assistant', content: 'Hello traveler! *smiles warmly*', reasoning_content: 'Thought process here', timestamp: 1500 },
+    ],
+    messageCount: 2,
+  };
+
+  const overview = extractSessionOverview(testSession);
+  assert.strictEqual(overview.id, 'chat_test_123');
+  assert.strictEqual(overview.characterName, 'Lily');
+  assert.strictEqual(overview.messageCount, 2);
+  assert.ok(overview.estimatedTokens > 0);
+  assert.ok(overview.lastMessagePreview.includes('Lily: Hello traveler!'));
+  assert.strictEqual((overview as any).messages, undefined, 'Overview MUST NOT contain full messages array');
+
+  // Edge case: Multimodal / array content in messages
+  const arrayContentSession: ChatSession = {
+    id: 'chat_array_456',
+    characterId: 'char_elena',
+    characterName: 'Elena',
+    title: 'Elena Chat',
+    createdAt: 1000,
+    updatedAt: 2000,
+    messages: [
+      { id: 'm3', role: 'user', content: [{ type: 'text', text: 'Look at this picture' }] as any, timestamp: 1000 },
+      { id: 'm4', role: 'assistant', content: [{ type: 'text', text: 'I see it clearly now.' }] as any, timestamp: 2000 },
+    ],
+    messageCount: 2,
+  };
+
+  const arrayOverview = extractSessionOverview(arrayContentSession);
+  assert.strictEqual(arrayOverview.id, 'chat_array_456');
+  assert.strictEqual(arrayOverview.messageCount, 2);
+  assert.ok(arrayOverview.lastMessagePreview.includes('I see it clearly now.'));
+
+  // Edge case: Empty session
+  const emptySession: ChatSession = {
+    id: 'chat_empty_789',
+    characterId: 'char_default',
+    characterName: 'Character',
+    title: 'New Chat',
+    createdAt: 1000,
+    updatedAt: 1000,
+    messages: [],
+    messageCount: 0,
+  };
+  const emptyOverview = extractSessionOverview(emptySession);
+  assert.strictEqual(emptyOverview.messageCount, 0);
+  assert.strictEqual(emptyOverview.lastMessagePreview, 'Empty session');
+
+  // 7.2 saveChatSession, getSessionById, and listSessionOverviews
+  await saveChatSession(testSession);
+  await saveChatSession(arrayContentSession);
+
+  const allOverviews = await listSessionOverviews(10);
+  assert.ok(allOverviews.length >= 2, `Expected at least 2 overviews, got ${allOverviews.length}`);
+  const foundTest = allOverviews.find(o => o.id === 'chat_test_123');
+  assert.ok(foundTest, 'Saved session must be listed in overviews');
+  assert.strictEqual((foundTest as any).messages, undefined, 'Listed overview must be lightweight without messages');
+
+  // getSessionById returns full session with messages intact
+  const fullDetail = await getSessionById('chat_test_123');
+  assert.ok(fullDetail, 'Full session detail must be retrievable by chatId');
+  assert.strictEqual(fullDetail!.messages.length, 2, 'Full detail must preserve messages array');
+  assert.strictEqual(fullDetail!.messages[1].reasoning_content, 'Thought process here');
+
+  // 7.3 recordTurnsIntoSession updates counts and turns
+  await recordTurnsIntoSession(
+    fullDetail!,
+    [
+      { role: 'user', content: 'Hello Lily!' },
+      { role: 'assistant', content: 'Hello traveler! *smiles warmly*' },
+      { role: 'user', content: 'What is your favorite flower?' }
+    ],
+    'I love snowdrop blossoms.',
+    'Thinking about flowers'
+  );
+  assert.strictEqual(fullDetail!.messages.length, 4, 'recordTurnsIntoSession must append turns');
+  const updatedOverview = extractSessionOverview(fullDetail!);
+  assert.strictEqual(updatedOverview.messageCount, 4);
+  assert.ok(updatedOverview.lastMessagePreview.includes('snowdrop blossoms'));
+
+  // 7.4 deleteChatSession
+  const deleted = await deleteChatSession('chat_test_123');
+  assert.strictEqual(deleted, true);
+  const detailAfterDelete = await getSessionById('chat_test_123');
+  assert.strictEqual(detailAfterDelete, null, 'Deleted session must not be found');
+
+  // Clean up array session
+  await deleteChatSession('chat_array_456');
+  console.log('✅ Memory & Chat Logs Architecture Verification passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }

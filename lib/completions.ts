@@ -249,37 +249,52 @@ export async function handleChatCompletions(req: NextRequest) {
       }
     }
 
+    let resolveOpenCodeDone: () => void;
+    const openCodeDonePromise = new Promise<void>(resolve => {
+      resolveOpenCodeDone = resolve;
+    });
+
+    let openCodeContent = '';
+    let openCodeThinking = '';
+
+    if (sessionPromise) {
+      const saveTask = async () => {
+        try {
+          await openCodeDonePromise;
+          const session = await sessionPromise;
+          if (session) {
+            await recordTurnsIntoSession(
+              session,
+              messages,
+              openCodeContent,
+              openCodeThinking || undefined,
+              injectedLore,
+              attachedInjections
+            );
+          }
+        } catch {}
+      };
+      try {
+        if (typeof after === 'function') {
+          after(saveTask);
+        } else {
+          saveTask().catch(() => {});
+        }
+      } catch {
+        saveTask().catch(() => {});
+      }
+    }
+
     return executeOpenCodeCompletion({
       body: { ...body, messages: preparedMessages },
       modelId: requestedModel,
       resolvedModel: openCodeResolved,
       onFinish: (content, thinking) => {
-        if (sessionPromise) {
-          const saveTask = async () => {
-            try {
-              const session = await sessionPromise;
-              if (session) {
-                await recordTurnsIntoSession(
-                  session,
-                  messages,
-                  content,
-                  thinking || undefined,
-                  injectedLore,
-                  attachedInjections
-                );
-              }
-            } catch {}
-          };
-          try {
-            if (typeof after === 'function') {
-              after(saveTask);
-            } else {
-              saveTask().catch(() => {});
-            }
-          } catch {
-            saveTask().catch(() => {});
-          }
-        }
+        openCodeContent = content;
+        openCodeThinking = thinking;
+      },
+      onStreamDone: () => {
+        resolveOpenCodeDone!();
       }
     });
   }
@@ -611,6 +626,9 @@ export async function handleChatCompletions(req: NextRequest) {
               resolveStreamDone!();
             }
           },
+          cancel() {
+            resolveStreamDone!();
+          }
         });
 
         return new NextResponse(customStream, {

@@ -39,6 +39,19 @@ export interface CharacterSummary {
   lastActive: number;
 }
 
+export interface SessionOverview {
+  id: string;
+  characterId: string;
+  characterName: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  estimatedTokens: number;
+  lastMessagePreview: string;
+  oocCount?: number;
+}
+
 // In-Memory Fallback Store
 const memoryStore = new Map<string, ChatSession>();
 
@@ -339,10 +352,51 @@ export async function getOrCreateChatSession(
   return newSession;
 }
 
+// Extract safe, lightweight metadata overview from session
+export function extractSessionOverview(session: ChatSession): SessionOverview {
+  const msgs = session.messages || [];
+  const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+
+  let lastContent = '';
+  if (lastMsg) {
+    const rawContent = lastMsg.content as any;
+    if (typeof rawContent === 'string') {
+      lastContent = rawContent;
+    } else if (Array.isArray(rawContent)) {
+      lastContent = rawContent.map((p: any) => p?.text || '').join(' ');
+    }
+  }
+
+  const totalChars = msgs.reduce((acc, m) => {
+    if (!m) return acc;
+    const raw = m.content as any;
+    if (typeof raw === 'string') return acc + raw.length;
+    if (Array.isArray(raw)) return acc + raw.reduce((c: number, p: any) => c + (p?.text?.length || 0), 0);
+    return acc;
+  }, 0);
+
+  const preview = lastMsg
+    ? `${lastMsg.role === 'user' ? 'User' : (session.characterName || 'Character')}: ${lastContent.slice(0, 75).replace(/[\r\n]+/g, ' ')}...`
+    : 'Empty session';
+
+  return {
+    id: session.id,
+    characterId: session.characterId || 'char_default',
+    characterName: session.characterName || 'Unknown Character',
+    title: session.title || 'Chat Session',
+    createdAt: session.createdAt || session.updatedAt || Date.now(),
+    updatedAt: session.updatedAt || Date.now(),
+    messageCount: msgs.length,
+    estimatedTokens: Math.floor(totalChars / 4),
+    lastMessagePreview: preview,
+    oocCount: 0,
+  };
+}
+
 // Save or update session
 export async function saveChatSession(session: ChatSession): Promise<void> {
   session.updatedAt = Date.now();
-  session.messageCount = session.messages.length;
+  session.messageCount = (session.messages || []).length;
 
   // Save to in-memory store
   memoryStore.set(session.id, session);
@@ -351,9 +405,12 @@ export async function saveChatSession(session: ChatSession): Promise<void> {
   if (isRedisConfigured()) {
     try {
       const json = JSON.stringify(session);
+      const overview = extractSessionOverview(session);
       await callRedisPipeline([
         ['SET', `antigravity:session:${session.id}`, json],
+        ['SET', `antigravity:meta:${session.id}`, JSON.stringify(overview)],
         ['SADD', 'antigravity:active_sessions', session.id],
+        ['ZADD', 'antigravity:active_sessions_z', session.updatedAt, session.id],
         ['SADD', `antigravity:char_sessions:${session.characterId}`, session.id]
       ]);
     } catch {}
@@ -377,7 +434,9 @@ export async function deleteChatSession(chatId: string): Promise<boolean> {
 
       const pipeline: (string | number)[][] = [
         ['DEL', `antigravity:session:${chatId}`],
-        ['SREM', 'antigravity:active_sessions', chatId]
+        ['DEL', `antigravity:meta:${chatId}`],
+        ['SREM', 'antigravity:active_sessions', chatId],
+        ['ZREM', 'antigravity:active_sessions_z', chatId]
       ];
       if (characterId) {
         pipeline.push(['SREM', `antigravity:char_sessions:${characterId}`, chatId]);
@@ -403,8 +462,10 @@ export async function deleteAllChatSessions(): Promise<boolean> {
 
       for (const id of ids) {
         pipeline.push(['DEL', `antigravity:session:${id}`]);
+        pipeline.push(['DEL', `antigravity:meta:${id}`]);
       }
       pipeline.push(['DEL', 'antigravity:active_sessions']);
+      pipeline.push(['DEL', 'antigravity:active_sessions_z']);
 
       // Also clean any character session sets
       const allCharKeys: string[] = (await callRedis('KEYS', 'antigravity:char_sessions:*')) || [];
@@ -437,19 +498,74 @@ export async function getSessionById(chatId: string): Promise<ChatSession | null
   return memoryStore.get(chatId) || null;
 }
 
-// List all sessions (Ultra-fast 1-request pipeline retrieval)
-export async function listAllSessions(): Promise<ChatSession[]> {
-  const sessions: ChatSession[] = [];
+// List lightweight session overviews (fast metadata-only retrieval, 0ms payload bloat)
+export async function listSessionOverviews(limit = 100): Promise<SessionOverview[]> {
+  const overviews: SessionOverview[] = [];
+  const seenIds = new Set<string>();
 
   if (isRedisConfigured()) {
     try {
-      const ids: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
+      // 1. Get recent IDs from sorted set (ZREVRANGE) or fallback to SMEMBERS
+      let ids: string[] = (await callRedis('ZREVRANGE', 'antigravity:active_sessions_z', 0, limit - 1)) || [];
+      if (!ids || ids.length === 0) {
+        const rawIds: string[] = (await callRedis('SMEMBERS', 'antigravity:active_sessions')) || [];
+        ids = (rawIds || []).slice(0, limit);
+      }
+
       if (ids && ids.length > 0) {
-        const pipelineCommands = ids.map(id => ['GET', `antigravity:session:${id}`]);
-        const results = await callRedisPipeline(pipelineCommands);
-        for (const raw of results) {
+        // 2. Fetch lightweight metadata keys
+        const metaCommands = ids.map(id => ['GET', `antigravity:meta:${id}`]);
+        const metaResults = await callRedisPipeline(metaCommands);
+        const missingIds: string[] = [];
+
+        for (let i = 0; i < ids.length; i++) {
+          const raw = metaResults[i];
           if (raw) {
-            sessions.push(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            try {
+              const parsed: SessionOverview = typeof raw === 'string' ? JSON.parse(raw) : raw;
+              if (parsed && parsed.id) {
+                overviews.push(parsed);
+                seenIds.add(parsed.id);
+                continue;
+              }
+            } catch {}
+          }
+          missingIds.push(ids[i]);
+        }
+
+        // 3. For legacy sessions missing metadata key, fetch full sessions in small safe chunk (max 20) and backfill metadata
+        if (missingIds.length > 0) {
+          const batchToFetch = missingIds.slice(0, 20);
+          const sessionCommands = batchToFetch.map(id => ['GET', `antigravity:session:${id}`]);
+          const sessionResults = await callRedisPipeline(sessionCommands);
+          const backfillCommands: (string | number)[][] = [];
+
+          for (const raw of sessionResults) {
+            if (raw) {
+              try {
+                const fullSession: ChatSession = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (fullSession && fullSession.id && !seenIds.has(fullSession.id)) {
+                  const overview = extractSessionOverview(fullSession);
+                  overviews.push(overview);
+                  seenIds.add(fullSession.id);
+                  backfillCommands.push([
+                    'SET',
+                    `antigravity:meta:${fullSession.id}`,
+                    JSON.stringify(overview)
+                  ]);
+                  backfillCommands.push([
+                    'ZADD',
+                    'antigravity:active_sessions_z',
+                    overview.updatedAt || Date.now(),
+                    fullSession.id
+                  ]);
+                }
+              } catch {}
+            }
+          }
+
+          if (backfillCommands.length > 0) {
+            callRedisPipeline(backfillCommands).catch(() => {});
           }
         }
       }
@@ -458,12 +574,32 @@ export async function listAllSessions(): Promise<ChatSession[]> {
 
   // Merge in-memory sessions
   for (const s of memoryStore.values()) {
-    if (!sessions.some(existing => existing.id === s.id)) {
-      sessions.push(s);
+    if (!seenIds.has(s.id)) {
+      overviews.push(extractSessionOverview(s));
+      seenIds.add(s.id);
     }
   }
 
-  return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+  return overviews.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+// Backwards-compatible session lister
+export async function listAllSessions(): Promise<ChatSession[]> {
+  const overviews = await listSessionOverviews();
+  return overviews.map(o => {
+    const mem = memoryStore.get(o.id);
+    if (mem) return mem;
+    return {
+      id: o.id,
+      characterId: o.characterId,
+      characterName: o.characterName,
+      title: o.title,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
+      messages: [],
+      messageCount: o.messageCount
+    };
+  });
 }
 
 // Generate in-context prompt anchor to reinforce active formatting and immersion on every turn

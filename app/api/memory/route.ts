@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAuth } from '@/lib/completions';
 import {
+  listSessionOverviews,
   listAllSessions,
   getSessionById,
   getOrCreateChatSession,
@@ -8,11 +9,13 @@ import {
   deleteChatSession,
   deleteAllChatSessions,
   isRedisConfigured,
-  ChatSession
+  ChatSession,
+  SessionOverview
 } from '@/lib/memory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -33,78 +36,71 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { searchParams } = new URL(req.url);
-  const chatId = searchParams.get('chatId');
+  try {
+    const { searchParams } = new URL(req.url);
+    const chatId = searchParams.get('chatId');
 
-  if (chatId) {
-    const session = await getSessionById(chatId);
-    if (!session) {
+    if (chatId) {
+      const session = await getSessionById(chatId);
+      if (!session) {
+        return NextResponse.json(
+          { error: { message: 'Session not found.' } },
+          { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } }
+        );
+      }
       return NextResponse.json(
-        { error: { message: 'Session not found.' } },
-        { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } }
+        {
+          session,
+          storageMode: isRedisConfigured() ? 'Upstash Redis (Cloud)' : 'In-Memory Store (Ephemeral)'
+        },
+        { headers: { 'Access-Control-Allow-Origin': '*' } }
       );
     }
+
+    const overviews = await listSessionOverviews(100);
+
+    // Group by character
+    const charMap = new Map<string, { characterId: string; characterName: string; chatCount: number; lastActive: number }>();
+    let totalArchivedMessages = 0;
+
+    for (const o of overviews) {
+      totalArchivedMessages += o.messageCount || 0;
+      const charId = o.characterId || 'char_default';
+      const existing = charMap.get(charId);
+      if (existing) {
+        existing.chatCount++;
+        if ((o.updatedAt || 0) > existing.lastActive) existing.lastActive = o.updatedAt || 0;
+      } else {
+        charMap.set(charId, {
+          characterId: charId,
+          characterName: o.characterName || 'Unknown Character',
+          chatCount: 1,
+          lastActive: o.updatedAt || 0,
+        });
+      }
+    }
+
     return NextResponse.json(
       {
-        session,
-        storageMode: isRedisConfigured() ? 'Upstash Redis (Cloud)' : 'In-Memory Store (Ephemeral)'
+        characters: Array.from(charMap.values()).sort((a, b) => b.lastActive - a.lastActive),
+        sessions: overviews,
+        stats: {
+          totalCharacters: charMap.size,
+          totalSessions: overviews.length,
+          totalArchivedMessages,
+          storageMode: isRedisConfigured() ? 'Upstash Redis (Cloud)' : 'In-Memory Store (Ephemeral)',
+          redisConnected: isRedisConfigured()
+        }
       },
       { headers: { 'Access-Control-Allow-Origin': '*' } }
     );
+  } catch (err: any) {
+    console.error('Error in /api/memory GET:', err);
+    return NextResponse.json(
+      { error: { message: err?.message || 'Internal error in memory route' } },
+      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
+    );
   }
-
-  const sessions = await listAllSessions();
-
-  // Group by character
-  const charMap = new Map<string, { characterId: string; characterName: string; chatCount: number; lastActive: number }>();
-  let totalArchivedMessages = 0;
-
-  for (const s of sessions) {
-    totalArchivedMessages += (s.messages || []).length;
-
-    const existing = charMap.get(s.characterId);
-    if (existing) {
-      existing.chatCount++;
-      if (s.updatedAt > existing.lastActive) existing.lastActive = s.updatedAt;
-    } else {
-      charMap.set(s.characterId, {
-        characterId: s.characterId,
-        characterName: s.characterName || 'Unknown Character',
-        chatCount: 1,
-        lastActive: s.updatedAt,
-      });
-    }
-  }
-
-  return NextResponse.json(
-    {
-      characters: Array.from(charMap.values()).sort((a, b) => b.lastActive - a.lastActive),
-      sessions: sessions.map(s => {
-        const msgs = s.messages || [];
-        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-        const totalChars = msgs.reduce((acc, m) => acc + (m.content?.length || 0), 0);
-        return {
-          id: s.id,
-          characterId: s.characterId,
-          characterName: s.characterName || 'Unknown Character',
-          title: s.title || 'Chat Session',
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt,
-          messageCount: msgs.length,
-          estimatedTokens: Math.floor(totalChars / 4),
-          lastMessagePreview: lastMsg ? `${lastMsg.role === 'user' ? 'User' : s.characterName}: ${lastMsg.content.slice(0, 75).replace(/[\r\n]+/g, ' ')}...` : 'Empty session'
-        };
-      }),
-      stats: {
-        totalCharacters: charMap.size,
-        totalSessions: sessions.length,
-        totalArchivedMessages,
-        storageMode: isRedisConfigured() ? 'Upstash Redis (Cloud)' : 'In-Memory Store (Ephemeral)',
-        redisConnected: isRedisConfigured()
-      }
-    },
-    { headers: { 'Access-Control-Allow-Origin': '*' } }
-  );
 }
 
 export async function POST(req: NextRequest) {
@@ -115,47 +111,55 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: any;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json(
-      { error: { message: 'Invalid JSON body.' } },
-      { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
-    );
-  }
-
-  const { action, chatId } = body;
-  if (!chatId) {
-    return NextResponse.json(
-      { error: { message: 'Missing chatId parameter.' } },
-      { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
-    );
-  }
-
-  let session = await getSessionById(chatId);
-
-  if (!session) {
-    session = await getOrCreateChatSession(chatId, body.characterId || 'char_default', body.characterName || 'Character', 'New Chat');
-  }
-
-  if (action === 'update_title') {
-    const title = (body.title || '').trim();
-    if (title) {
-      session.title = title;
-      await saveChatSession(session);
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: { message: 'Invalid JSON body.' } },
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
     }
-    return NextResponse.json({ success: true, session }, { headers: { 'Access-Control-Allow-Origin': '*' } });
-  }
 
-  if (action === 'clear_history') {
-    session.messages = [];
-    session.messageCount = 0;
-    await saveChatSession(session);
-    return NextResponse.json({ success: true, session }, { headers: { 'Access-Control-Allow-Origin': '*' } });
-  }
+    const { action, chatId } = body;
+    if (!chatId) {
+      return NextResponse.json(
+        { error: { message: 'Missing chatId parameter.' } },
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
 
-  return NextResponse.json({ error: { message: `Unknown action: ${action}` } }, { status: 400 });
+    let session = await getSessionById(chatId);
+
+    if (!session) {
+      session = await getOrCreateChatSession(chatId, body.characterId || 'char_default', body.characterName || 'Character', 'New Chat');
+    }
+
+    if (action === 'update_title') {
+      const title = (body.title || '').trim();
+      if (title) {
+        session.title = title;
+        await saveChatSession(session);
+      }
+      return NextResponse.json({ success: true, session }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    if (action === 'clear_history') {
+      session.messages = [];
+      session.messageCount = 0;
+      await saveChatSession(session);
+      return NextResponse.json({ success: true, session }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    return NextResponse.json({ error: { message: `Unknown action: ${action}` } }, { status: 400 });
+  } catch (err: any) {
+    console.error('Error in /api/memory POST:', err);
+    return NextResponse.json(
+      { error: { message: err?.message || 'Internal error processing memory POST' } },
+      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
 }
 
 export async function DELETE(req: NextRequest) {
@@ -166,28 +170,36 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  const { searchParams } = new URL(req.url);
-  const chatId = searchParams.get('chatId');
-  const deleteAll = searchParams.get('all') === 'true';
+  try {
+    const { searchParams } = new URL(req.url);
+    const chatId = searchParams.get('chatId');
+    const deleteAll = searchParams.get('all') === 'true';
 
-  if (deleteAll) {
-    const success = await deleteAllChatSessions();
+    if (deleteAll) {
+      const success = await deleteAllChatSessions();
+      return NextResponse.json(
+        { success, message: 'All logged chat sessions deleted successfully.' },
+        { headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    if (!chatId) {
+      return NextResponse.json(
+        { error: { message: 'Missing chatId parameter or all=true.' } },
+        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+
+    const success = await deleteChatSession(chatId);
     return NextResponse.json(
-      { success, message: 'All logged chat sessions deleted successfully.' },
+      { success, message: `Chat session ${chatId} deleted.` },
       { headers: { 'Access-Control-Allow-Origin': '*' } }
     );
-  }
-
-  if (!chatId) {
+  } catch (err: any) {
+    console.error('Error in /api/memory DELETE:', err);
     return NextResponse.json(
-      { error: { message: 'Missing chatId parameter or all=true.' } },
-      { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+      { error: { message: err?.message || 'Internal error processing memory DELETE' } },
+      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }
-
-  const success = await deleteChatSession(chatId);
-  return NextResponse.json(
-    { success, message: `Chat session ${chatId} deleted.` },
-    { headers: { 'Access-Control-Allow-Origin': '*' } }
-  );
 }

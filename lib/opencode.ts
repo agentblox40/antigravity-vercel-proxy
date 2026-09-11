@@ -297,6 +297,7 @@ export interface ExecuteOpenCodeOptions {
   modelId: string;
   resolvedModel: ResolvedOpenCodeModel;
   onFinish?: (content: string, reasoning: string) => void;
+  onStreamDone?: () => void;
 }
 
 export async function executeOpenCodeCompletion({
@@ -304,6 +305,7 @@ export async function executeOpenCodeCompletion({
   modelId,
   resolvedModel,
   onFinish,
+  onStreamDone,
 }: ExecuteOpenCodeOptions): Promise<NextResponse> {
   const isStream = body.stream === true;
   const now = Date.now();
@@ -595,14 +597,31 @@ export async function executeOpenCodeCompletion({
               }
 
               controller.close();
-
+            } catch (streamErr) {
+              controller.error(streamErr);
+            } finally {
               if (onFinish) {
                 try {
                   onFinish(fullContent, fullThinking);
                 } catch {}
               }
-            } catch (streamErr) {
-              controller.error(streamErr);
+              if (onStreamDone) {
+                try {
+                  onStreamDone();
+                } catch {}
+              }
+            }
+          },
+          cancel() {
+            if (onFinish) {
+              try {
+                onFinish(fullContent, fullThinking);
+              } catch {}
+            }
+            if (onStreamDone) {
+              try {
+                onStreamDone();
+              } catch {}
             }
           }
         });
@@ -634,6 +653,12 @@ export async function executeOpenCodeCompletion({
             onFinish(choice.message.content || '', reasoning);
           } catch {}
         }
+      }
+
+      if (onStreamDone) {
+        try {
+          onStreamDone();
+        } catch {}
       }
 
       return NextResponse.json(json, {

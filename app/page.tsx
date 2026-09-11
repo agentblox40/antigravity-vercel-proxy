@@ -592,10 +592,8 @@ export default function AntigravityControlCenter() {
         } else if (selectedChatId) {
           const active = incomingSessions.find((s: any) => s.id === selectedChatId);
           if (active) {
-            setSelectedSession(active);
-            if (!active.messages || active.messages.length === 0) {
-              fetchSingleSession(selectedChatId, currentKey);
-            }
+            setSelectedSession((prev: any) => (prev && prev.id === selectedChatId && prev.messages ? prev : active));
+            fetchSingleSession(selectedChatId, currentKey);
           }
         }
       }
@@ -609,13 +607,11 @@ export default function AntigravityControlCenter() {
     if (!chatId) return;
     setSelectedChatId(chatId);
 
-    // Instant 0ms render from cached state
+    // Instant 0ms render from cached state if full messages already loaded
     const local = memorySessions.find(s => s.id === chatId);
-    if (local) {
+    if (local && local.messages && local.messages.length > 0) {
       setSelectedSession(local);
-      if (local.messages && local.messages.length > 0) {
-        return;
-      }
+      return;
     }
 
     if (!currentKey) return;
@@ -718,34 +714,62 @@ export default function AntigravityControlCenter() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const copyTranscriptMarkdown = (session: any) => {
-    if (!session || !session.messages) return;
-    let md = `# Roleplay Transcript: ${session.characterName} - ${session.title}\n`;
-    md += `*Session ID: ${session.id} | Turns: ${session.messages.length}*\n\n---\n\n`;
+  const copyTranscriptMarkdown = async (session: any) => {
+    if (!session) return;
+    let target = session;
+    if (!target.messages || target.messages.length === 0) {
+      try {
+        const res = await fetch(`/api/memory?chatId=${encodeURIComponent(session.id)}`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.session) target = data.session;
+        }
+      } catch {}
+    }
+    if (!target || !target.messages) return;
 
-    if (session.oocRules && session.oocRules.length > 0) {
+    let md = `# Roleplay Transcript: ${target.characterName} - ${target.title}\n`;
+    md += `*Session ID: ${target.id} | Turns: ${target.messages.length}*\n\n---\n\n`;
+
+    if (target.oocRules && target.oocRules.length > 0) {
       md += `### Active Pinned OOC Rules:\n`;
-      for (const r of session.oocRules) {
+      for (const r of target.oocRules) {
         if (r.enabled) md += `- ${r.rule}\n`;
       }
       md += `\n---\n\n`;
     }
 
-    for (const m of session.messages) {
-      const speaker = m.role === 'user' ? 'User' : session.characterName;
-      md += `### **${speaker}**\n${m.content}\n\n`;
+    for (const m of target.messages) {
+      const speaker = m.role === 'user' ? 'User' : target.characterName;
+      const content = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '');
+      md += `### **${speaker}**\n${content}\n\n`;
     }
 
-    copyToClipboard(md, `transcript_${session.id}`);
+    copyToClipboard(md, `transcript_${target.id}`);
   };
 
-  const downloadTranscriptJson = (session: any) => {
+  const downloadTranscriptJson = async (session: any) => {
     if (!session) return;
-    const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' });
+    let target = session;
+    if (!target.messages || target.messages.length === 0) {
+      try {
+        const res = await fetch(`/api/memory?chatId=${encodeURIComponent(session.id)}`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.session) target = data.session;
+        }
+      } catch {}
+    }
+
+    const blob = new Blob([JSON.stringify(target, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `transcript_${session.characterName || 'chat'}_${session.id}.json`;
+    a.download = `transcript_${target.characterName || 'chat'}_${target.id}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2088,7 +2112,7 @@ export default function AntigravityControlCenter() {
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: colors.textSub, fontFamily: 'monospace' }}>
-                          ID: {selectedSession.id} • {(selectedSession.messages || []).length} turns • ~{Math.floor(((selectedSession.messages || []).reduce((acc: number, m: any) => acc + (m.content?.length || 0), 0)) / 4).toLocaleString()} tokens preserved
+                          ID: {selectedSession.id} • {selectedSession.messages ? selectedSession.messages.length : (selectedSession.messageCount || 0)} turns • ~{selectedSession.messages ? Math.floor(((selectedSession.messages || []).reduce((acc: number, m: any) => acc + (m.content?.length || 0), 0)) / 4).toLocaleString() : (selectedSession.estimatedTokens || 0).toLocaleString()} tokens preserved
                         </div>
                       </div>
 
@@ -2137,7 +2161,12 @@ export default function AntigravityControlCenter() {
 
                     {/* Chat Messages Stream */}
                     <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, paddingRight: 6 }}>
-                      {(selectedSession.messages || []).length === 0 ? (
+                      {!selectedSession.messages && (selectedSession.messageCount || 0) > 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.textMuted, fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                          <span style={{ display: 'inline-block', width: 22, height: 22, border: `2px solid ${colors.border}`, borderTopColor: colors.btnPrimaryBg, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                          <span>Loading transcript turns...</span>
+                        </div>
+                      ) : (selectedSession.messages || []).length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.textMuted, fontStyle: 'italic', fontSize: 13 }}>
                           No turns recorded for this session yet.
                         </div>
