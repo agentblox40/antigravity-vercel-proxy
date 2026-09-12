@@ -180,7 +180,7 @@ const CONFIG_CACHE_TTL_MS = 30_000; // 30s cache for 0ms completion latency
 export async function getInjectionsConfig(forceRefresh = false): Promise<InjectionsConfig> {
   const now = Date.now();
   if (!forceRefresh && memoryInjectionsConfig && (now - lastConfigFetch < CONFIG_CACHE_TTL_MS)) {
-    return memoryInjectionsConfig;
+    return structuredClone(memoryInjectionsConfig);
   }
   if (isRedisConfigured()) {
     try {
@@ -196,7 +196,7 @@ export async function getInjectionsConfig(forceRefresh = false): Promise<Injecti
           }));
           memoryInjectionsConfig = parsed;
           lastConfigFetch = now;
-          return parsed;
+          return structuredClone(parsed);
         }
       }
     } catch (err) {
@@ -205,7 +205,7 @@ export async function getInjectionsConfig(forceRefresh = false): Promise<Injecti
   }
 
   lastConfigFetch = now;
-  return memoryInjectionsConfig;
+  return structuredClone(memoryInjectionsConfig);
 }
 
 export async function saveInjectionsConfig(config: InjectionsConfig): Promise<boolean> {
@@ -220,7 +220,7 @@ export async function saveInjectionsConfig(config: InjectionsConfig): Promise<bo
         console.error('[Injections] Failed to persist prompt injections config to Upstash Redis pipeline. Result:', results);
         return false;
       }
-      memoryInjectionsConfig = config;
+      memoryInjectionsConfig = structuredClone(config);
       lastConfigFetch = Date.now();
       return true;
     } catch (err: any) {
@@ -230,7 +230,7 @@ export async function saveInjectionsConfig(config: InjectionsConfig): Promise<bo
     }
   }
 
-  memoryInjectionsConfig = config;
+  memoryInjectionsConfig = structuredClone(config);
   lastConfigFetch = Date.now();
   return true;
 }
@@ -512,9 +512,9 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
     config.masterEnabled = nextState;
     const saved = await saveInjectionsConfig(config);
     if (!saved && isRedisConfigured()) {
-      config.masterEnabled = previousState;
-      const notice = `⚠️ Warning: Failed to persist Master Switch to cloud database (${getLastRedisError() || 'storage error'}). Reverted to ${previousState ? '🟢 ON' : '⚪ PAUSED'}.`;
-      return generateSettingsMenu(config, notice);
+      const currentValid = await getInjectionsConfig();
+      const notice = `⚠️ Warning: Failed to persist Master Switch to cloud database (${getLastRedisError() || 'storage error'}). Switch remains ${currentValid.masterEnabled ? '🟢 ON' : '⚪ PAUSED'}.`;
+      return generateSettingsMenu(currentValid, notice);
     }
     const notice = `✨ Updated: Master Injections Switch is now ${nextState ? '🟢 ON' : '⚪ PAUSED'}.`;
     return generateSettingsMenu(config, notice);
@@ -548,21 +548,9 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
       const saved = await saveInjectionsConfig(config);
       const actionWord = shouldEnable ? 'Enabled' : 'Disabled';
       if (!saved && isRedisConfigured()) {
-        // Revert in-memory modification on failure
-        for (const t of targets) {
-          const rawTarget = t.trim();
-          const num = parseInt(rawTarget, 10);
-          let targetInj: PromptInjection | undefined;
-          if (!isNaN(num) && num >= 1 && num <= injections.length) {
-            targetInj = injections[num - 1];
-          } else {
-            const lower = rawTarget.toLowerCase();
-            targetInj = injections.find(i => i.title.toLowerCase().includes(lower) || i.id.toLowerCase() === lower);
-          }
-          if (targetInj) targetInj.enabled = !shouldEnable;
-        }
-        const notice = `⚠️ Warning: Failed to persist update to cloud database (${getLastRedisError() || 'storage error'}). Reverted changes.`;
-        return generateSettingsMenu(config, notice);
+        const currentValid = await getInjectionsConfig();
+        const notice = `⚠️ Warning: Failed to persist update to cloud database (${getLastRedisError() || 'storage error'}). Directives were NOT updated.`;
+        return generateSettingsMenu(currentValid, notice);
       }
       const notice = `✨ Updated: ${actionWord} [${matchedTitles.join(', ')}].`;
       return generateSettingsMenu(config, notice);
