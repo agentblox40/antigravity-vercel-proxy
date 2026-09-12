@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.5.2`  
+> *Current Version*: `v3.5.3`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -119,11 +119,11 @@ To prevent Gemini 3.7 from dropping markdown syntax during extended thinking (th
 ## 5. Lossless Memory Engine & Upstash Redis Architecture
 
 ### A. Dual-Mode Storage
-1. **Cloud Mode (Upstash Redis REST)**:
+1. **Cloud Mode (Upstash Redis REST & Pipeline)**:
    - Uses `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
-   - All Redis commands are executed via **`HTTP POST` with JSON array body `[command, ...args]`** to bypass URL length limitations on multi-megabyte payloads.
+   - All session writes and prompt injection configurations (`antigravity:prompt_injections_v1`) are executed via **`HTTP POST` to `/pipeline` with command arrays `[[cmd, ...args]]`** to ensure atomic execution, eliminate payload truncation, and verify positive acknowledgements (`['OK']`).
 2. **In-Memory Fallback**:
-   - In the absence of Upstash credentials, maintains an in-memory session map.
+   - In the absence of Upstash credentials, maintains an in-memory session map and config cache.
 
 ### B. Session Lifecycle & Synchronization
 1. **Fingerprinting (`deriveChatFingerprint`)**:
@@ -143,6 +143,7 @@ To prevent Gemini 3.7 from dropping markdown syntax during extended thinking (th
 | `/` | `GET` | Interactive Glassmorphism Dashboard |
 | `/api/status` | `GET` | Live gateway telemetry, account cooldowns, active commit SHA, models catalog |
 | `/api/memory` | `GET, DELETE` | Session inspector and memory manager |
+| `/api/injections` | `GET, POST, DELETE` | Prompt injections management with Upstash `/pipeline` persistence |
 | `/v1/chat/completions` | `POST` | OpenAI-compatible streaming & non-streaming chat completions |
 | `/v1/models` | `GET` | OpenAI-compatible models list |
 

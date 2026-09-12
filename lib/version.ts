@@ -8,10 +8,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.2';
+export const CURRENT_VERSION = '3.5.3';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.3',
+    tag: 'PATCH',
+    title: 'Upstash Pipeline Prompt Injections Persistence & Cold-Boot Synchronization',
+    date: 'Sep 12, 2026',
+    commit: 'latest',
+    description: 'Upgraded prompt injections transport to the proven Upstash Redis /pipeline endpoint, ensuring directives and master toggle state reliably persist across serverless cold boots and beyond the 30-second memory cache TTL. Hardened API route segments and added frontend optimistic rollback.',
+    highlights: [
+      'Upstash /pipeline Transport: Replaced legacy REST single-command fetch with atomic /pipeline endpoint (HTTP POST to /pipeline with command arrays), matching lib/memory.ts reliability.',
+      'Strict Persistence Verification: saveInjectionsConfig asserts [\'OK\'] response from Upstash Redis, preventing silent failure and cache desynchronization.',
+      'API Error Propagation & Node.js Runtime: Exported runtime = \'nodejs\' and dynamic = \'force-dynamic\' in /api/injections, returning HTTP 500 if database persistence fails.',
+      'Frontend Optimistic Rollback: Added automatic state rollback and user alert notifications in dashboard handlers if Upstash or network persistence encounters an error.',
+      'Cold-Boot Resilience: Prompt injections configuration persists seamlessly across serverless container recycling with 0ms completion latency impact.'
+    ]
+  },
   {
     version: '3.5.2',
     tag: 'PATCH',

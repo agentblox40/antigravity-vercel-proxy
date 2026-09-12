@@ -118,25 +118,44 @@ let memoryInjectionsConfig: InjectionsConfig = {
 };
 
 // Upstash Redis helper
-async function callRedis(command: string, ...args: (string | number)[]): Promise<any> {
+export function isRedisConfigured(): boolean {
+  return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+}
+
+// Upstash Redis Pipeline helper (executes batch commands in 1 single HTTP request)
+async function callRedisPipeline(commands: (string | number)[][]): Promise<any[]> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  if (!url || !token || commands.length === 0) return [];
 
   try {
-    const res = await fetch(url, {
+    const cleanUrl = url.replace(/\/$/, '');
+    const res = await fetch(`${cleanUrl}/pipeline`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify([command, ...args])
+      body: JSON.stringify(commands)
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`[Injections Redis Error] Upstash pipeline HTTP ${res.status}: ${errText}`);
+      return [];
+    }
     const data = await res.json();
-    return data.result;
-  } catch {
-    return null;
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        if (item?.error) {
+          console.error('[Injections Redis Pipeline Command Error]:', item.error);
+        }
+      }
+      return data.map(item => item?.result);
+    }
+    return [];
+  } catch (err) {
+    console.error('[Injections Redis Error] Upstash pipeline request failed:', err);
+    return [];
   }
 }
 
@@ -149,33 +168,51 @@ export async function getInjectionsConfig(forceRefresh = false): Promise<Injecti
   if (!forceRefresh && memoryInjectionsConfig && (now - lastConfigFetch < CONFIG_CACHE_TTL_MS)) {
     return memoryInjectionsConfig;
   }
-  try {
-    const raw = await callRedis('GET', REDIS_KEY);
-    if (raw) {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (parsed && Array.isArray(parsed.injections)) {
-        // Ensure triggerMode exists on legacy items
-        parsed.injections = parsed.injections.map((i: any) => ({
-          triggerMode: 'always',
-          ...i
-        }));
-        memoryInjectionsConfig = parsed;
-        lastConfigFetch = now;
-        return parsed;
+  if (isRedisConfigured()) {
+    try {
+      const results = await callRedisPipeline([['GET', REDIS_KEY]]);
+      const raw = Array.isArray(results) && results.length > 0 ? results[0] : null;
+      if (raw) {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (parsed && Array.isArray(parsed.injections)) {
+          // Ensure triggerMode exists on legacy items
+          parsed.injections = parsed.injections.map((i: any) => ({
+            triggerMode: 'always',
+            ...i
+          }));
+          memoryInjectionsConfig = parsed;
+          lastConfigFetch = now;
+          return parsed;
+        }
       }
+    } catch (err) {
+      console.error('[Injections] Error fetching prompt injections config from Redis pipeline:', err);
     }
-  } catch {}
+  }
 
   lastConfigFetch = now;
   return memoryInjectionsConfig;
 }
 
-export async function saveInjectionsConfig(config: InjectionsConfig): Promise<void> {
+export async function saveInjectionsConfig(config: InjectionsConfig): Promise<boolean> {
   memoryInjectionsConfig = config;
   lastConfigFetch = Date.now();
-  try {
-    await callRedis('SET', REDIS_KEY, JSON.stringify(config));
-  } catch {}
+
+  if (isRedisConfigured()) {
+    try {
+      const results = await callRedisPipeline([['SET', REDIS_KEY, JSON.stringify(config)]]);
+      const success = Array.isArray(results) && results[0] === 'OK';
+      if (!success) {
+        console.error('[Injections] Failed to persist prompt injections config to Upstash Redis pipeline. Result:', results);
+      }
+      return success;
+    } catch (err) {
+      console.error('[Injections] Exception persisting prompt injections config to Upstash Redis pipeline:', err);
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function estimateTokens(text: string): number {

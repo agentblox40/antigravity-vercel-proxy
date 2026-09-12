@@ -6,6 +6,9 @@ import {
   generateHelpMenu,
   generateSettingsMenu,
   getInjectionsConfig,
+  saveInjectionsConfig,
+  isRedisConfigured,
+  DEFAULT_INJECTIONS,
 } from '../lib/injections';
 import {
   resolveWireModel,
@@ -441,6 +444,59 @@ async function main() {
   const afterFlush = await listSessionOverviews(10);
   assert.strictEqual(afterFlush.length, 0, 'deleteAllChatSessions must flush all sessions');
   console.log('✅ Memory & Chat Logs Architecture Verification passed.\n');
+
+  // ==========================================
+  // 8. Upstash Pipeline Prompt Injections Persistence & In-Chat Commands Verification
+  // ==========================================
+  console.log('Test 8: Upstash Pipeline Prompt Injections Persistence & In-Chat Commands Verification');
+
+  // 8.1 getInjectionsConfig initial state
+  const initialConfig = await getInjectionsConfig(true);
+  assert.ok(initialConfig, 'Initial injections config must exist');
+  assert.strictEqual(typeof initialConfig.masterEnabled, 'boolean');
+  assert.ok(Array.isArray(initialConfig.injections), 'Injections must be an array');
+  assert.ok(initialConfig.injections.length >= 7, 'Default curated injections must be present');
+
+  // 8.2 saveInjectionsConfig returns boolean
+  const modifiedConfig = {
+    ...initialConfig,
+    masterEnabled: false,
+  };
+  const saveResult = await saveInjectionsConfig(modifiedConfig);
+  assert.strictEqual(typeof saveResult, 'boolean');
+  assert.strictEqual(saveResult, true, 'saveInjectionsConfig must return true in local/in-memory mode');
+
+  const fetchedAfterSave = await getInjectionsConfig();
+  assert.strictEqual(fetchedAfterSave.masterEnabled, false, 'Config must reflect updated masterEnabled');
+
+  // 8.3 In-chat master toggle command
+  const masterOnRes = await executeInChatCommand({ type: 'master_toggle', rawInput: '<INJECTIONS: ON>', masterEnabled: true });
+  assert.ok(masterOnRes.includes('Master Injections Switch is now 🟢 ON'));
+  const configAfterMasterOn = await getInjectionsConfig();
+  assert.strictEqual(configAfterMasterOn.masterEnabled, true, 'Master switch should be ON');
+
+  // 8.4 In-chat enable / disable commands
+  const enableRes = await executeInChatCommand({ type: 'enable', rawInput: '<ENABLE: Slow Romance>', targets: ['Slow Romance'] });
+  assert.ok(enableRes.includes('Enabled [Slow Romance Setting]'));
+  const configAfterEnable = await getInjectionsConfig();
+  const slowRomanceInj = configAfterEnable.injections.find(i => i.title.toLowerCase().includes('slow romance'));
+  assert.strictEqual(slowRomanceInj?.enabled, true, 'Slow Romance injection should be enabled');
+
+  const disableRes = await executeInChatCommand({ type: 'disable', rawInput: '<DISABLE: Slow Romance>', targets: ['Slow Romance'] });
+  assert.ok(disableRes.includes('Disabled [Slow Romance Setting]'));
+  const configAfterDisable = await getInjectionsConfig();
+  const slowRomanceInjAfterDisable = configAfterDisable.injections.find(i => i.title.toLowerCase().includes('slow romance'));
+  assert.strictEqual(slowRomanceInjAfterDisable?.enabled, false, 'Slow Romance injection should be disabled');
+
+  // 8.5 Reset to defaults
+  await saveInjectionsConfig({
+    masterEnabled: true,
+    injections: DEFAULT_INJECTIONS
+  });
+  const resetCheck = await getInjectionsConfig(true);
+  assert.strictEqual(resetCheck.masterEnabled, true);
+
+  console.log('✅ Upstash Pipeline Prompt Injections Persistence & In-Chat Commands Verification passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }

@@ -470,18 +470,30 @@ export default function AntigravityControlCenter() {
   };
 
   const handleToggleMasterInjections = async (newVal: boolean) => {
+    const prevVal = !newVal;
     setInjectionsData((prev: any) => {
       const activeCount = newVal ? (prev.injections || []).filter((inj: any) => inj.enabled).length : 0;
       const totalTokens = newVal ? (prev.injections || []).reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
       return { ...prev, masterEnabled: newVal, activeCount, totalTokens };
     });
     try {
-      await fetch('/api/injections', {
+      const res = await fetch('/api/injections', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ masterEnabled: newVal })
       });
-    } catch {}
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Failed to update master switch (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      setInjectionsData((prev: any) => {
+        const activeCount = prevVal ? (prev.injections || []).filter((inj: any) => inj.enabled).length : 0;
+        const totalTokens = prevVal ? (prev.injections || []).reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
+        return { ...prev, masterEnabled: prevVal, activeCount, totalTokens };
+      });
+      alert(`⚠️ Injections Update Failed: ${err?.message || 'Network or database error'}. Reverted switch.`);
+    }
   };
 
   const handleToggleSingleInjection = async (id: string, currentEnabled: boolean) => {
@@ -495,12 +507,25 @@ export default function AntigravityControlCenter() {
     });
 
     try {
-      await fetch('/api/injections', {
+      const res = await fetch('/api/injections', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggle', id, enabled: nextVal })
       });
-    } catch {}
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Failed to toggle injection (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      setInjectionsData((prev: any) => {
+        const updated = (prev.injections || []).map((inj: any) => inj.id === id ? { ...inj, enabled: currentEnabled } : inj);
+        const isMasterOn = prev.masterEnabled !== false;
+        const activeCount = isMasterOn ? updated.filter((inj: any) => inj.enabled).length : 0;
+        const totalTokens = isMasterOn ? updated.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
+        return { ...prev, injections: updated, activeCount, totalTokens };
+      });
+      alert(`⚠️ Injections Update Failed: ${err?.message || 'Network or database error'}. Reverted toggle.`);
+    }
   };
 
   const handleSaveInjection = async (inj: any) => {
@@ -529,8 +554,13 @@ export default function AntigravityControlCenter() {
         setIsCreatingNewInj(false);
         setNewInjTitle('');
         setNewInjContent('');
+      } else {
+        const data = await res.json().catch(() => null);
+        alert(`⚠️ Failed to save injection: ${data?.error || `HTTP ${res.status}`}`);
       }
-    } catch {}
+    } catch (err: any) {
+      alert(`⚠️ Failed to save injection: ${err?.message || 'Network or database error'}`);
+    }
     finally {
       setIsSavingInjection(false);
     }
@@ -538,7 +568,9 @@ export default function AntigravityControlCenter() {
 
   const handleDeleteInjection = async (id: string) => {
     if (!confirm('Are you sure you want to delete this prompt injection block?')) return;
+    let backupInjections: any[] = [];
     setInjectionsData((prev: any) => {
+      backupInjections = prev.injections || [];
       const updated = (prev.injections || []).filter((inj: any) => inj.id !== id);
       const isMasterOn = prev.masterEnabled !== false;
       const activeCount = isMasterOn ? updated.filter((inj: any) => inj.enabled).length : 0;
@@ -547,11 +579,23 @@ export default function AntigravityControlCenter() {
     });
 
     try {
-      await fetch(`/api/injections?id=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/injections?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${apiKey}` }
       });
-    } catch {}
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Failed to delete injection (HTTP ${res.status})`);
+      }
+    } catch (err: any) {
+      setInjectionsData((prev: any) => {
+        const isMasterOn = prev.masterEnabled !== false;
+        const activeCount = isMasterOn ? backupInjections.filter((inj: any) => inj.enabled).length : 0;
+        const totalTokens = isMasterOn ? backupInjections.reduce((acc: number, inj: any) => acc + (inj.enabled ? (inj.tokens || 0) : 0), 0) : 0;
+        return { ...prev, injections: backupInjections, activeCount, totalTokens };
+      });
+      alert(`⚠️ Injections Delete Failed: ${err?.message || 'Network or database error'}. Restored item.`);
+    }
   };
 
   const handleResetInjectionsToDefault = async () => {
@@ -564,8 +608,13 @@ export default function AntigravityControlCenter() {
       });
       if (res.ok) {
         await fetchInjectionsData();
+      } else {
+        const data = await res.json().catch(() => null);
+        alert(`⚠️ Failed to reset injections: ${data?.error || `HTTP ${res.status}`}`);
       }
-    } catch {}
+    } catch (err: any) {
+      alert(`⚠️ Failed to reset injections: ${err?.message || 'Network error'}`);
+    }
   };
 
   const fetchMemoryOverview = async (currentKey = apiKey) => {
