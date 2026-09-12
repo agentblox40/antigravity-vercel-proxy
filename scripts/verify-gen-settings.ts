@@ -8,6 +8,7 @@ import {
   getInjectionsConfig,
   saveInjectionsConfig,
   isRedisConfigured,
+  getLastRedisError,
   DEFAULT_INJECTIONS,
 } from '../lib/injections';
 import {
@@ -495,6 +496,31 @@ async function main() {
   });
   const resetCheck = await getInjectionsConfig(true);
   assert.strictEqual(resetCheck.masterEnabled, true);
+
+  // 8.6 Persistence failure simulation & non-corrupting memory cache
+  process.env.UPSTASH_REDIS_REST_URL = 'http://127.0.0.1:9'; // Non-routable local port to simulate failure
+  process.env.UPSTASH_REDIS_REST_TOKEN = 'mock_token';
+  assert.strictEqual(isRedisConfigured(), true);
+
+  const failSaveResult = await saveInjectionsConfig({
+    masterEnabled: false,
+    injections: DEFAULT_INJECTIONS
+  });
+  assert.strictEqual(failSaveResult, false, 'saveInjectionsConfig must return false when Redis write fails');
+  assert.ok(getLastRedisError().length > 0, 'getLastRedisError must record the failure');
+
+  // Verify memory cache did NOT get corrupted with unpersisted masterEnabled: false
+  const cacheAfterFailure = await getInjectionsConfig();
+  assert.strictEqual(cacheAfterFailure.masterEnabled, true, 'Memory cache must not be corrupted when Redis persistence fails');
+
+  // In-chat command warning test when Redis fails
+  const failedCmdRes = await executeInChatCommand({ type: 'master_toggle', rawInput: '<INJECTIONS: OFF>', masterEnabled: false });
+  assert.ok(failedCmdRes.includes('⚠️ Warning: Failed to persist Master Switch to cloud database'), 'In-chat command must issue clear persistence warning');
+
+  // Clean up mock environment
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  assert.strictEqual(isRedisConfigured(), false);
 
   console.log('✅ Upstash Pipeline Prompt Injections Persistence & In-Chat Commands Verification passed.\n');
 

@@ -469,6 +469,11 @@ export default function AntigravityControlCenter() {
     }
   };
 
+  const formatApiError = (data: any, res: Response, fallback: string) => {
+    const base = typeof data?.error === 'string' ? data.error : (data?.error?.message || `${fallback} (HTTP ${res.status})`);
+    return data?.details ? `${base}: ${data.details}` : base;
+  };
+
   const handleToggleMasterInjections = async (newVal: boolean) => {
     const prevVal = !newVal;
     setInjectionsData((prev: any) => {
@@ -484,7 +489,7 @@ export default function AntigravityControlCenter() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        throw new Error(data?.details ? `${data.error}: ${data.details}` : (data?.error || `Failed to update master switch (HTTP ${res.status})`));
+        throw new Error(formatApiError(data, res, 'Failed to update master switch'));
       }
     } catch (err: any) {
       setInjectionsData((prev: any) => {
@@ -514,7 +519,7 @@ export default function AntigravityControlCenter() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        throw new Error(data?.details ? `${data.error}: ${data.details}` : (data?.error || `Failed to toggle injection (HTTP ${res.status})`));
+        throw new Error(formatApiError(data, res, 'Failed to toggle injection'));
       }
     } catch (err: any) {
       setInjectionsData((prev: any) => {
@@ -556,7 +561,7 @@ export default function AntigravityControlCenter() {
         setNewInjContent('');
       } else {
         const data = await res.json().catch(() => null);
-        alert(`⚠️ Failed to save injection: ${data?.details ? `${data.error}: ${data.details}` : (data?.error || `HTTP ${res.status}`)}`);
+        alert(`⚠️ Failed to save injection: ${formatApiError(data, res, 'Server error')}`);
       }
     } catch (err: any) {
       alert(`⚠️ Failed to save injection: ${err?.message || 'Network or database error'}`);
@@ -585,7 +590,7 @@ export default function AntigravityControlCenter() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        throw new Error(data?.details ? `${data.error}: ${data.details}` : (data?.error || `Failed to delete injection (HTTP ${res.status})`));
+        throw new Error(formatApiError(data, res, 'Failed to delete injection'));
       }
     } catch (err: any) {
       setInjectionsData((prev: any) => {
@@ -610,7 +615,7 @@ export default function AntigravityControlCenter() {
         await fetchInjectionsData();
       } else {
         const data = await res.json().catch(() => null);
-        alert(`⚠️ Failed to reset injections: ${data?.details ? `${data.error}: ${data.details}` : (data?.error || `HTTP ${res.status}`)}`);
+        alert(`⚠️ Failed to reset injections: ${formatApiError(data, res, 'Server error')}`);
       }
     } catch (err: any) {
       alert(`⚠️ Failed to reset injections: ${err?.message || 'Network error'}`);

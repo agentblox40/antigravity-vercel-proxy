@@ -130,6 +130,7 @@ export function isRedisConfigured(): boolean {
 
 // Upstash Redis Pipeline helper (executes batch commands in 1 single HTTP request)
 async function callRedisPipeline(commands: (string | number)[][]): Promise<any[]> {
+  lastRedisError = '';
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token || commands.length === 0) {
@@ -208,9 +209,6 @@ export async function getInjectionsConfig(forceRefresh = false): Promise<Injecti
 }
 
 export async function saveInjectionsConfig(config: InjectionsConfig): Promise<boolean> {
-  memoryInjectionsConfig = config;
-  lastConfigFetch = Date.now();
-
   if (isRedisConfigured()) {
     try {
       const results = await callRedisPipeline([['SET', REDIS_KEY, JSON.stringify(config)]]);
@@ -220,8 +218,11 @@ export async function saveInjectionsConfig(config: InjectionsConfig): Promise<bo
           lastRedisError = `Unexpected result: ${JSON.stringify(results)}`;
         }
         console.error('[Injections] Failed to persist prompt injections config to Upstash Redis pipeline. Result:', results);
+        return false;
       }
-      return success;
+      memoryInjectionsConfig = config;
+      lastConfigFetch = Date.now();
+      return true;
     } catch (err: any) {
       lastRedisError = `saveInjectionsConfig exception: ${err?.message || String(err)}`;
       console.error('[Injections] Exception persisting prompt injections config to Upstash Redis pipeline:', err);
@@ -229,6 +230,8 @@ export async function saveInjectionsConfig(config: InjectionsConfig): Promise<bo
     }
   }
 
+  memoryInjectionsConfig = config;
+  lastConfigFetch = Date.now();
   return true;
 }
 
@@ -505,8 +508,14 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
 
   if (cmd.type === 'master_toggle') {
     const nextState = cmd.masterEnabled ?? !config.masterEnabled;
+    const previousState = config.masterEnabled;
     config.masterEnabled = nextState;
-    await saveInjectionsConfig(config);
+    const saved = await saveInjectionsConfig(config);
+    if (!saved && isRedisConfigured()) {
+      config.masterEnabled = previousState;
+      const notice = `⚠️ Warning: Failed to persist Master Switch to cloud database (${getLastRedisError() || 'storage error'}). Reverted to ${previousState ? '🟢 ON' : '⚪ PAUSED'}.`;
+      return generateSettingsMenu(config, notice);
+    }
     const notice = `✨ Updated: Master Injections Switch is now ${nextState ? '🟢 ON' : '⚪ PAUSED'}.`;
     return generateSettingsMenu(config, notice);
   }
@@ -536,8 +545,25 @@ export async function executeInChatCommand(cmd: InChatCommand): Promise<string> 
     }
 
     if (matchedTitles.length > 0) {
-      await saveInjectionsConfig(config);
+      const saved = await saveInjectionsConfig(config);
       const actionWord = shouldEnable ? 'Enabled' : 'Disabled';
+      if (!saved && isRedisConfigured()) {
+        // Revert in-memory modification on failure
+        for (const t of targets) {
+          const rawTarget = t.trim();
+          const num = parseInt(rawTarget, 10);
+          let targetInj: PromptInjection | undefined;
+          if (!isNaN(num) && num >= 1 && num <= injections.length) {
+            targetInj = injections[num - 1];
+          } else {
+            const lower = rawTarget.toLowerCase();
+            targetInj = injections.find(i => i.title.toLowerCase().includes(lower) || i.id.toLowerCase() === lower);
+          }
+          if (targetInj) targetInj.enabled = !shouldEnable;
+        }
+        const notice = `⚠️ Warning: Failed to persist update to cloud database (${getLastRedisError() || 'storage error'}). Reverted changes.`;
+        return generateSettingsMenu(config, notice);
+      }
       const notice = `✨ Updated: ${actionWord} [${matchedTitles.join(', ')}].`;
       return generateSettingsMenu(config, notice);
     } else {

@@ -193,6 +193,11 @@ export async function DELETE(req: NextRequest) {
   }
 
   const currentConfig = await getInjectionsConfig();
+  const exists = (currentConfig.injections || []).some(inj => inj.id === id);
+  if (!exists) {
+    return NextResponse.json({ error: 'Injection not found' }, { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+  }
+
   currentConfig.injections = (currentConfig.injections || []).filter(inj => inj.id !== id);
   const saved = await saveInjectionsConfig(currentConfig);
   if (isRedisConfigured() && !saved) {
