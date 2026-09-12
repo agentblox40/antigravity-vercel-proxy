@@ -3,6 +3,7 @@ import {
   getInjectionsConfig,
   saveInjectionsConfig,
   isRedisConfigured,
+  getLastRedisError,
   estimateTokens,
   DEFAULT_INJECTIONS,
   PromptInjection
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
       const saved = await saveInjectionsConfig(currentConfig);
       if (isRedisConfigured() && !saved) {
         return NextResponse.json(
-          { error: 'Failed to persist prompt injections to cloud database' },
+          { error: 'Failed to persist prompt injections to cloud database', details: getLastRedisError() },
           { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
         );
       }
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       const saved = await saveInjectionsConfig(currentConfig);
       if (isRedisConfigured() && !saved) {
         return NextResponse.json(
-          { error: 'Failed to persist prompt injections to cloud database' },
+          { error: 'Failed to persist prompt injections to cloud database', details: getLastRedisError() },
           { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
         );
       }
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       const saved = await saveInjectionsConfig(resetConfig);
       if (isRedisConfigured() && !saved) {
         return NextResponse.json(
-          { error: 'Failed to persist prompt injections to cloud database' },
+          { error: 'Failed to persist prompt injections to cloud database', details: getLastRedisError() },
           { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
         );
       }
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
         const saved = await saveInjectionsConfig(currentConfig);
         if (isRedisConfigured() && !saved) {
           return NextResponse.json(
-            { error: 'Failed to persist prompt injections to cloud database' },
+            { error: 'Failed to persist prompt injections to cloud database', details: getLastRedisError() },
             { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
           );
         }
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       const saved = await saveInjectionsConfig(currentConfig);
       if (isRedisConfigured() && !saved) {
         return NextResponse.json(
-          { error: 'Failed to persist prompt injections to cloud database' },
+          { error: 'Failed to persist prompt injections to cloud database', details: getLastRedisError() },
           { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
         );
       }
@@ -196,7 +197,7 @@ export async function DELETE(req: NextRequest) {
   const saved = await saveInjectionsConfig(currentConfig);
   if (isRedisConfigured() && !saved) {
     return NextResponse.json(
-      { error: 'Failed to persist prompt injections to cloud database' },
+      { error: 'Failed to persist prompt injections to cloud database', details: getLastRedisError() },
       { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }
     );
   }

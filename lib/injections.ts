@@ -118,6 +118,12 @@ let memoryInjectionsConfig: InjectionsConfig = {
 };
 
 // Upstash Redis helper
+let lastRedisError = '';
+
+export function getLastRedisError(): string {
+  return lastRedisError;
+}
+
 export function isRedisConfigured(): boolean {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 }
@@ -126,7 +132,10 @@ export function isRedisConfigured(): boolean {
 async function callRedisPipeline(commands: (string | number)[][]): Promise<any[]> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token || commands.length === 0) return [];
+  if (!url || !token || commands.length === 0) {
+    lastRedisError = `Missing config: url=${!!url}, token=${!!token}, commands=${commands.length}`;
+    return [];
+  }
 
   try {
     const cleanUrl = url.replace(/\/$/, '');
@@ -140,6 +149,7 @@ async function callRedisPipeline(commands: (string | number)[][]): Promise<any[]
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
+      lastRedisError = `HTTP ${res.status}: ${errText}`;
       console.error(`[Injections Redis Error] Upstash pipeline HTTP ${res.status}: ${errText}`);
       return [];
     }
@@ -147,13 +157,16 @@ async function callRedisPipeline(commands: (string | number)[][]): Promise<any[]
     if (Array.isArray(data)) {
       for (const item of data) {
         if (item?.error) {
+          lastRedisError = `Command Error: ${item.error}`;
           console.error('[Injections Redis Pipeline Command Error]:', item.error);
         }
       }
       return data.map(item => item?.result);
     }
+    lastRedisError = `Non-array data: ${JSON.stringify(data)}`;
     return [];
-  } catch (err) {
+  } catch (err: any) {
+    lastRedisError = `Exception: ${err?.message || String(err)}`;
     console.error('[Injections Redis Error] Upstash pipeline request failed:', err);
     return [];
   }
@@ -203,10 +216,14 @@ export async function saveInjectionsConfig(config: InjectionsConfig): Promise<bo
       const results = await callRedisPipeline([['SET', REDIS_KEY, JSON.stringify(config)]]);
       const success = Array.isArray(results) && results[0] === 'OK';
       if (!success) {
+        if (!lastRedisError) {
+          lastRedisError = `Unexpected result: ${JSON.stringify(results)}`;
+        }
         console.error('[Injections] Failed to persist prompt injections config to Upstash Redis pipeline. Result:', results);
       }
       return success;
-    } catch (err) {
+    } catch (err: any) {
+      lastRedisError = `saveInjectionsConfig exception: ${err?.message || String(err)}`;
       console.error('[Injections] Exception persisting prompt injections config to Upstash Redis pipeline:', err);
       return false;
     }
