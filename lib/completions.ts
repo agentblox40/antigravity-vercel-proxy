@@ -88,6 +88,8 @@ export async function handleChatCompletions(req: NextRequest) {
             'gemini-3.8-flash',
             'gemini-3.8-flash-high',
             'gemini-3.8-flash-max',
+            'gemini-3.8-flash-medium',
+            'gemini-3.8-flash-low',
             'gemini-3.8-flash-fast',
             'gemini-3.7-flash',
             'gemini-3.7-flash-high',
@@ -147,14 +149,14 @@ export async function handleChatCompletions(req: NextRequest) {
   let sessionPromise: Promise<any> | null = null;
   const disableMemory = req.headers.get('x-disable-memory') === 'true' || body.disable_memory === true;
 
-  if (!disableMemory) {
-    try {
-      const { characterId, characterName, chatId, sessionTitle } = deriveChatFingerprint(
-        messages,
-        rawSystemText,
-        req.headers
-      );
-      currentChatId = chatId;
+  try {
+    const { characterId, characterName, chatId, sessionTitle } = deriveChatFingerprint(
+      messages,
+      rawSystemText,
+      req.headers
+    );
+    currentChatId = chatId;
+    if (!disableMemory) {
       // Non-blocking: execute session lookup in the background parallel to Google call
       sessionPromise = getOrCreateChatSession(chatId, characterId, characterName, sessionTitle).then(s => {
         if (rawSystemText && s) s.systemPrompt = rawSystemText;
@@ -163,9 +165,9 @@ export async function handleChatCompletions(req: NextRequest) {
         console.warn('Memory engine non-blocking warning:', err);
         return null;
       });
-    } catch (memErr) {
-      console.warn('Memory fingerprint non-blocking warning:', memErr);
     }
+  } catch (memErr) {
+    console.warn('Memory fingerprint non-blocking warning:', memErr);
   }
 
   // Check for In-Chat Roleplay Control Commands (<MYSETTINGS>, <GENSETTINGS>, <SET: ...>, <RESET_SETTINGS>, <ENABLE: ...>, <DISABLE: ...>)
@@ -382,7 +384,15 @@ export async function handleChatCompletions(req: NextRequest) {
   for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
-      const unclampedContext = req.headers.get('x-unclamped-context') === 'true' || body.unclamped_context === true;
+      const unclampedHeader = (req.headers.get('x-unclamped-context') || '').toLowerCase();
+      const unclampedContext =
+        unclampedHeader === 'true' ||
+        unclampedHeader === '1' ||
+        unclampedHeader === 'yes' ||
+        body.unclamped_context === true ||
+        body.unclamped_context === 1 ||
+        body.unclampedContext === true;
+
       const envelope = transformOpenAIToAntigravity(
         body,
         resolved,
@@ -419,20 +429,28 @@ export async function handleChatCompletions(req: NextRequest) {
           const errLower = errText.toLowerCase();
 
           if (res.status === 429) {
-            const isClaude = resolved.wireModel.startsWith('claude-');
+            const isClaude = resolved.wireModel.startsWith('claude-') || (body.model || '').toLowerCase().includes('claude');
             const isDailyExhaustion =
               errText.includes('PerDay') ||
               errLower.includes('per_day') ||
               errLower.includes('perday') ||
               errLower.includes('per day') ||
               errLower.includes('daily') ||
-              (isClaude && (errText.includes('RESOURCE_EXHAUSTED') || errLower.includes('quota exceeded')));
+              (isClaude && (
+                errText.includes('RESOURCE_EXHAUSTED') ||
+                errLower.includes('resource_exhausted') ||
+                errLower.includes('quota exceeded') ||
+                errLower.includes('quota_exceeded')
+              ));
+
+            if (isDailyExhaustion) {
+              // Mark account with 1-hour cooldown so proxy does not misleadingly hammer Google every 20s
+              account.cooldownUntil = Date.now() + 3600 * 1000;
+              account.failCount++;
+            }
 
             if (isClaude && isDailyExhaustion) {
               console.warn(`[Claude Daily Quota Exhausted] on ${account.name} (${upstreamUrl}): ${errText}`);
-              // Set 1-hour cooldown so the proxy does not misleadingly retry after 20s
-              account.cooldownUntil = Date.now() + 3600 * 1000;
-              account.failCount++;
               attemptLogs.push({ account: account.name, status: 429, error: `Daily quota exhausted: ${errText.slice(0, 300)}` });
 
               return NextResponse.json(
@@ -472,7 +490,7 @@ export async function handleChatCompletions(req: NextRequest) {
       if (!upstreamRes) {
         account.failCount++;
         const hasRateLimit = attemptLogs.some(l => l.account === account.name && (l.status === 429 || l.status === 503));
-        if (hasRateLimit) {
+        if (hasRateLimit && account.cooldownUntil <= Date.now()) {
           account.cooldownUntil = Date.now() + 20000;
         }
         continue;

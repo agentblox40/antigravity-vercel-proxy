@@ -709,6 +709,62 @@ async function main() {
     wireSys2.request.sessionId,
     'Same system prompt without chatId must produce deterministic sessionId'
   );
+
+  // 9.6 Massive character count with short turn count (<= 10 turns) clamped properly under ~100k chars
+  const massiveCharDialogue: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: 'You are an AI.' }
+  ];
+  for (let i = 1; i <= 4; i++) {
+    massiveCharDialogue.push({ role: 'user', content: 'U'.repeat(15000) });
+    massiveCharDialogue.push({ role: 'assistant', content: 'A'.repeat(15000) });
+  }
+  const charClampedWire = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: massiveCharDialogue },
+    claudeSonnetFast!,
+    'test-proj'
+  );
+  const totalWireChars = charClampedWire.request.contents.reduce(
+    (acc: number, c: any) => acc + (c.parts?.[0]?.text?.length || 0),
+    0
+  );
+  assert.ok(
+    totalWireChars <= 100000,
+    `Dialogue exceeding 100k chars must be clamped to <= 100k chars even with <= 10 turns, got ${totalWireChars}`
+  );
+  assert.strictEqual(charClampedWire.request.contents[0].role, 'user', 'Clamped turns must begin with user');
+  assert.strictEqual(
+    charClampedWire.request.contents[charClampedWire.request.contents.length - 1].role,
+    'user',
+    'Clamped turns must terminate with user'
+  );
+
+  // 9.7 Numeric chatId / sessionId must not throw TypeError
+  const numericSessionWire = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Hi' }], chat_id: 987654321 },
+    claudeSonnetFast!,
+    'test-proj'
+  );
+  assert.ok(
+    /^-\d+$/.test(numericSessionWire.request.sessionId),
+    `Numeric chatId must produce valid negative numeric sessionId, got ${numericSessionWire.request.sessionId}`
+  );
+
+  // 9.8 Extended Claude aliases and path prefixes
+  const opusThinkingFast = resolveWireModel('claude-opus-4-6-thinking-fast');
+  assert.ok(opusThinkingFast, 'claude-opus-4-6-thinking-fast failed to resolve');
+  assert.strictEqual(opusThinkingFast!.wireModel, 'claude-opus-4-6-thinking');
+  assert.strictEqual(opusThinkingFast!.defaultThinkingBudget, 0);
+
+  const opusThinkingLow = resolveWireModel('claude-opus-4-6-thinking:low');
+  assert.ok(opusThinkingLow, 'claude-opus-4-6-thinking:low failed to resolve');
+  assert.strictEqual(opusThinkingLow!.wireModel, 'claude-opus-4-6-thinking');
+  assert.strictEqual(opusThinkingLow!.defaultThinkingBudget, 2048);
+
+  const anthropicSonnet = resolveWireModel('anthropic/claude-sonnet-4-6-fast');
+  assert.ok(anthropicSonnet, 'anthropic/claude-sonnet-4-6-fast failed to resolve');
+  assert.strictEqual(anthropicSonnet!.wireModel, 'claude-sonnet-4-6');
+  assert.strictEqual(anthropicSonnet!.defaultThinkingBudget, 0);
+
   console.log('✅ Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse) passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');

@@ -327,7 +327,7 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   }
 
   // 4. Claude Models
-  if (
+  const isSonnetFast =
     clean === 'claude-sonnet-4-6-fast' ||
     clean === 'claude-sonnet-4-6:off' ||
     clean === 'claude-sonnet-4-6-off' ||
@@ -335,19 +335,25 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     clean === 'claude-sonnet-4-6:no-think' ||
     clean === 'claude-sonnet-4-6:fast' ||
     clean === 'claude-sonnet-fast' ||
-    clean === 'claude-sonnet:off'
-  ) {
+    clean === 'claude-sonnet:off' ||
+    clean === 'anthropic/claude-sonnet-4-6-fast' ||
+    clean === 'models/claude-sonnet-4-6-fast';
+  if (isSonnetFast) {
     return { wireModel: 'claude-sonnet-4-6', defaultThinkingBudget: 0 };
   }
-  if (
+
+  const isSonnetLow =
     clean === 'claude-sonnet-4-6-low' ||
     clean === 'claude-sonnet-4-6:low' ||
     clean === 'claude-sonnet-low' ||
-    clean === 'claude-sonnet:low'
-  ) {
+    clean === 'claude-sonnet:low' ||
+    clean === 'anthropic/claude-sonnet-4-6-low' ||
+    clean === 'models/claude-sonnet-4-6-low';
+  if (isSonnetLow) {
     return { wireModel: 'claude-sonnet-4-6', defaultThinkingBudget: 2048 };
   }
-  if (
+
+  const isOpusFast =
     clean === 'claude-opus-4-6-fast' ||
     clean === 'claude-opus-4-6:off' ||
     clean === 'claude-opus-4-6-off' ||
@@ -355,22 +361,47 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     clean === 'claude-opus-4-6:no-think' ||
     clean === 'claude-opus-4-6:fast' ||
     clean === 'claude-opus-fast' ||
-    clean === 'claude-opus:off'
-  ) {
+    clean === 'claude-opus:off' ||
+    clean === 'claude-opus-4-6-thinking-fast' ||
+    clean === 'claude-opus-4-6-thinking:fast' ||
+    clean === 'claude-opus-4-6-thinking:off' ||
+    clean === 'claude-opus-4-6-thinking-off' ||
+    clean === 'claude-opus-4-6-thinking-no-think' ||
+    clean === 'claude-opus-4-6-thinking:no-think' ||
+    clean === 'anthropic/claude-opus-4-6-fast' ||
+    clean === 'models/claude-opus-4-6-fast';
+  if (isOpusFast) {
     return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 0 };
   }
-  if (
+
+  const isOpusLow =
     clean === 'claude-opus-4-6-low' ||
     clean === 'claude-opus-4-6:low' ||
     clean === 'claude-opus-low' ||
-    clean === 'claude-opus:low'
-  ) {
+    clean === 'claude-opus:low' ||
+    clean === 'claude-opus-4-6-thinking-low' ||
+    clean === 'claude-opus-4-6-thinking:low' ||
+    clean === 'anthropic/claude-opus-4-6-low' ||
+    clean === 'models/claude-opus-4-6-low';
+  if (isOpusLow) {
     return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 2048 };
   }
-  if (clean === 'claude-opus-4-6-thinking' || clean === 'claude-opus-4-6' || clean === 'claude-opus') {
+
+  if (
+    clean === 'claude-opus-4-6-thinking' ||
+    clean === 'claude-opus-4-6' ||
+    clean === 'claude-opus' ||
+    clean === 'anthropic/claude-opus-4-6-thinking' ||
+    clean === 'models/claude-opus-4-6-thinking'
+  ) {
     return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 16384 };
   }
-  if (clean === 'claude-sonnet-4-6' || clean === 'claude-sonnet') {
+  if (
+    clean === 'claude-sonnet-4-6' ||
+    clean === 'claude-sonnet' ||
+    clean === 'anthropic/claude-sonnet-4-6' ||
+    clean === 'models/claude-sonnet-4-6'
+  ) {
     return { wireModel: 'claude-sonnet-4-6', defaultThinkingBudget: 16384 };
   }
 
@@ -437,10 +468,10 @@ export function transformOpenAIToAntigravity(
     }
   }
 
-  // Smart Context Clamping for 3rd-Party Claude Models (>30 turns or >~25k tokens)
+  // Smart Context Clamping for 3rd-Party Claude Models (>30 turns or >~25k tokens / 100k chars)
   let dialogueTurns = contents;
-  const isClaude = resolved.wireModel.startsWith('claude-') || (body.model || '').toLowerCase().startsWith('claude-');
-  const isUnclamped = options?.unclampedContext === true || body.unclamped_context === true;
+  const isClaude = resolved.wireModel.startsWith('claude-') || (body.model || '').toLowerCase().includes('claude');
+  const isUnclamped = options?.unclampedContext === true || body.unclamped_context === true || body.unclampedContext === true;
 
   if (isClaude && !isUnclamped) {
     const totalChars = contents.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0);
@@ -448,7 +479,7 @@ export function transformOpenAIToAntigravity(
 
     if (isMassive) {
       let clamped = contents.length > 30 ? contents.slice(-30) : contents;
-      while (clamped.length > 10 && clamped.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0) > 100000) {
+      while (clamped.length > 2 && clamped.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0) > 100000) {
         clamped = clamped.slice(2);
       }
       // Ensure sliced dialogue begins with a user turn as required by Google API protocol
@@ -484,17 +515,31 @@ export function transformOpenAIToAntigravity(
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
   }
 
-  // Ensure Claude dialogue turns do not exceed 30 turns and strictly begin/end on user
-  if (isClaude && !isUnclamped && merged.length > 30) {
-    let finalMerged = merged.slice(-30);
-    if (finalMerged.length > 0 && finalMerged[0].role === 'model') {
-      finalMerged = finalMerged.slice(1);
+  // Ensure Claude dialogue turns do not exceed 30 turns or 100k chars (~25k tokens), and strictly begin/end on user
+  if (isClaude && !isUnclamped) {
+    if (merged.length > 30) {
+      let finalMerged = merged.slice(-30);
+      if (finalMerged.length > 0 && finalMerged[0].role === 'model') {
+        finalMerged = finalMerged.slice(1);
+      }
+      if (finalMerged.length === 0 || finalMerged[0].role !== 'user') {
+        finalMerged.unshift({ role: 'user', parts: [{ text: '...' }] });
+      }
+      merged.length = 0;
+      merged.push(...finalMerged);
     }
-    if (finalMerged.length === 0 || finalMerged[0].role !== 'user') {
-      finalMerged.unshift({ role: 'user', parts: [{ text: '...' }] });
+    while (merged.length > 2 && merged.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0) > 100000) {
+      merged.splice(0, 2);
+      if (merged.length > 0 && merged[0].role === 'model') {
+        merged.shift();
+      }
     }
-    merged.length = 0;
-    merged.push(...finalMerged);
+    if (merged.length === 0 || merged[0]?.role !== 'user') {
+      merged.unshift({ role: 'user', parts: [{ text: '...' }] });
+    }
+    if (merged[merged.length - 1]?.role === 'model') {
+      merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
+    }
   }
 
   // Attach active modular prompt injections to the terminal user turn (Depth 0)
@@ -579,10 +624,10 @@ export function transformOpenAIToAntigravity(
   }
 
   // Deterministic sessionId per chat session for upstream prefix KV caching
-  const sessionSeed = options?.chatId || body.chatId || body.chat_id || body.sessionId || body.session_id || (userSystemText.trim() ? userSystemText.trim() : null);
+  const sessionSeed = options?.chatId ?? body.chatId ?? body.chat_id ?? body.sessionId ?? body.session_id ?? (userSystemText.trim() ? userSystemText.trim() : null);
   let sessionId: string;
-  if (sessionSeed) {
-    const hash = crypto.createHash('sha256').update(sessionSeed).digest('hex');
+  if (sessionSeed !== null && sessionSeed !== undefined && String(sessionSeed).trim()) {
+    const hash = crypto.createHash('sha256').update(String(sessionSeed).trim()).digest('hex');
     const numericPart = parseInt(hash.slice(0, 12), 16);
     sessionId = `-${Math.abs(numericPart) || 100000000000}`;
   } else {
