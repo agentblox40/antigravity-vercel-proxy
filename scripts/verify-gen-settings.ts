@@ -136,7 +136,11 @@ async function main() {
     'gemini-3.1-pro-no-think',
     'gemini-3.1-pro:no-think',
     'gemini-3.5-flash',
-    'gemini-2.5-flash'
+    'gemini-2.5-flash',
+    'claude-sonnet-4-6-fast',
+    'claude-sonnet-4-6:off',
+    'claude-sonnet-4-6-no-think',
+    'claude-opus-4-6-fast'
   ];
 
   for (const modelId of fastModels) {
@@ -163,7 +167,10 @@ async function main() {
     'gemini-3.7-flash-low',
     'gemini-3.7-flash:low',
     'gemini-3.1-pro-low',
-    'gemini-3.1-pro:low'
+    'gemini-3.1-pro:low',
+    'claude-sonnet-4-6-low',
+    'claude-sonnet-4-6:low',
+    'claude-opus-4-6-low'
   ];
 
   for (const modelId of lowModels) {
@@ -237,6 +244,25 @@ async function main() {
       wire.request.generationConfig.thinkingConfig?.thinkingBudget,
       65536,
       `Model ${modelId} must produce thinkingBudget 65536 on wire`
+    );
+  }
+
+  // 3f. Claude Standard thinking models (16,384 tokens)
+  const claudeStdModels = ['claude-sonnet-4-6', 'claude-opus-4-6-thinking'];
+  for (const modelId of claudeStdModels) {
+    const resolved = resolveWireModel(modelId);
+    assert.ok(resolved, `Model ${modelId} failed to resolve`);
+    assert.strictEqual(resolved.defaultThinkingBudget, 16384, `Model ${modelId} must have 16384 thinking budget`);
+
+    const wire = transformOpenAIToAntigravity(
+      { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
+      resolved,
+      'test-proj'
+    );
+    assert.strictEqual(
+      wire.request.generationConfig.thinkingConfig?.thinkingBudget,
+      16384,
+      `Model ${modelId} must produce thinkingBudget 16384 on wire`
     );
   }
   console.log('✅ Model Presets as Single Source of Truth for Thinking Tiers passed.\n');
@@ -523,6 +549,167 @@ async function main() {
   assert.strictEqual(isRedisConfigured(), false);
 
   console.log('✅ Upstash Pipeline Prompt Injections Persistence & In-Chat Commands Verification passed.\n');
+
+  // ==========================================
+  // 9. Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse)
+  // ==========================================
+  console.log('Test 9: Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse)');
+
+  // 9.1 Claude Smart Context Clamping (>30 turns clamped, system prompt 100% preserved)
+  const claudeSonnetFast = resolveWireModel('claude-sonnet-4-6-fast');
+  assert.ok(claudeSonnetFast);
+
+  // Generate 50 dialogue turns (25 user, 25 assistant)
+  const massiveDialogue: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: 'Character Persona: Aurora the Sorceress. Lore: The ancient citadel.' }
+  ];
+  for (let i = 1; i <= 25; i++) {
+    massiveDialogue.push({ role: 'user', content: `User statement ${i}` });
+    massiveDialogue.push({ role: 'assistant', content: `Assistant reply ${i}` });
+  }
+
+  const clampedWire = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue },
+    claudeSonnetFast!,
+    'test-proj'
+  );
+
+  // Assert clamped dialogue length <= 30 turns (Google requires start and end on user)
+  assert.ok(
+    clampedWire.request.contents.length <= 30,
+    `Expected clamped contents <= 30 turns, got ${clampedWire.request.contents.length}`
+  );
+  // Assert Google protocol invariants
+  assert.strictEqual(clampedWire.request.contents[0].role, 'user', 'First turn must be user');
+  assert.strictEqual(
+    clampedWire.request.contents[clampedWire.request.contents.length - 1].role,
+    'user',
+    'Terminal turn must be user'
+  );
+  // Assert 100% system prompt preserved
+  const sysText = clampedWire.request.systemInstruction.parts[0]?.text || '';
+  assert.ok(sysText.includes('Aurora the Sorceress'), 'Character persona in system prompt was lost!');
+  assert.ok(sysText.includes('The ancient citadel'), 'Lore in system prompt was lost!');
+
+  // 9.2 Dialogue turns <= 30 on Claude are preserved without clamping
+  const shortDialogue: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: 'You are an AI.' }
+  ];
+  for (let i = 1; i <= 5; i++) {
+    shortDialogue.push({ role: 'user', content: `User message ${i}` });
+    shortDialogue.push({ role: 'assistant', content: `Assistant message ${i}` });
+  }
+  const shortWire = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: shortDialogue },
+    claudeSonnetFast!,
+    'test-proj'
+  );
+  assert.ok(
+    shortWire.request.contents.length <= 12,
+    `Short dialogue should not be truncated, got ${shortWire.request.contents.length}`
+  );
+  assert.ok(shortWire.request.contents.some((c: any) => c.parts[0]?.text?.includes('User message 1')));
+
+  // 9.3 Client Unclamped Override via body.unclamped_context or options
+  const unclampedWire1 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue, unclamped_context: true },
+    claudeSonnetFast!,
+    'test-proj'
+  );
+  assert.ok(
+    unclampedWire1.request.contents.length >= 50,
+    `Unclamped override must preserve full history, got ${unclampedWire1.request.contents.length}`
+  );
+
+  const unclampedWire2 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue },
+    claudeSonnetFast!,
+    'test-proj',
+    undefined,
+    undefined,
+    undefined,
+    { unclampedContext: true }
+  );
+  assert.ok(
+    unclampedWire2.request.contents.length >= 50,
+    `Options unclampedContext must preserve full history, got ${unclampedWire2.request.contents.length}`
+  );
+
+  // 9.4 First-party Gemini models are never clamped even with massive dialogues
+  const gemini38 = resolveWireModel('gemini-3.8-flash');
+  const geminiWire = transformOpenAIToAntigravity(
+    { model: 'gemini-3.8-flash', messages: massiveDialogue },
+    gemini38!,
+    'test-proj'
+  );
+  assert.ok(
+    geminiWire.request.contents.length >= 50,
+    `Gemini models must NOT be clamped, got ${geminiWire.request.contents.length}`
+  );
+
+  // 9.5 Deterministic sessionId for prefix KV caching
+  const wireSessionA1 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 1' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    undefined,
+    undefined,
+    undefined,
+    { chatId: 'chat_session_stable_123' }
+  );
+  const wireSessionA2 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 2' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    undefined,
+    undefined,
+    undefined,
+    { chatId: 'chat_session_stable_123' }
+  );
+  assert.strictEqual(
+    wireSessionA1.request.sessionId,
+    wireSessionA2.request.sessionId,
+    'Same chatId must produce identical deterministic sessionId across turns'
+  );
+  assert.ok(
+    /^-\d+$/.test(wireSessionA1.request.sessionId),
+    `sessionId must be a negative numeric string, got "${wireSessionA1.request.sessionId}"`
+  );
+
+  const wireSessionB = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 1' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    undefined,
+    undefined,
+    undefined,
+    { chatId: 'chat_session_different_456' }
+  );
+  assert.notStrictEqual(
+    wireSessionA1.request.sessionId,
+    wireSessionB.request.sessionId,
+    'Different chatId must produce distinct sessionId'
+  );
+
+  // Deterministic fallback using system prompt seed when chatId is absent
+  const wireSys1 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Hello' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    'Character card: Lyra the Bard'
+  );
+  const wireSys2 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Another turn' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    'Character card: Lyra the Bard'
+  );
+  assert.strictEqual(
+    wireSys1.request.sessionId,
+    wireSys2.request.sessionId,
+    'Same system prompt without chatId must produce deterministic sessionId'
+  );
+  console.log('✅ Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse) passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }

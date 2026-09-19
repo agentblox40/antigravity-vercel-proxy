@@ -67,7 +67,11 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', tier: 'Flash', badge: 'Lightweight', thinking: 'None', context: '1M Context', desc: 'Instantaneous response speed with full 1M context support.' },
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', tier: 'Flash', badge: 'Legacy High-Q', thinking: 'None', context: '1M Context', desc: 'Ultra-stable high-throughput flash architecture.' },
   { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
+  { id: 'claude-opus-4-6-low', name: 'Claude Opus 4.6 (Low)', tier: 'Claude', badge: 'Low Thinking (2K)', thinking: '2K Tokens', context: '1M Context', desc: 'Snappy lightweight reasoning budget (2k tokens) on Claude Opus 4.6 to save quota.' },
+  { id: 'claude-opus-4-6-fast', name: 'Claude Opus 4.6 (Fast)', tier: 'Claude', badge: 'Fast (0 Thinking)', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low token consumption Claude Opus 4.6 for long roleplay sessions.' },
   { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tier: 'Claude', badge: 'Claude Sonnet', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Sonnet with reasoning capabilities.' },
+  { id: 'claude-sonnet-4-6-low', name: 'Claude Sonnet 4.6 (Low)', tier: 'Claude', badge: 'Low Thinking (2K)', thinking: '2K Tokens', context: '1M Context', desc: 'Snappy lightweight reasoning budget (2k tokens) on Claude Sonnet 4.6 to save quota.' },
+  { id: 'claude-sonnet-4-6-fast', name: 'Claude Sonnet 4.6 (Fast)', tier: 'Claude', badge: 'Fast (0 Thinking)', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low token consumption Claude Sonnet 4.6 for long roleplay sessions.' },
   { id: 'gpt-4o', name: 'GPT-4o (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Maps directly to Gemini 3.7 Flash for Janitor AI / SillyTavern default settings.' },
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Legacy OpenAI default client alias mapped to Gemini 3.7 Flash.' },
   ...OPENCODE_MODELS.map(m => ({
@@ -323,6 +327,46 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   }
 
   // 4. Claude Models
+  if (
+    clean === 'claude-sonnet-4-6-fast' ||
+    clean === 'claude-sonnet-4-6:off' ||
+    clean === 'claude-sonnet-4-6-off' ||
+    clean === 'claude-sonnet-4-6-no-think' ||
+    clean === 'claude-sonnet-4-6:no-think' ||
+    clean === 'claude-sonnet-4-6:fast' ||
+    clean === 'claude-sonnet-fast' ||
+    clean === 'claude-sonnet:off'
+  ) {
+    return { wireModel: 'claude-sonnet-4-6', defaultThinkingBudget: 0 };
+  }
+  if (
+    clean === 'claude-sonnet-4-6-low' ||
+    clean === 'claude-sonnet-4-6:low' ||
+    clean === 'claude-sonnet-low' ||
+    clean === 'claude-sonnet:low'
+  ) {
+    return { wireModel: 'claude-sonnet-4-6', defaultThinkingBudget: 2048 };
+  }
+  if (
+    clean === 'claude-opus-4-6-fast' ||
+    clean === 'claude-opus-4-6:off' ||
+    clean === 'claude-opus-4-6-off' ||
+    clean === 'claude-opus-4-6-no-think' ||
+    clean === 'claude-opus-4-6:no-think' ||
+    clean === 'claude-opus-4-6:fast' ||
+    clean === 'claude-opus-fast' ||
+    clean === 'claude-opus:off'
+  ) {
+    return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 0 };
+  }
+  if (
+    clean === 'claude-opus-4-6-low' ||
+    clean === 'claude-opus-4-6:low' ||
+    clean === 'claude-opus-low' ||
+    clean === 'claude-opus:low'
+  ) {
+    return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 2048 };
+  }
   if (clean === 'claude-opus-4-6-thinking' || clean === 'claude-opus-4-6' || clean === 'claude-opus') {
     return { wireModel: 'claude-opus-4-6-thinking', defaultThinkingBudget: 16384 };
   }
@@ -344,7 +388,11 @@ export function transformOpenAIToAntigravity(
   projectId: string,
   augmentedSystem?: string,
   userInjectionsText?: string,
-  systemInjectionsText?: string
+  systemInjectionsText?: string,
+  options?: {
+    chatId?: string | null;
+    unclampedContext?: boolean;
+  }
 ) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   let userSystemText = augmentedSystem || '';
@@ -389,13 +437,35 @@ export function transformOpenAIToAntigravity(
     }
   }
 
-  if (contents.length === 0) {
-    contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
+  // Smart Context Clamping for 3rd-Party Claude Models (>30 turns or >~25k tokens)
+  let dialogueTurns = contents;
+  const isClaude = resolved.wireModel.startsWith('claude-') || (body.model || '').toLowerCase().startsWith('claude-');
+  const isUnclamped = options?.unclampedContext === true || body.unclamped_context === true;
+
+  if (isClaude && !isUnclamped) {
+    const totalChars = contents.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0);
+    const isMassive = contents.length > 30 || totalChars > 100000; // > 30 turns or > ~25,000 tokens
+
+    if (isMassive) {
+      let clamped = contents.length > 30 ? contents.slice(-30) : contents;
+      while (clamped.length > 10 && clamped.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0) > 100000) {
+        clamped = clamped.slice(2);
+      }
+      // Ensure sliced dialogue begins with a user turn as required by Google API protocol
+      if (clamped.length > 0 && clamped[0].role === 'model') {
+        clamped = clamped.slice(1);
+      }
+      dialogueTurns = clamped;
+    }
+  }
+
+  if (dialogueTurns.length === 0) {
+    dialogueTurns.push({ role: 'user', parts: [{ text: 'Hello' }] });
   }
 
   // Merge consecutive same-role turns
   const merged: any[] = [];
-  for (const c of contents) {
+  for (const c of dialogueTurns) {
     const prev = merged[merged.length - 1];
     if (prev && prev.role === c.role) {
       prev.parts[0].text += '\n\n' + c.parts[0].text;
@@ -412,6 +482,19 @@ export function transformOpenAIToAntigravity(
   // Google Antigravity requires last turn to be 'user' (never model/assistant)
   if (merged[merged.length - 1]?.role === 'model') {
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
+  }
+
+  // Ensure Claude dialogue turns do not exceed 30 turns and strictly begin/end on user
+  if (isClaude && !isUnclamped && merged.length > 30) {
+    let finalMerged = merged.slice(-30);
+    if (finalMerged.length > 0 && finalMerged[0].role === 'model') {
+      finalMerged = finalMerged.slice(1);
+    }
+    if (finalMerged.length === 0 || finalMerged[0].role !== 'user') {
+      finalMerged.unshift({ role: 'user', parts: [{ text: '...' }] });
+    }
+    merged.length = 0;
+    merged.push(...finalMerged);
   }
 
   // Attach active modular prompt injections to the terminal user turn (Depth 0)
@@ -495,8 +578,19 @@ export function transformOpenAIToAntigravity(
     systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
 
+  // Deterministic sessionId per chat session for upstream prefix KV caching
+  const sessionSeed = options?.chatId || body.chatId || body.chat_id || body.sessionId || body.session_id || (userSystemText.trim() ? userSystemText.trim() : null);
+  let sessionId: string;
+  if (sessionSeed) {
+    const hash = crypto.createHash('sha256').update(sessionSeed).digest('hex');
+    const numericPart = parseInt(hash.slice(0, 12), 16);
+    sessionId = `-${Math.abs(numericPart) || 100000000000}`;
+  } else {
+    sessionId = `-${Date.now()}`;
+  }
+
   const reqObj: any = {
-    sessionId: `-${Date.now()}`,
+    sessionId,
     contents: merged,
     systemInstruction: { role: 'system', parts: systemInstructionParts },
     generationConfig,

@@ -579,8 +579,8 @@ export function generateHelpMenu(): string {
   lines.push('• Disable directives:    <DISABLE: 5, 6>');
   lines.push('• Master switch:         <INJECTIONS: ON> or <INJECTIONS: OFF>');
   lines.push('\n[3. MODEL THINKING TIERS (SELECT VIA MODEL NAME)]:');
-  lines.push('• Zero thinking (Instant): gemini-3.8-flash-fast, gemini-3.1-pro-fast, big-pickle-fast');
-  lines.push('• Snappy thinking (2K):    gemini-3.8-flash-low, gemini-3.1-pro-low');
+  lines.push('• Zero thinking (Instant): gemini-3.8-flash-fast, gemini-3.1-pro-fast, claude-sonnet-4-6-fast, big-pickle-fast');
+  lines.push('• Snappy thinking (2K):    gemini-3.8-flash-low, gemini-3.1-pro-low, claude-sonnet-4-6-low');
   lines.push('• Standard thinking (8K):  gemini-3.8-flash, gemini-3.7-flash');
   lines.push('• High thinking (24K):     gemini-3.8-flash-high, gemini-3.7-flash-high');
   lines.push('• Max thinking (64K):      gemini-3.8-flash-max, gemini-3.7-flash-max');

@@ -79,7 +79,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -99,7 +99,11 @@ export async function handleChatCompletions(req: NextRequest) {
             'gemini-3.1-pro-fast',
             'gemini-3.5-flash',
             'claude-opus-4-6-thinking',
+            'claude-opus-4-6-low',
+            'claude-opus-4-6-fast',
             'claude-sonnet-4-6',
+            'claude-sonnet-4-6-low',
+            'claude-sonnet-4-6-fast',
             'big-pickle',
             'big-pickle-fast',
             'mimo-v2.5-free',
@@ -378,13 +382,18 @@ export async function handleChatCompletions(req: NextRequest) {
   for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
+      const unclampedContext = req.headers.get('x-unclamped-context') === 'true' || body.unclamped_context === true;
       const envelope = transformOpenAIToAntigravity(
         body,
         resolved,
         account.projectId,
         rawSystemText,
         userInjectionsText,
-        systemInjectionsText
+        systemInjectionsText,
+        {
+          chatId: currentChatId,
+          unclampedContext
+        }
       );
 
       let upstreamRes: Response | null = null;
@@ -404,11 +413,53 @@ export async function handleChatCompletions(req: NextRequest) {
           if (res.ok) {
             upstreamRes = res;
             break;
-          } else if (res.status === 429) {
-            attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}` });
+          }
+
+          const errText = await res.text();
+          const errLower = errText.toLowerCase();
+
+          if (res.status === 429) {
+            const isClaude = resolved.wireModel.startsWith('claude-');
+            const isDailyExhaustion =
+              errText.includes('PerDay') ||
+              errLower.includes('per_day') ||
+              errLower.includes('perday') ||
+              errLower.includes('per day') ||
+              errLower.includes('daily') ||
+              (isClaude && (errText.includes('RESOURCE_EXHAUSTED') || errLower.includes('quota exceeded')));
+
+            if (isClaude && isDailyExhaustion) {
+              console.warn(`[Claude Daily Quota Exhausted] on ${account.name} (${upstreamUrl}): ${errText}`);
+              // Set 1-hour cooldown so the proxy does not misleadingly retry after 20s
+              account.cooldownUntil = Date.now() + 3600 * 1000;
+              account.failCount++;
+              attemptLogs.push({ account: account.name, status: 429, error: `Daily quota exhausted: ${errText.slice(0, 300)}` });
+
+              return NextResponse.json(
+                {
+                  error: {
+                    message: `[Claude Daily Quota Exhausted]: Google CloudCode PA daily token/request quota for '${resolved.wireModel}' has been exhausted on ${account.name}. Upstream diagnostic: ${errText.slice(0, 300)}. Halted failover to prevent exhausting remaining accounts. Switch to a Fast/Low tier (e.g. 'claude-sonnet-4-6-fast' / 'claude-sonnet-4-6-low') or Gemini ('gemini-3.8-flash'), or wait for daily quota reset.`,
+                    type: 'claude_daily_quota_exhausted',
+                    code: 429,
+                    model: requestedModel,
+                    wire_model: resolved.wireModel,
+                    account: account.name,
+                    upstream_diagnostic: errText.slice(0, 500)
+                  }
+                },
+                {
+                  status: 429,
+                  headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Retry-After': '3600'
+                  }
+                }
+              );
+            }
+
+            attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}: ${errText.slice(0, 300)}` });
             continue;
           } else {
-            const errText = await res.text();
             attemptLogs.push({ account: account.name, status: res.status, error: errText.slice(0, 300) });
             console.warn(`Upstream ${upstreamUrl} returned ${res.status} for model ${resolved.wireModel}: ${errText}`);
           }

@@ -8,10 +8,25 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.3';
+export const CURRENT_VERSION = '3.5.4';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.4',
+    tag: 'PATCH',
+    title: 'Claude Token Optimization: Fast/Low Tiers, Smart Context Clamping & KV Cache Reuse',
+    date: 'Sep 20, 2026',
+    commit: 'latest',
+    description: 'Added Claude Fast (0 thinking) and Low (2k thinking) tiers, smart context clamping (>30 dialogue turns) to preserve daily quotas on long roleplay chats, deterministic session IDs for upstream KV-cache prefix reuse, and immediate halting of cross-account cascades on Claude daily quota exhaustion.',
+    highlights: [
+      'Claude Fast & Low Tiers: Added claude-sonnet-4-6-fast (0 thinking tokens), claude-sonnet-4-6-low (2,048 tokens), claude-opus-4-6-fast, and claude-opus-4-6-low to drastically cut token consumption.',
+      'Smart Context Clamping: Dialogue turns exceeding 30 turns (~25k tokens) on Claude models are safely clamped to the most recent 30 turns while preserving 100% of character system prompts, jailbreaks, and active injections.',
+      'Client Clamping Override: Clients can bypass clamping by passing header x-unclamped-context: true or body unclamped_context: true for full 1M context pass-through.',
+      'Deterministic KV-Cache Reuse: Derived stable, negative numeric session IDs from chat IDs and character prompts, enabling upstream Google inference clusters to leverage prefix KV caching.',
+      'Halt 429 Daily Cascade: Detects upstream RESOURCE_EXHAUSTED and PerDay quota limits on Claude to halt cross-account failure cascades and return informative diagnostics instead of misleading 20s cooldowns.'
+    ]
+  },
   {
     version: '3.5.3',
     tag: 'PATCH',

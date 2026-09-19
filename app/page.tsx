@@ -3101,7 +3101,7 @@ export default function AntigravityControlCenter() {
                 <div><span style={{ color: colors.textSub }}>API Format: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>OpenAI / Custom OpenAI</code></div>
                 <div><span style={{ color: colors.textSub }}>Reverse Proxy URL: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
                 <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
-                <div><span style={{ color: colors.textSub }}>Recommended Model: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.8-flash-high</code></div>
+                <div><span style={{ color: colors.textSub }}>Recommended Models: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.8-flash-high</code> <span style={{ color: colors.textMuted }}>•</span> <code style={{ color: colors.textMain, fontWeight: 600 }}>claude-sonnet-4-6-fast</code></div>
               </div>
 
               <button
@@ -3121,6 +3121,7 @@ export default function AntigravityControlCenter() {
                 <div><span style={{ color: colors.textSub }}>Custom Endpoint: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
                 <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
                 <div><span style={{ color: colors.textSub }}>Streaming: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>Enabled (SSE)</code></div>
+                <div><span style={{ color: colors.textSub }}>Recommended Models: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.8-flash-high</code> <span style={{ color: colors.textMuted }}>•</span> <code style={{ color: colors.textMain, fontWeight: 600 }}>claude-sonnet-4-6-fast</code></div>
               </div>
 
               <button

@@ -46,4 +46,4 @@ Full-featured, serverless OpenAI-compatible proxy built with **Next.js 15 (App R
 - **API**: `OpenAI / Custom OpenAI`
 - **API Base URL**: `https://your-app.vercel.app/v1`
 - **API Key**: `tavern-secret-key-12345`
-- **Model**: `gemini-3.7-flash`, `gemini-3.7-flash-high`, `gemini-3.1-pro`, `claude-opus-4-6-thinking`
+- **Model**: `gemini-3.8-flash`, `gemini-3.8-flash-high`, `gemini-3.7-flash`, `claude-sonnet-4-6-fast`, `gemini-3.1-pro`, `claude-opus-4-6-thinking`
