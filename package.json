@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsc scripts/verify-gen-settings.ts --module commonjs --target es2022 --skipLibCheck --moduleResolution node --esModuleInterop --noEmit false && node scripts/verify-gen-settings.js"
+    "test": "tsc scripts/verify-gen-settings.ts --module commonjs --target es2022 --skipLibCheck --moduleResolution node --esModuleInterop --noEmit false && node scripts/verify-gen-settings.js",
+    "add-account": "node scripts/auth-account.mjs"
   },
   "dependencies": {
     "next": "^15.1.7",
