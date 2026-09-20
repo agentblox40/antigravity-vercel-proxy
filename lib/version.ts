@@ -8,14 +8,29 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.4';
+export const CURRENT_VERSION = '3.5.5';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
+    version: '3.5.5',
+    tag: 'PATCH',
+    title: 'Claude Memory Restoration & 100% Pure Client Pass-Through',
+    date: 'Sep 20, 2026',
+    commit: 'latest',
+    description: 'Excised forced 30-turn and 100k-character server-side context clamping for Claude models. Restored full verbatim conversation history, character grounding, and opening scenario memory to Janitor AI and SillyTavern clients. Context management is strictly client-controlled.',
+    highlights: [
+      'Memory Restoration: Removed forced 30-turn / 100k-char truncation on Claude dialogue history, preventing memory loss, amnesia, and character hallucination on ongoing roleplay sessions.',
+      '100% Pure Client Pass-Through: The frontend context slider in Janitor AI and SillyTavern serves as the single source of truth for conversational history length.',
+      'Preserved Fast/Low Tiers: Kept claude-sonnet-4-6-fast (0 thinking) and claude-sonnet-4-6-low (2k thinking) for token-efficient roleplay without tampering with chat history.',
+      'Deterministic KV Cache & Cascade Protection: Retained stable session IDs for prefix KV cache reuse and daily quota cascade isolation across account pools.',
+      'Opt-in Clamping: Clamping is now strictly opt-in via x-clamped-context: true or clamped_context: true.'
+    ]
+  },
+  {
     version: '3.5.4',
     tag: 'PATCH',
-    title: 'Claude Token Optimization: Fast/Low Tiers, Smart Context Clamping & KV Cache Reuse',
+    title: 'Claude Token Optimization: Fast/Low Tiers & KV Cache Reuse',
     date: 'Sep 20, 2026',
     commit: 'latest',
     description: 'Added Claude Fast (0 thinking) and Low (2k thinking) tiers, smart context clamping (>30 dialogue turns) to preserve daily quotas on long roleplay chats, deterministic session IDs for upstream KV-cache prefix reuse, and immediate halting of cross-account cascades on Claude daily quota exhaustion.',

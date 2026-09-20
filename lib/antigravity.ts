@@ -423,6 +423,7 @@ export function transformOpenAIToAntigravity(
   options?: {
     chatId?: string | null;
     unclampedContext?: boolean;
+    clampedContext?: boolean;
   }
 ) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
@@ -468,35 +469,13 @@ export function transformOpenAIToAntigravity(
     }
   }
 
-  // Smart Context Clamping for 3rd-Party Claude Models (>30 turns or >~25k tokens / 100k chars)
-  let dialogueTurns = contents;
-  const isClaude = resolved.wireModel.startsWith('claude-') || (body.model || '').toLowerCase().includes('claude');
-  const isUnclamped = options?.unclampedContext === true || body.unclamped_context === true || body.unclampedContext === true;
-
-  if (isClaude && !isUnclamped) {
-    const totalChars = contents.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0);
-    const isMassive = contents.length > 30 || totalChars > 100000; // > 30 turns or > ~25,000 tokens
-
-    if (isMassive) {
-      let clamped = contents.length > 30 ? contents.slice(-30) : contents;
-      while (clamped.length > 2 && clamped.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0) > 100000) {
-        clamped = clamped.slice(2);
-      }
-      // Ensure sliced dialogue begins with a user turn as required by Google API protocol
-      if (clamped.length > 0 && clamped[0].role === 'model') {
-        clamped = clamped.slice(1);
-      }
-      dialogueTurns = clamped;
-    }
-  }
-
-  if (dialogueTurns.length === 0) {
-    dialogueTurns.push({ role: 'user', parts: [{ text: 'Hello' }] });
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: 'Hello' }] });
   }
 
   // Merge consecutive same-role turns
   const merged: any[] = [];
-  for (const c of dialogueTurns) {
+  for (const c of contents) {
     const prev = merged[merged.length - 1];
     if (prev && prev.role === c.role) {
       prev.parts[0].text += '\n\n' + c.parts[0].text;
@@ -515,31 +494,25 @@ export function transformOpenAIToAntigravity(
     merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
   }
 
-  // Ensure Claude dialogue turns do not exceed 30 turns or 100k chars (~25k tokens), and strictly begin/end on user
-  if (isClaude && !isUnclamped) {
-    if (merged.length > 30) {
-      let finalMerged = merged.slice(-30);
-      if (finalMerged.length > 0 && finalMerged[0].role === 'model') {
-        finalMerged = finalMerged.slice(1);
-      }
-      if (finalMerged.length === 0 || finalMerged[0].role !== 'user') {
-        finalMerged.unshift({ role: 'user', parts: [{ text: '...' }] });
-      }
-      merged.length = 0;
-      merged.push(...finalMerged);
+  // Optional Opt-in Context Clamping (ONLY when explicitly requested by client via x-clamped-context header or body.clamped_context)
+  const isExplicitlyClamped =
+    options?.clampedContext === true ||
+    body.clamped_context === true ||
+    body.clampedContext === true;
+
+  if (isExplicitlyClamped && merged.length > 30) {
+    let finalMerged = merged.slice(-30);
+    if (finalMerged.length > 0 && finalMerged[0].role === 'model') {
+      finalMerged = finalMerged.slice(1);
     }
-    while (merged.length > 2 && merged.reduce((acc, c) => acc + (c.parts?.[0]?.text?.length || 0), 0) > 100000) {
-      merged.splice(0, 2);
-      if (merged.length > 0 && merged[0].role === 'model') {
-        merged.shift();
-      }
+    if (finalMerged.length === 0 || finalMerged[0].role !== 'user') {
+      finalMerged.unshift({ role: 'user', parts: [{ text: '...' }] });
     }
-    if (merged.length === 0 || merged[0]?.role !== 'user') {
-      merged.unshift({ role: 'user', parts: [{ text: '...' }] });
+    if (finalMerged[finalMerged.length - 1]?.role === 'model') {
+      finalMerged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
     }
-    if (merged[merged.length - 1]?.role === 'model') {
-      merged.push({ role: 'user', parts: [{ text: 'Continue the scenario and dialogue naturally.' }] });
-    }
+    merged.length = 0;
+    merged.push(...finalMerged);
   }
 
   // Attach active modular prompt injections to the terminal user turn (Depth 0)

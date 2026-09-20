@@ -384,14 +384,14 @@ export async function handleChatCompletions(req: NextRequest) {
   for (const account of accountsToTry) {
     try {
       const accessToken = await getAccessToken(account);
-      const unclampedHeader = (req.headers.get('x-unclamped-context') || '').toLowerCase();
-      const unclampedContext =
-        unclampedHeader === 'true' ||
-        unclampedHeader === '1' ||
-        unclampedHeader === 'yes' ||
-        body.unclamped_context === true ||
-        body.unclamped_context === 1 ||
-        body.unclampedContext === true;
+      const clampedHeader = (req.headers.get('x-clamped-context') || '').toLowerCase();
+      const clampedContext =
+        clampedHeader === 'true' ||
+        clampedHeader === '1' ||
+        clampedHeader === 'yes' ||
+        body.clamped_context === true ||
+        body.clamped_context === 1 ||
+        body.clampedContext === true;
 
       const envelope = transformOpenAIToAntigravity(
         body,
@@ -402,7 +402,7 @@ export async function handleChatCompletions(req: NextRequest) {
         systemInjectionsText,
         {
           chatId: currentChatId,
-          unclampedContext
+          clampedContext
         }
       );
 

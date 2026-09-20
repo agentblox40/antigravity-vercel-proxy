@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.5.4`  
+> *Current Version*: `v3.5.5`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---

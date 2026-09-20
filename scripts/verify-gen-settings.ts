@@ -551,11 +551,11 @@ async function main() {
   console.log('✅ Upstash Pipeline Prompt Injections Persistence & In-Chat Commands Verification passed.\n');
 
   // ==========================================
-  // 9. Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse)
+  // 9. Claude Token Optimization Suite & Pure Client Pass-Through
   // ==========================================
-  console.log('Test 9: Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse)');
+  console.log('Test 9: Claude Token Optimization Suite & Pure Client Pass-Through');
 
-  // 9.1 Claude Smart Context Clamping (>30 turns clamped, system prompt 100% preserved)
+  // 9.1 Claude Pure Client Pass-Through: 100% full history preserved by default (no forced 30-turn clamping)
   const claudeSonnetFast = resolveWireModel('claude-sonnet-4-6-fast');
   assert.ok(claudeSonnetFast);
 
@@ -568,74 +568,66 @@ async function main() {
     massiveDialogue.push({ role: 'assistant', content: `Assistant reply ${i}` });
   }
 
-  const clampedWire = transformOpenAIToAntigravity(
+  const passThroughWire = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue },
     claudeSonnetFast!,
     'test-proj'
   );
 
-  // Assert clamped dialogue length <= 30 turns (Google requires start and end on user)
+  // Assert 100% of dialogue turns are preserved (no forced 30-turn chokehold)
   assert.ok(
-    clampedWire.request.contents.length <= 30,
-    `Expected clamped contents <= 30 turns, got ${clampedWire.request.contents.length}`
+    passThroughWire.request.contents.length >= 50,
+    `Expected pure client pass-through >= 50 turns by default, got ${passThroughWire.request.contents.length}`
   );
   // Assert Google protocol invariants
-  assert.strictEqual(clampedWire.request.contents[0].role, 'user', 'First turn must be user');
+  assert.strictEqual(passThroughWire.request.contents[0].role, 'user', 'First turn must be user');
   assert.strictEqual(
-    clampedWire.request.contents[clampedWire.request.contents.length - 1].role,
+    passThroughWire.request.contents[passThroughWire.request.contents.length - 1].role,
     'user',
     'Terminal turn must be user'
   );
   // Assert 100% system prompt preserved
-  const sysText = clampedWire.request.systemInstruction.parts[0]?.text || '';
+  const sysText = passThroughWire.request.systemInstruction.parts[0]?.text || '';
   assert.ok(sysText.includes('Aurora the Sorceress'), 'Character persona in system prompt was lost!');
   assert.ok(sysText.includes('The ancient citadel'), 'Lore in system prompt was lost!');
+  // Assert earlier turns are preserved in full (e.g. statement 1 is present!)
+  assert.ok(
+    passThroughWire.request.contents.some((c: any) => c.parts[0]?.text?.includes('User statement 1')),
+    'Early dialogue turns (turn 1) must be preserved in full!'
+  );
 
-  // 9.2 Dialogue turns <= 30 on Claude are preserved without clamping
-  const shortDialogue: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: 'You are an AI.' }
-  ];
-  for (let i = 1; i <= 5; i++) {
-    shortDialogue.push({ role: 'user', content: `User message ${i}` });
-    shortDialogue.push({ role: 'assistant', content: `Assistant message ${i}` });
-  }
-  const shortWire = transformOpenAIToAntigravity(
-    { model: 'claude-sonnet-4-6-fast', messages: shortDialogue },
+  // 9.2 Opt-In Clamping (ONLY when explicitly requested via clamped_context or clampedContext option)
+  const clampedWire1 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue, clamped_context: true },
     claudeSonnetFast!,
     'test-proj'
   );
   assert.ok(
-    shortWire.request.contents.length <= 12,
-    `Short dialogue should not be truncated, got ${shortWire.request.contents.length}`
+    clampedWire1.request.contents.length <= 30,
+    `Explicitly clamped contents must be <= 30 turns, got ${clampedWire1.request.contents.length}`
   );
-  assert.ok(shortWire.request.contents.some((c: any) => c.parts[0]?.text?.includes('User message 1')));
-
-  // 9.3 Client Unclamped Override via body.unclamped_context or options
-  const unclampedWire1 = transformOpenAIToAntigravity(
-    { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue, unclamped_context: true },
-    claudeSonnetFast!,
-    'test-proj'
-  );
-  assert.ok(
-    unclampedWire1.request.contents.length >= 50,
-    `Unclamped override must preserve full history, got ${unclampedWire1.request.contents.length}`
+  assert.strictEqual(clampedWire1.request.contents[0].role, 'user', 'Clamped first turn must be user');
+  assert.strictEqual(
+    clampedWire1.request.contents[clampedWire1.request.contents.length - 1].role,
+    'user',
+    'Clamped terminal turn must be user'
   );
 
-  const unclampedWire2 = transformOpenAIToAntigravity(
+  const clampedWire2 = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: massiveDialogue },
     claudeSonnetFast!,
     'test-proj',
     undefined,
     undefined,
     undefined,
-    { unclampedContext: true }
+    { clampedContext: true }
   );
   assert.ok(
-    unclampedWire2.request.contents.length >= 50,
-    `Options unclampedContext must preserve full history, got ${unclampedWire2.request.contents.length}`
+    clampedWire2.request.contents.length <= 30,
+    `Options clampedContext must clamp to <= 30 turns, got ${clampedWire2.request.contents.length}`
   );
 
-  // 9.4 First-party Gemini models are never clamped even with massive dialogues
+  // 9.3 First-party Gemini models are also pure pass-through
   const gemini38 = resolveWireModel('gemini-3.8-flash');
   const geminiWire = transformOpenAIToAntigravity(
     { model: 'gemini-3.8-flash', messages: massiveDialogue },
@@ -647,7 +639,7 @@ async function main() {
     `Gemini models must NOT be clamped, got ${geminiWire.request.contents.length}`
   );
 
-  // 9.5 Deterministic sessionId for prefix KV caching
+  // 9.4 Deterministic sessionId for prefix KV caching
   const wireSessionA1 = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 1' }] },
     claudeSonnetFast!,
@@ -708,34 +700,6 @@ async function main() {
     wireSys1.request.sessionId,
     wireSys2.request.sessionId,
     'Same system prompt without chatId must produce deterministic sessionId'
-  );
-
-  // 9.6 Massive character count with short turn count (<= 10 turns) clamped properly under ~100k chars
-  const massiveCharDialogue: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: 'You are an AI.' }
-  ];
-  for (let i = 1; i <= 4; i++) {
-    massiveCharDialogue.push({ role: 'user', content: 'U'.repeat(15000) });
-    massiveCharDialogue.push({ role: 'assistant', content: 'A'.repeat(15000) });
-  }
-  const charClampedWire = transformOpenAIToAntigravity(
-    { model: 'claude-sonnet-4-6-fast', messages: massiveCharDialogue },
-    claudeSonnetFast!,
-    'test-proj'
-  );
-  const totalWireChars = charClampedWire.request.contents.reduce(
-    (acc: number, c: any) => acc + (c.parts?.[0]?.text?.length || 0),
-    0
-  );
-  assert.ok(
-    totalWireChars <= 100000,
-    `Dialogue exceeding 100k chars must be clamped to <= 100k chars even with <= 10 turns, got ${totalWireChars}`
-  );
-  assert.strictEqual(charClampedWire.request.contents[0].role, 'user', 'Clamped turns must begin with user');
-  assert.strictEqual(
-    charClampedWire.request.contents[charClampedWire.request.contents.length - 1].role,
-    'user',
-    'Clamped turns must terminate with user'
   );
 
   // 9.7 Numeric chatId / sessionId must not throw TypeError
