@@ -596,16 +596,10 @@ export function transformOpenAIToAntigravity(
     systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
 
-  // Deterministic sessionId per chat session for upstream prefix KV caching
-  const sessionSeed = options?.chatId ?? body.chatId ?? body.chat_id ?? body.sessionId ?? body.session_id ?? (userSystemText.trim() ? userSystemText.trim() : null);
-  let sessionId: string;
-  if (sessionSeed !== null && sessionSeed !== undefined && String(sessionSeed).trim()) {
-    const hash = crypto.createHash('sha256').update(String(sessionSeed).trim()).digest('hex');
-    const numericPart = parseInt(hash.slice(0, 12), 16);
-    sessionId = `-${Math.abs(numericPart) || 100000000000}`;
-  } else {
-    sessionId = `-${Date.now()}`;
-  }
+  // Google CloudCode PA sessionId MUST be unconditionally fresh on every turn (-${Date.now()}).
+  // Reusing sessionId across turns causes Google's server-side session orchestrator to retain stale IDE session state
+  // and completely ignore or drop updated systemInstruction, dynamic lorebook entries, and character persona directives for Claude.
+  const sessionId = `-${Date.now()}`;
 
   const reqObj: any = {
     sessionId,

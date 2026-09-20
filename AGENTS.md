@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.5.5`  
+> *Current Version*: `v3.5.6`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -28,7 +28,7 @@
 13. **OpenCode Free Models Suite & 16-Account Rotating Pool**: Verified working OpenCode free models (`big-pickle`, `mimo-v2.5-free`, `ling-3.0-flash-fin-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`) with paired `-fast` / no-think variants (0 thinking tokens) and a high-capacity pool of 16 rotating guest sessions (`opencode-cli/1.0.0`) with instant failover on HTTP 429.
 14. **Streamlined Roleplay Core & Pure Client Pass-Through**: Stripped out the overcomplicated 15-slider cockpit dashboard and parameter override layers. Whatever sampling parameters (temperature, top_p, top_k, max_tokens, penalties) Janitor AI or SillyTavern sends are passed directly through to Google CloudCode PA and OpenCode without tampering. Model IDs serve as the single source of truth for thinking token budgets (-fast, -low, standard, -high, -max), while in-chat commands (<MYSETTINGS>, <ENABLE: ...>, <DISABLE: ...>, <INJECTIONS: ON/OFF>) maintain modular prompt directives with 100% wire history sanitization.
 15. **Zero-Wait TTFT & Native Serverless Lifecycle**: Hot-path TTFT unblocked from database calls via negative caching, Next.js 15 native after() lifecycle preservation, dual-mapped reasoning tokens (reasoning_content + reasoning), and Gemini 3.1 Pro Fast/Low variants.
-16. **Claude Token Optimization & Smart Context Clamping**: Fast (0 thinking) and Low (2k thinking) tiers across Claude Sonnet 4.6 and Claude Opus 4.6, smart context clamping (>30 dialogue turns or >~25k tokens) for Claude models to preserve strict daily quota caps without dropping system prompts, jailbreaks, or active injections, deterministic session IDs for upstream KV-cache prefix reuse, and immediate halting of cross-account failure cascades on Claude daily quota exhaustion.
+16. **Claude Token Optimization & Stateless System Prompt Adherence**: Fast (0 thinking) and Low (2k thinking) tiers across Claude Sonnet 4.6 and Claude Opus 4.6, 100% pure client pass-through dialogue history (opt-in clamping via `x-clamped-context: true`), unconditionally fresh stateless session IDs (`-${Date.now()}`) to force Google CloudCode PA to parse full character system instructions on every turn without stale IDE session contamination, and immediate halting of cross-account failure cascades on Claude daily quota exhaustion.
 
 ---
 

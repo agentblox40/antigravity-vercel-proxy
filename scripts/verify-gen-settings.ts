@@ -639,7 +639,7 @@ async function main() {
     `Gemini models must NOT be clamped, got ${geminiWire.request.contents.length}`
   );
 
-  // 9.4 Deterministic sessionId for prefix KV caching
+  // 9.4 Stateless fresh sessionId on every turn to guarantee Google CloudCode PA parses system prompt fresh
   const wireSessionA1 = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 1' }] },
     claudeSonnetFast!,
@@ -648,20 +648,6 @@ async function main() {
     undefined,
     undefined,
     { chatId: 'chat_session_stable_123' }
-  );
-  const wireSessionA2 = transformOpenAIToAntigravity(
-    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 2' }] },
-    claudeSonnetFast!,
-    'test-proj',
-    undefined,
-    undefined,
-    undefined,
-    { chatId: 'chat_session_stable_123' }
-  );
-  assert.strictEqual(
-    wireSessionA1.request.sessionId,
-    wireSessionA2.request.sessionId,
-    'Same chatId must produce identical deterministic sessionId across turns'
   );
   assert.ok(
     /^-\d+$/.test(wireSessionA1.request.sessionId),
@@ -677,32 +663,12 @@ async function main() {
     undefined,
     { chatId: 'chat_session_different_456' }
   );
-  assert.notStrictEqual(
-    wireSessionA1.request.sessionId,
-    wireSessionB.request.sessionId,
-    'Different chatId must produce distinct sessionId'
+  assert.ok(
+    /^-\d+$/.test(wireSessionB.request.sessionId),
+    `sessionId must be a negative numeric string, got "${wireSessionB.request.sessionId}"`
   );
 
-  // Deterministic fallback using system prompt seed when chatId is absent
-  const wireSys1 = transformOpenAIToAntigravity(
-    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Hello' }] },
-    claudeSonnetFast!,
-    'test-proj',
-    'Character card: Lyra the Bard'
-  );
-  const wireSys2 = transformOpenAIToAntigravity(
-    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Another turn' }] },
-    claudeSonnetFast!,
-    'test-proj',
-    'Character card: Lyra the Bard'
-  );
-  assert.strictEqual(
-    wireSys1.request.sessionId,
-    wireSys2.request.sessionId,
-    'Same system prompt without chatId must produce deterministic sessionId'
-  );
-
-  // 9.7 Numeric chatId / sessionId must not throw TypeError
+  // 9.7 Numeric chatId / sessionId in request body must not break generation
   const numericSessionWire = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Hi' }], chat_id: 987654321 },
     claudeSonnetFast!,

@@ -8,10 +8,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.5';
+export const CURRENT_VERSION = '3.5.6';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.6',
+    tag: 'PATCH',
+    title: 'Claude System Prompt Adherence & Stateless Session Restoration',
+    date: 'Sep 20, 2026',
+    commit: 'latest',
+    description: 'Restored unconditionally fresh stateless session IDs (-${Date.now()}) for Google CloudCode PA across all Claude and Gemini generation calls. Eliminates server-side session caching that caused Google to ignore updated system prompts, dynamic lorebook entries, and character persona directives.',
+    highlights: [
+      'Stateless Session Restoration: Reverted deterministic sessionId to -${Date.now()} on every turn, preventing Google CloudCode PA from retaining stale IDE session state.',
+      '100% System Prompt Adherence: Guarantees Google\'s Anthropic Claude bridge parses and evaluates the complete 40k+ character system instructions, jailbreaks, and persona directives on every single turn.',
+      'Zero Stale Cache Contamination: Swiping, editing earlier messages, and dynamic lore injections are processed cleanly without interference from past turns or stale session IDs.',
+      'Pure Client Pass-Through: Maintains 100% verbatim dialogue history and client-controlled context without server-side tampering.'
+    ]
+  },
   {
     version: '3.5.5',
     tag: 'PATCH',
@@ -23,7 +37,7 @@ export const CHANGELOG_HISTORY: ChangelogEntry[] = [
       'Memory Restoration: Removed forced 30-turn / 100k-char truncation on Claude dialogue history, preventing memory loss, amnesia, and character hallucination on ongoing roleplay sessions.',
       '100% Pure Client Pass-Through: The frontend context slider in Janitor AI and SillyTavern serves as the single source of truth for conversational history length.',
       'Preserved Fast/Low Tiers: Kept claude-sonnet-4-6-fast (0 thinking) and claude-sonnet-4-6-low (2k thinking) for token-efficient roleplay without tampering with chat history.',
-      'Deterministic KV Cache & Cascade Protection: Retained stable session IDs for prefix KV cache reuse and daily quota cascade isolation across account pools.',
+      'Cascade Protection: Daily quota cascade isolation across account pools prevents cascading rate-limit locks.',
       'Opt-in Clamping: Clamping is now strictly opt-in via x-clamped-context: true or clamped_context: true.'
     ]
   },
