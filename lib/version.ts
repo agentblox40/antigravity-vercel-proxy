@@ -8,10 +8,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.6';
+export const CURRENT_VERSION = '3.5.7';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.7',
+    tag: 'PATCH',
+    title: 'Abolish Synthetic Lockouts & Restore Pure Upstream Failover',
+    date: 'Sep 23, 2026',
+    commit: 'latest',
+    description: 'Completely excised synthetic 1-hour (3600s) lockouts and halted failovers from the proxy. Rate limit cooldowns strictly follow standard 20-second burst buffer windows with instant account failover.',
+    highlights: [
+      'Zero Synthetic Lockouts: Abolished the 3600s proxy-side cooldown triggered on generic RESOURCE_EXHAUSTED errors.',
+      'Pure Upstream Failover: Restored immediate seamless failover across all accounts in the pool on HTTP 429.',
+      'Standard 20s Buffer: Temporary per-minute burst rate limits clear in 20 seconds instead of locking accounts for an hour.'
+    ]
+  },
   {
     version: '3.5.6',
     tag: 'PATCH',

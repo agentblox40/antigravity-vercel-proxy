@@ -429,52 +429,6 @@ export async function handleChatCompletions(req: NextRequest) {
           const errLower = errText.toLowerCase();
 
           if (res.status === 429) {
-            const isClaude = resolved.wireModel.startsWith('claude-') || (body.model || '').toLowerCase().includes('claude');
-            const isDailyExhaustion =
-              errText.includes('PerDay') ||
-              errLower.includes('per_day') ||
-              errLower.includes('perday') ||
-              errLower.includes('per day') ||
-              errLower.includes('daily') ||
-              (isClaude && (
-                errText.includes('RESOURCE_EXHAUSTED') ||
-                errLower.includes('resource_exhausted') ||
-                errLower.includes('quota exceeded') ||
-                errLower.includes('quota_exceeded')
-              ));
-
-            if (isDailyExhaustion) {
-              // Mark account with 1-hour cooldown so proxy does not misleadingly hammer Google every 20s
-              account.cooldownUntil = Date.now() + 3600 * 1000;
-              account.failCount++;
-            }
-
-            if (isClaude && isDailyExhaustion) {
-              console.warn(`[Claude Daily Quota Exhausted] on ${account.name} (${upstreamUrl}): ${errText}`);
-              attemptLogs.push({ account: account.name, status: 429, error: `Daily quota exhausted: ${errText.slice(0, 300)}` });
-
-              return NextResponse.json(
-                {
-                  error: {
-                    message: `[Claude Daily Quota Exhausted]: Google CloudCode PA daily token/request quota for '${resolved.wireModel}' has been exhausted on ${account.name}. Upstream diagnostic: ${errText.slice(0, 300)}. Halted failover to prevent exhausting remaining accounts. Switch to a Fast/Low tier (e.g. 'claude-sonnet-4-6-fast' / 'claude-sonnet-4-6-low') or Gemini ('gemini-3.8-flash'), or wait for daily quota reset.`,
-                    type: 'claude_daily_quota_exhausted',
-                    code: 429,
-                    model: requestedModel,
-                    wire_model: resolved.wireModel,
-                    account: account.name,
-                    upstream_diagnostic: errText.slice(0, 500)
-                  }
-                },
-                {
-                  status: 429,
-                  headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Retry-After': '3600'
-                  }
-                }
-              );
-            }
-
             attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}: ${errText.slice(0, 300)}` });
             continue;
           } else {
