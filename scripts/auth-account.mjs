@@ -2,6 +2,7 @@
 import http from 'node:http';
 import readline from 'node:readline';
 import { exec } from 'node:child_process';
+import fs from 'node:fs';
 
 const MASK = 'antigravity-proxy-v1';
 const MASKED_CLIENT_ID = [80,94,67,88,87,66,87,70,95,68,76,20,65,95,27,21,17,94,5,88,15,92,28,91,86,30,2,4,12,70,74,24,6,6,0,20,22,71,30,5,6,90,68,90,2,2,79,23,25,4,10,3,23,29,0,31,21,72,3,66,4,28,23,6,9,6,4,24,29,90,26,66,29];
@@ -35,10 +36,12 @@ authUrl.searchParams.set('scope', SCOPES);
 authUrl.searchParams.set('access_type', 'offline');
 authUrl.searchParams.set('prompt', 'consent');
 
+const targetAccountIndex = process.argv[2] || '3';
+
 console.log('\n======================================================');
-console.log('  Google Antigravity OAuth Account Provisioner');
+console.log(`  Google Antigravity OAuth Account Provisioner (Account #${targetAccountIndex})`);
 console.log('======================================================\n');
-console.log('1. Open this URL in your browser with your 3rd Google account:\n');
+console.log(`1. Open this URL in your browser with your Google account #${targetAccountIndex}:\n`);
 console.log(authUrl.toString());
 console.log('\n------------------------------------------------------');
 
@@ -120,19 +123,32 @@ async function handleCode(authCode) {
     } catch (_) {}
 
     console.log('\n======================================================');
-    console.log('  SUCCESS! 3RD ACCOUNT READY');
+    console.log(`  SUCCESS! ACCOUNT #${targetAccountIndex} READY`);
     console.log('======================================================\n');
     console.log('Add these environment variables to Vercel:\n');
-    console.log(`ACCOUNT_3_NAME=${userEmail}`);
-    console.log(`ACCOUNT_3_REFRESH_TOKEN=${refreshToken}`);
+    console.log(`ACCOUNT_${targetAccountIndex}_NAME=${userEmail}`);
+    console.log(`ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}`);
     if (projectId) {
-      console.log(`ACCOUNT_3_PROJECT_ID=${projectId}`);
+      console.log(`ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}`);
     } else {
-      console.log('# ACCOUNT_3_PROJECT_ID: (Auto-discovered on first request)');
+      console.log(`# ACCOUNT_${targetAccountIndex}_PROJECT_ID: (Auto-discovered on first request)`);
     }
+
+    try {
+      const envPath = '.env.local';
+      if (fs.existsSync(envPath)) {
+        let envContent = fs.readFileSync(envPath, 'utf8');
+        const snippet = `\n# Account ${targetAccountIndex} (${userEmail})\nACCOUNT_${targetAccountIndex}_NAME=${userEmail}\nACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}\n${projectId ? `ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}\n` : ''}`;
+        if (!envContent.includes(`ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=`)) {
+          fs.appendFileSync(envPath, snippet, 'utf8');
+          console.log(`\n[✓] Automatically appended Account #${targetAccountIndex} to .env.local!`);
+        }
+      }
+    } catch (_) {}
+
     console.log('\n------------------------------------------------------');
     console.log('Next step: Go to Vercel -> Settings -> Environment Variables,');
-    console.log('paste the 3 variables above, and click Redeploy!');
+    console.log(`paste the ACCOUNT_${targetAccountIndex}_* variables above, and click Redeploy!`);
     console.log('------------------------------------------------------\n');
     process.exit(0);
   } catch (err) {

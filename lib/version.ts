@@ -8,10 +8,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.7';
+export const CURRENT_VERSION = '3.5.8';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.8',
+    tag: 'MAJOR',
+    title: 'Quad-Account Pool Scaling: 4x Concurrency, Headroom & Dynamic Provisioning',
+    date: 'Sep 29, 2026',
+    commit: 'latest',
+    description: 'Expanded active Google CloudCode PA account pool from 2 to 4 accounts (kars86120@gmail.com, yashv0961@gmail.com). Upgraded auth-account script with dynamic multi-account indexing, automated .env.local synchronization, and seamless 4-way round-robin load distribution with 4-way failover.',
+    highlights: [
+      'Quad-Account Pool Scaling: Integrated Account 3 (kars86120@gmail.com) and Account 4 (yashv0961@gmail.com) alongside Account 1 and Account 2, quadrupling total daily token headroom and concurrency.',
+      'Equal Round-Robin Load Balancing: Distributed incoming generation requests evenly across all 4 accounts (25% each) with instantaneous failover across the entire pool on HTTP 429 quota exhaustion.',
+      'Dynamic OAuth Provisioning: Enhanced scripts/auth-account.mjs to support arbitrary account indexes (node scripts/auth-account.mjs <index>) with automatic .env.local file appending.',
+      'Zero-Config Auto Discovery: Accounts automatically discover CloudCode projects on their first generation turns without manual project ID specification.'
+    ]
+  },
   {
     version: '3.5.7',
     tag: 'PATCH',
