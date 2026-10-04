@@ -11,6 +11,7 @@ export interface AccountConfig {
   expiresAt: number;
   cooldownUntil: number;
   failCount: number;
+  claudeDeprecated?: boolean;
 }
 
 export interface ModelSpec {
@@ -237,8 +238,8 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
   return acc.accessToken!;
 }
 
-export function pickAccount(): AccountConfig {
-  const accounts = getAccounts();
+export function pickAccount(candidateAccounts?: AccountConfig[]): AccountConfig {
+  const accounts = candidateAccounts && candidateAccounts.length > 0 ? candidateAccounts : getAccounts();
   if (accounts.length === 0) throw new Error('No Google Antigravity accounts configured in Environment Variables!');
   const now = Date.now();
   for (let i = 0; i < accounts.length; i++) {

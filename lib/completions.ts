@@ -316,7 +316,27 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   }
 
-  const accounts = getAccounts();
+  const allAccounts = getAccounts();
+  const isClaudeModel = resolved.wireModel.includes('claude');
+  // Account 4 (yashv0961@gmail.com) was phased out of Claude 4.6 by Google and returns canned deprecation text.
+  // Filter out any accounts where Claude 4.6 is deprecated when serving Claude requests so they fail over cleanly to active accounts.
+  const accounts = isClaudeModel
+    ? allAccounts.filter(a => a.name !== 'yashv0961@gmail.com' && !a.claudeDeprecated)
+    : allAccounts;
+
+  if (accounts.length === 0) {
+    return NextResponse.json(
+      {
+        error: {
+          message: `[Proxy Error]: No available accounts configured in pool for ${resolved.wireModel}.`,
+          type: 'invalid_request_error',
+          code: 400
+        }
+      },
+      { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
+
   const now = Date.now();
   const availableAccounts = accounts.filter(a => a.cooldownUntil <= now);
 
@@ -360,10 +380,10 @@ export async function handleChatCompletions(req: NextRequest) {
     );
   }
 
-  // 50/50 Round-Robin Account Balancing
+  // Round-Robin Account Balancing across eligible pool
   let primaryAccount: any;
   try {
-    primaryAccount = pickAccount();
+    primaryAccount = pickAccount(accounts);
   } catch {
     primaryAccount = accounts[0];
   }
@@ -695,6 +715,12 @@ export async function handleChatCompletions(req: NextRequest) {
             }
           } catch {}
         }
+      }
+
+      if (contentText.includes('is no longer available') && contentText.includes('switch to Claude')) {
+        account.claudeDeprecated = true;
+        attemptLogs.push({ account: account.name, status: 410, error: contentText.trim() });
+        continue;
       }
 
       // Record asynchronously into memory with dynamic Lorebary injections & proxy prompt injections

@@ -8,10 +8,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.5.8';
+export const CURRENT_VERSION = '3.5.9';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.5.9',
+    tag: 'PATCH',
+    title: 'Selective Claude 4.6 Account Routing & Isolation',
+    date: 'Oct 05, 2026',
+    commit: 'latest',
+    description: 'Isolated yashv0961@gmail.com from the Claude routing pool to prevent usage spikes and deprecation errors on Claude 4.6, reserving it exclusively for Gemini models while routing Claude requests strictly across Accounts 1, 2, and 3.',
+    highlights: [
+      'Account 4 Isolation for Claude: Excluded yashv0961@gmail.com from serving Claude models, ensuring Claude 4.6 requests only route to Accounts 1, 2, and 3 (33% load balancing each).',
+      'Dynamic Deprecation Detection: Added automatic failover if any upstream account returns Claude version deprecation notices, marking the account and retrying the next pool member seamlessly.',
+      'Preserved Gemini Quad-Scaling: All 4 accounts remain active for Gemini models (Gemini 3.8 Flash, 3.7 Flash, 3.1 Pro) with full 4-way load balancing (25% each).'
+    ]
+  },
   {
     version: '3.5.8',
     tag: 'MAJOR',
