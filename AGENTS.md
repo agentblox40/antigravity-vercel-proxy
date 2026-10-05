@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.5.9`  
+> *Current Version*: `v3.6.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -21,7 +21,7 @@
 6. **3-Stage Testing Lab & Character Presets**: Interactive 3-column playground showing 1️⃣ Raw User Input, 2️⃣ Live Wire Input + Injections, and 3️⃣ Model Output with switchable character personas.
 7. **Zero Silent Fallback & Strict Validation**: Unknown or unsupported model names return an immediate `HTTP 404 Model Not Found`. If an upstream model returns an error (404/400/503), the proxy never silently swaps models; it returns the exact error diagnostic.
 8. **Decoupled Thinking Tokens**: Automatically provisions full upstream `maxOutputTokens` headroom (16k+ tokens) so Gemini 3.7 thinking tokens never cannibalize the client's visible response budget.
-9. **Quad-Account Round-Robin Load Balancing**: Evenly distributes generation requests across all configured Google OAuth accounts (25% each across 4 accounts) on every turn with instantaneous failover across the entire pool on 429 quota exhaustion.
+9. **Pentad-Account Round-Robin Load Balancing**: Evenly distributes generation requests across all 5 configured Google OAuth accounts (20% each across 5 accounts) on every turn with instantaneous failover across the entire pool on 429 quota exhaustion.
 10. **Lorebary & Lorebook Injection Tracking**: Passively extracts dynamic `<lore>`, `<world_info>`, and `<memory>` entries and renders an interactive turn-by-turn inspection panel in the Logged Chats explorer.
 11. **Passive Cloud Logging & 1-Click DB Wipe**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency and 1-click database flush.
 12. **In-Chat Control Commands & History Sanitization**: In-band control commands (`<MYSETTINGS>`, `<ENABLE: X, Y>`, `<DISABLE: X, Y>`, `<INJECTIONS: ON/OFF>`) allow real-time module inspection and toggling directly inside roleplay chat boxes with 0ms delay, 0 Google API quota cost, and automatic sanitization of past command turns from upstream prompts to ensure 100% character immersion.
@@ -29,7 +29,6 @@
 14. **Streamlined Roleplay Core & Pure Client Pass-Through**: Stripped out the overcomplicated 15-slider cockpit dashboard and parameter override layers. Whatever sampling parameters (temperature, top_p, top_k, max_tokens, penalties) Janitor AI or SillyTavern sends are passed directly through to Google CloudCode PA and OpenCode without tampering. Model IDs serve as the single source of truth for thinking token budgets (-fast, -low, standard, -high, -max), while in-chat commands (<MYSETTINGS>, <ENABLE: ...>, <DISABLE: ...>, <INJECTIONS: ON/OFF>) maintain modular prompt directives with 100% wire history sanitization.
 15. **Zero-Wait TTFT & Native Serverless Lifecycle**: Hot-path TTFT unblocked from database calls via negative caching, Next.js 15 native after() lifecycle preservation, dual-mapped reasoning tokens (reasoning_content + reasoning), and Gemini 3.1 Pro Fast/Low variants.
 16. **Claude Token Optimization & Stateless System Prompt Adherence**: Fast (0 thinking) and Low (2k thinking) tiers across Claude Sonnet 4.6 and Claude Opus 4.6, 100% pure client pass-through dialogue history (opt-in clamping via `x-clamped-context: true`), unconditionally fresh stateless session IDs (`-${Date.now()}`) to force Google CloudCode PA to parse full character system instructions on every turn without stale IDE session contamination, and zero synthetic proxy-side lockouts with clean 20-second Google rate limit buffers and uninhibited account failover.
-17. **Selective Claude 4.6 Account Routing & Isolation**: Excludes family-shared or upgraded accounts (such as `yashv0961@gmail.com`) from the Claude routing pool to eliminate quota drain and version deprecation errors, dedicating Claude 4.6 requests strictly across Accounts 1, 2, and 3 (33% each) while retaining all 4 accounts for Gemini models (25% each).
 
 ---
 
@@ -173,8 +172,11 @@ ACCOUNT_2_PROJECT_ID=trusty-arch-pc9s2
 ACCOUNT_3_NAME=kars86120@gmail.com
 ACCOUNT_3_REFRESH_TOKEN=<third-google-refresh-token>
 
-ACCOUNT_4_NAME=yashv0961@gmail.com
+ACCOUNT_4_NAME=dsnow3600@gmail.com
 ACCOUNT_4_REFRESH_TOKEN=<fourth-google-refresh-token>
+
+ACCOUNT_5_NAME=kirtiraikwar600@gmail.com
+ACCOUNT_5_REFRESH_TOKEN=<fifth-google-refresh-token>
 ```
 
 ### B. Upstash Redis Persistence Setup

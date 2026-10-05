@@ -139,7 +139,13 @@ async function handleCode(authCode) {
       if (fs.existsSync(envPath)) {
         let envContent = fs.readFileSync(envPath, 'utf8');
         const snippet = `\n# Account ${targetAccountIndex} (${userEmail})\nACCOUNT_${targetAccountIndex}_NAME=${userEmail}\nACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}\n${projectId ? `ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}\n` : ''}`;
-        if (!envContent.includes(`ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=`)) {
+        if (envContent.includes(`ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=`)) {
+          const lines = envContent.split('\n').filter(l => !l.startsWith(`ACCOUNT_${targetAccountIndex}_`) && !l.includes(`# Account ${targetAccountIndex} `));
+          lines.push('', `# Account ${targetAccountIndex} (${userEmail})`, `ACCOUNT_${targetAccountIndex}_NAME=${userEmail}`, `ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}`);
+          if (projectId) lines.push(`ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}`);
+          fs.writeFileSync(envPath, lines.join('\n').trim() + '\n', 'utf8');
+          console.log(`\n[✓] Successfully updated Account #${targetAccountIndex} (${userEmail}) in .env.local!`);
+        } else {
           fs.appendFileSync(envPath, snippet, 'utf8');
           console.log(`\n[✓] Automatically appended Account #${targetAccountIndex} to .env.local!`);
         }
@@ -176,7 +182,13 @@ const server = http.createServer((req, res) => {
       res.end('<h1>Authentication Successful!</h1><p>You can close this window and return to your terminal.</p>');
       server.close();
       handleCode(code);
+    } else if (!error) {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<h1>OAuth Listener Active</h1><p>Waiting for Google OAuth code...</p>');
     }
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
   }
 });
 
