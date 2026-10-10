@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.6.0`  
+> *Current Version*: `v3.6.1`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -21,7 +21,7 @@
 6. **3-Stage Testing Lab & Character Presets**: Interactive 3-column playground showing 1️⃣ Raw User Input, 2️⃣ Live Wire Input + Injections, and 3️⃣ Model Output with switchable character personas.
 7. **Zero Silent Fallback & Strict Validation**: Unknown or unsupported model names return an immediate `HTTP 404 Model Not Found`. If an upstream model returns an error (404/400/503), the proxy never silently swaps models; it returns the exact error diagnostic.
 8. **Decoupled Thinking Tokens**: Automatically provisions full upstream `maxOutputTokens` headroom (16k+ tokens) so Gemini 3.7 thinking tokens never cannibalize the client's visible response budget.
-9. **Pentad-Account Round-Robin Load Balancing**: Evenly distributes generation requests across all 5 configured Google OAuth accounts (20% each across 5 accounts) on every turn with instantaneous failover across the entire pool on 429 quota exhaustion.
+9. **Hexad-Account Round-Robin Load Balancing**: Evenly distributes generation requests across all 6 configured Google OAuth accounts (16.6% each across 6 accounts) on every turn with instantaneous failover across the entire pool on 429 quota exhaustion.
 10. **Lorebary & Lorebook Injection Tracking**: Passively extracts dynamic `<lore>`, `<world_info>`, and `<memory>` entries and renders an interactive turn-by-turn inspection panel in the Logged Chats explorer.
 11. **Passive Cloud Logging & 1-Click DB Wipe**: Upstash Redis REST `/pipeline` batch persistence strictly in the background for the dashboard's Logged Chats explorer with 0ms impact on completion latency and 1-click database flush.
 12. **In-Chat Control Commands & History Sanitization**: In-band control commands (`<MYSETTINGS>`, `<ENABLE: X, Y>`, `<DISABLE: X, Y>`, `<INJECTIONS: ON/OFF>`) allow real-time module inspection and toggling directly inside roleplay chat boxes with 0ms delay, 0 Google API quota cost, and automatic sanitization of past command turns from upstream prompts to ensure 100% character immersion.
@@ -177,6 +177,9 @@ ACCOUNT_4_REFRESH_TOKEN=<fourth-google-refresh-token>
 
 ACCOUNT_5_NAME=kirtiraikwar600@gmail.com
 ACCOUNT_5_REFRESH_TOKEN=<fifth-google-refresh-token>
+
+ACCOUNT_6_NAME=yashv0961@gmail.com
+ACCOUNT_6_REFRESH_TOKEN=<sixth-google-refresh-token>
 ```
 
 ### B. Upstash Redis Persistence Setup

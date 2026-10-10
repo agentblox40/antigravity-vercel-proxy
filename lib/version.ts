@@ -8,10 +8,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.6.0';
+export const CURRENT_VERSION = '3.6.1';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.6.1',
+    tag: 'MAJOR',
+    title: 'Hexad-Account Pool Scaling: 6x Capacity & yashv0961 Reintegration',
+    date: 'Oct 10, 2026',
+    commit: 'latest',
+    description: 'Expanded active Google CloudCode PA account pool to 6 accounts (yashv3050, manishflamingopharma, kars86120, dsnow3600, kirtiraikwar600, yashv0961). All 6 accounts verified with Claude 4.6 and Gemini 3.8/3.7 models with seamless 6-way round-robin load distribution (~16.6% each).',
+    highlights: [
+      'Hexad-Account Pool (6 Accounts): Reintegrated yashv0961@gmail.com as Account 6. Pool now scales to 6 independent Google AI Pro accounts.',
+      'Universal Claude 4.6 Verification: Verified operational status on claude-sonnet-4-6, claude-opus-4-6-thinking, and Gemini 3.8/3.7 across all 6 accounts.',
+      '6-Way Round-Robin Balancing: Generation requests automatically balanced across all 6 accounts (16.6% each) with instantaneous failover across the entire pool on HTTP 429 quota exhaustion.',
+      'Auto-Discovered CloudCode Project: Zero manual project configuration required; credentials saved directly into local environment.'
+    ]
+  },
   {
     version: '3.6.0',
     tag: 'MAJOR',
