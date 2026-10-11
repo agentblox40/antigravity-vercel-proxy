@@ -366,10 +366,11 @@ export async function handleChatCompletions(req: NextRequest) {
     );
   }
 
-  // Round-Robin Account Balancing across eligible pool
+  // Session-Sticky Account Affinity for KV-Cache preservation (falls back to Round-Robin when no chat seed exists)
+  const sessionAffinitySeed = currentChatId || rawSystemText || null;
   let primaryAccount: any;
   try {
-    primaryAccount = pickAccount(accounts);
+    primaryAccount = pickAccount(accounts, sessionAffinitySeed);
   } catch {
     primaryAccount = accounts[0];
   }

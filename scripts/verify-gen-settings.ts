@@ -639,33 +639,63 @@ async function main() {
     `Gemini models must NOT be clamped, got ${geminiWire.request.contents.length}`
   );
 
-  // 9.4 Stateless fresh sessionId on every turn to guarantee Google CloudCode PA parses system prompt fresh
+  // 9.4 Deterministic sessionId for prefix KV caching (reuses cache on same chat + system prompt, rotates on system prompt edit)
   const wireSessionA1 = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 1' }] },
     claudeSonnetFast!,
     'test-proj',
-    undefined,
+    'Character card: Lyra v1',
     undefined,
     undefined,
     { chatId: 'chat_session_stable_123' }
+  );
+  const wireSessionA2 = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 2' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    'Character card: Lyra v1',
+    undefined,
+    undefined,
+    { chatId: 'chat_session_stable_123' }
+  );
+  assert.strictEqual(
+    wireSessionA1.request.sessionId,
+    wireSessionA2.request.sessionId,
+    'Same chatId + system prompt must produce identical deterministic sessionId across turns for KV-cache hits'
   );
   assert.ok(
     /^-\d+$/.test(wireSessionA1.request.sessionId),
     `sessionId must be a negative numeric string, got "${wireSessionA1.request.sessionId}"`
   );
 
+  const wireSessionEditedSys = transformOpenAIToAntigravity(
+    { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 3' }] },
+    claudeSonnetFast!,
+    'test-proj',
+    'Character card: Lyra v2 (edited persona)',
+    undefined,
+    undefined,
+    { chatId: 'chat_session_stable_123' }
+  );
+  assert.notStrictEqual(
+    wireSessionA1.request.sessionId,
+    wireSessionEditedSys.request.sessionId,
+    'Editing system prompt must rotate sessionId so Claude immediately picks up system changes'
+  );
+
   const wireSessionB = transformOpenAIToAntigravity(
     { model: 'claude-sonnet-4-6-fast', messages: [{ role: 'user', content: 'Turn 1' }] },
     claudeSonnetFast!,
     'test-proj',
-    undefined,
+    'Character card: Lyra v1',
     undefined,
     undefined,
     { chatId: 'chat_session_different_456' }
   );
-  assert.ok(
-    /^-\d+$/.test(wireSessionB.request.sessionId),
-    `sessionId must be a negative numeric string, got "${wireSessionB.request.sessionId}"`
+  assert.notStrictEqual(
+    wireSessionA1.request.sessionId,
+    wireSessionB.request.sessionId,
+    'Different chatId must produce distinct sessionId'
   );
 
   // 9.7 Numeric chatId / sessionId in request body must not break generation

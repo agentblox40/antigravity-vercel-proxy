@@ -238,10 +238,23 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
   return acc.accessToken!;
 }
 
-export function pickAccount(candidateAccounts?: AccountConfig[]): AccountConfig {
+export function pickAccount(candidateAccounts?: AccountConfig[], sessionSeed?: string | null): AccountConfig {
   const accounts = candidateAccounts && candidateAccounts.length > 0 ? candidateAccounts : getAccounts();
   if (accounts.length === 0) throw new Error('No Google Antigravity accounts configured in Environment Variables!');
   const now = Date.now();
+
+  if (sessionSeed && String(sessionSeed).trim()) {
+    const hash = crypto.createHash('sha256').update(String(sessionSeed).trim()).digest('hex');
+    const baseIdx = (parseInt(hash.slice(0, 8), 16) || 0) % accounts.length;
+    for (let i = 0; i < accounts.length; i++) {
+      const idx = (baseIdx + i) % accounts.length;
+      const acc = accounts[idx];
+      if (acc.cooldownUntil <= now) {
+        return acc;
+      }
+    }
+  }
+
   for (let i = 0; i < accounts.length; i++) {
     const idx = (nextAccountIdx + i) % accounts.length;
     const acc = accounts[idx];
@@ -597,10 +610,20 @@ export function transformOpenAIToAntigravity(
     systemInstructionParts.push({ text: ANTIGRAVITY_DEFAULT_SYSTEM });
   }
 
-  // Google CloudCode PA sessionId MUST be unconditionally fresh on every turn (-${Date.now()}).
-  // Reusing sessionId across turns causes Google's server-side session orchestrator to retain stale IDE session state
-  // and completely ignore or drop updated systemInstruction, dynamic lorebook entries, and character persona directives for Claude.
-  const sessionId = `-${Date.now()}`;
+  // Deterministic sessionId per chat session + system prompt for upstream prefix KV-cache reuse (90% cached token discount).
+  // Combining chatId and userSystemText ensures consecutive turns in the same chat reuse the warm KV cache,
+  // while any change to the system prompt or character persona automatically rotates the sessionId.
+  const explicitSessionSeed = options?.chatId ?? body.chatId ?? body.chat_id ?? body.sessionId ?? body.session_id ?? '';
+  const systemSeed = userSystemText.trim();
+  const combinedSeed = [String(explicitSessionSeed).trim(), systemSeed].filter(Boolean).join('::');
+  let sessionId: string;
+  if (combinedSeed) {
+    const hash = crypto.createHash('sha256').update(combinedSeed).digest('hex');
+    const numericPart = parseInt(hash.slice(0, 12), 16);
+    sessionId = `-${Math.abs(numericPart) || 100000000000}`;
+  } else {
+    sessionId = `-${Date.now()}`;
+  }
 
   const reqObj: any = {
     sessionId,

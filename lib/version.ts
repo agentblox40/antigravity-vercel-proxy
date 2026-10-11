@@ -8,10 +8,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.6.1';
+export const CURRENT_VERSION = '3.6.2';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.6.2',
+    tag: 'MAJOR',
+    title: 'Prompt Caching Restoration & Session-Sticky Account Affinity',
+    date: 'Oct 11, 2026',
+    commit: 'latest',
+    description: 'Restored deterministic KV-Cache session IDs (chatId + system prompt hash) and upgraded account routing to Session-Sticky Affinity so consecutive turns in the same chat hit the same account to preserve Anthropic/Vertex 5-minute prompt caches (up to 90% token savings) while rotating automatically on system prompt edits.',
+    highlights: [
+      'Deterministic Composite sessionId: Hashes both chatId and userSystemText so consecutive turns in the same roleplay chat reuse upstream prefix KV caches (~90% input token discount).',
+      'Zero Stale System Prompt Bug: Editing the character card, system prompt, or system injections automatically changes the hash and rotates the sessionId so updates take effect immediately.',
+      'Session-Sticky Account Affinity: Routes consecutive turns of the same chat session to the same healthy Google account rather than scattering cold cache writes across all 6 accounts, failing over immediately on HTTP 429.'
+    ]
+  },
   {
     version: '3.6.1',
     tag: 'MAJOR',
