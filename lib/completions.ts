@@ -441,16 +441,35 @@ export async function handleChatCompletions(req: NextRequest) {
       let upstreamRes: Response | null = null;
       for (const upstreamUrl of UPSTREAM_URLS) {
         try {
-          const res = await fetch(upstreamUrl, {
+          let res = await fetch(upstreamUrl, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
               Accept: 'text/event-stream',
-              'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64',
+              'User-Agent': 'antigravity/2.22.0 windows/amd64',
             },
             body: JSON.stringify(envelope),
           });
+
+          // If daily-cloudcode-pa returns 404 for legacy -tiered model ID, auto-upgrade to -high on same pipe
+          if (res.status === 404 && envelope.model.endsWith('-tiered')) {
+            const upgradedEnvelope = {
+              ...envelope,
+              project: envelope.project || 'aicode-consumers',
+              model: envelope.model.replace(/-tiered$/, '-high'),
+            };
+            res = await fetch(upstreamUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                Accept: 'text/event-stream',
+                'User-Agent': 'antigravity/2.22.0 windows/amd64',
+              },
+              body: JSON.stringify(upgradedEnvelope),
+            });
+          }
 
           if (res.ok) {
             upstreamRes = res;
@@ -458,7 +477,6 @@ export async function handleChatCompletions(req: NextRequest) {
           }
 
           const errText = await res.text();
-          const errLower = errText.toLowerCase();
 
           if (res.status === 429) {
             attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}: ${errText.slice(0, 300)}` });
@@ -466,6 +484,10 @@ export async function handleChatCompletions(req: NextRequest) {
           } else {
             attemptLogs.push({ account: account.name, status: res.status, error: errText.slice(0, 300) });
             console.warn(`Upstream ${upstreamUrl} returned ${res.status} for model ${resolved.wireModel}: ${errText}`);
+            // If primary daily-cloudcode-pa returned 400 or 404 (not rate limit/503), do not fall back to cloudcode-pa with aicode-consumers (which triggers a false 429)
+            if (res.status === 400 || res.status === 404) {
+              break;
+            }
           }
         } catch (e: any) {
           attemptLogs.push({ account: account.name, status: 500, error: e.message || 'Connection error' });

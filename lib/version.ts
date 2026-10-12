@@ -8,21 +8,21 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.6.3';
+export const CURRENT_VERSION = '3.6.4';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
-    version: '3.6.3',
+    version: '3.6.4',
     tag: 'LATEST',
-    title: 'Argon Exp-A Dedicated Models & 7-Account Pool Scaling',
+    title: 'Argon Exp-A Dedicated Models & Antigravity 2.22.0 Wire Header Upgrade',
     date: 'Oct 12, 2026',
     commit: 'latest',
-    description: 'Added dedicated Argon experimental models (argon-low, argon-medium, argon-high) exclusively pinned to Account #7 (kars60928@gmail.com) to guarantee 100% routing to Google\'s experimental gemini-3.8-flash-exp-a cohort.',
+    description: 'Added dedicated Argon experimental models (argon-low, argon-medium, argon-high) pinned to Account #7 (kars60928@gmail.com) and upgraded the upstream User-Agent header to antigravity/2.22.0 windows/amd64 to eliminate 404->429 cascades on gemini-3.8-flash-high.',
     highlights: [
+      'Antigravity 2.22.0 User-Agent Upgrade: Updated upstream User-Agent from legacy 2.1.1 to antigravity/2.22.0 windows/amd64 required by daily-cloudcode-pa for gemini-3.8-flash-high (gemini-3.8-flash-exp-a).',
       'Argon Exp-A Model Suite: Added argon-low (2K thinking), argon-medium (8K thinking), and argon-high (24K thinking) mapped to gemini-3.8-flash-high on project aicode-consumers.',
-      'Strict Account Pinning: Argon requests route exclusively through kars60928@gmail.com and never silently fail over to standard gemini-3.8-flash-n accounts.',
-      'Heptad-Account Pool (7 Accounts): Integrated kars60928@gmail.com as Account #7 alongside Accounts 1–6.'
+      'Eliminated False 404->429 Cooldown Cascade: Prevented 404/400 errors on daily-cloudcode-pa from spilling onto cloudcode-pa and triggering false 20s rate-limit cooldowns.'
     ]
   },
   {

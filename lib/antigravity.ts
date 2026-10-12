@@ -116,7 +116,7 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
           const res = await fetch(url, {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
-              'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64'
+              'User-Agent': 'antigravity/2.22.0 windows/amd64'
             }
           });
 
@@ -229,7 +229,7 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
     try {
       const metaRes = await fetch('https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssistMetadata', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${acc.accessToken}`, 'Content-Type': 'application/json', 'User-Agent': 'antigravity/ide/2.1.1 darwin/arm64' },
+        headers: { 'Authorization': `Bearer ${acc.accessToken}`, 'Content-Type': 'application/json', 'User-Agent': 'antigravity/2.22.0 windows/amd64' },
         body: JSON.stringify({ metadata: { ideType: 'VSCODE', ideVersion: '1.96.0' } })
       });
       if (metaRes.ok) {
