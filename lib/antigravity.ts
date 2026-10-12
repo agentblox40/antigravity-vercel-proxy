@@ -50,6 +50,9 @@ export const UNRESTRICTED_SAFETY_SETTINGS = [
 ];
 
 export const FALLBACK_MODELS: ModelSpec[] = [
+  { id: 'argon-low', name: 'Argon Low (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '2K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Low (2K) thinking.' },
+  { id: 'argon-medium', name: 'Argon Medium (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '8K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Medium (8K) thinking.' },
+  { id: 'argon-high', name: 'Argon High (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '24K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with High (24K) thinking.' },
   { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', tier: 'Fast', badge: 'Next-Gen', thinking: 'Auto / 8K', context: '1M Context', desc: 'Google next-gen flagship multimodal reasoning model. Ultra-fast, adaptive, and expressive.' },
   { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget for complex character lore and narrative branching on Gemini 3.8.' },
   { id: 'gemini-3.8-flash-max', name: 'Gemini 3.8 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom (64k tokens) for extreme world simulation.' },
@@ -175,7 +178,7 @@ export function getAccounts(): AccountConfig[] {
     const token = (process.env[`ACCOUNT_${i}_REFRESH_TOKEN`] || '').trim();
     if (!token) break;
     const name = (process.env[`ACCOUNT_${i}_NAME`] || `Account ${i}`).trim();
-    const projectId = (process.env[`ACCOUNT_${i}_PROJECT_ID`] || '').trim();
+    const projectId = (process.env[`ACCOUNT_${i}_PROJECT_ID`] || 'aicode-consumers').trim();
     accounts.push({
       id: `acc-${i}`,
       name,
@@ -193,7 +196,7 @@ export function getAccounts(): AccountConfig[] {
       id: 'acc-default',
       name: 'Default Account',
       refreshToken: process.env.ANTIGRAVITY_REFRESH_TOKEN.trim(),
-      projectId: process.env.ANTIGRAVITY_PROJECT_ID || '',
+      projectId: process.env.ANTIGRAVITY_PROJECT_ID || 'aicode-consumers',
       accessToken: null,
       expiresAt: 0,
       cooldownUntil: 0,
@@ -234,6 +237,7 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
         if (meta.project) acc.projectId = meta.project;
       }
     } catch {}
+    if (!acc.projectId) acc.projectId = 'aicode-consumers';
   }
   return acc.accessToken!;
 }
@@ -271,11 +275,28 @@ export function pickAccount(candidateAccounts?: AccountConfig[], sessionSeed?: s
 }
 
 // Strictly resolve requested model ID to Google Antigravity wire model without silent fallbacks
-export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number } | null {
+export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number; targetAccount?: string } | null {
   if (!modelId || !modelId.trim()) {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
   }
   const clean = modelId.trim().toLowerCase();
+
+  // 0. Argon Experimental Cohort (Dedicated Account #7: kars60928@gmail.com -> gemini-3.8-flash-exp-a)
+  if (clean === 'argon-low' || clean === 'argon:low') {
+    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 2048, targetAccount: 'kars60928@gmail.com' };
+  }
+  if (clean === 'argon-medium' || clean === 'argon:medium' || clean === 'argon:med' || clean === 'argon-med' || clean === 'argon') {
+    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 8192, targetAccount: 'kars60928@gmail.com' };
+  }
+  if (clean === 'argon-high' || clean === 'argon:high') {
+    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 24576, targetAccount: 'kars60928@gmail.com' };
+  }
+  if (clean === 'argon-max' || clean === 'argon:max') {
+    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 65536, targetAccount: 'kars60928@gmail.com' };
+  }
+  if (clean === 'argon-fast' || clean === 'argon:fast' || clean === 'argon-off' || clean === 'argon:off') {
+    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 0, targetAccount: 'kars60928@gmail.com' };
+  }
 
   // 1. Gemini 3.8 Flash variants (maps to upstream gemini-3.8-flash-tiered)
   if (clean === 'gemini-3.8-flash' || clean === 'gemini-3.8-flash-tiered') {

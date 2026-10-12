@@ -725,7 +725,26 @@ async function main() {
   assert.strictEqual(anthropicSonnet!.wireModel, 'claude-sonnet-4-6');
   assert.strictEqual(anthropicSonnet!.defaultThinkingBudget, 0);
 
-  console.log('✅ Claude Token Optimization Suite (Smart Context Clamping & KV Cache Reuse) passed.\n');
+  // 9.9 Argon Experimental Cohort Models (Pinned to kars60928@gmail.com)
+  const argonLow = resolveWireModel('argon-low');
+  assert.ok(argonLow, 'argon-low failed to resolve');
+  assert.strictEqual(argonLow!.wireModel, 'gemini-3.8-flash-high');
+  assert.strictEqual(argonLow!.defaultThinkingBudget, 2048);
+  assert.strictEqual(argonLow!.targetAccount, 'kars60928@gmail.com');
+
+  const argonMed = resolveWireModel('argon-medium');
+  assert.ok(argonMed, 'argon-medium failed to resolve');
+  assert.strictEqual(argonMed!.wireModel, 'gemini-3.8-flash-high');
+  assert.strictEqual(argonMed!.defaultThinkingBudget, 8192);
+  assert.strictEqual(argonMed!.targetAccount, 'kars60928@gmail.com');
+
+  const argonHigh = resolveWireModel('argon-high');
+  assert.ok(argonHigh, 'argon-high failed to resolve');
+  assert.strictEqual(argonHigh!.wireModel, 'gemini-3.8-flash-high');
+  assert.strictEqual(argonHigh!.defaultThinkingBudget, 24576);
+  assert.strictEqual(argonHigh!.targetAccount, 'kars60928@gmail.com');
+
+  console.log('✅ Claude Token Optimization & Argon Cohort Pinning Suite passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }

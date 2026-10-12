@@ -79,12 +79,15 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
           requested_model: requestedModel,
           available_models: [
+            'argon-low',
+            'argon-medium',
+            'argon-high',
             'gemini-3.8-flash',
             'gemini-3.8-flash-high',
             'gemini-3.8-flash-max',
@@ -319,9 +322,31 @@ export async function handleChatCompletions(req: NextRequest) {
   const allAccounts = getAccounts();
   const isClaudeModel = resolved.wireModel.includes('claude');
   // Filter out any accounts where Claude 4.6 is deprecated when serving Claude requests so they fail over cleanly to active accounts.
-  const accounts = isClaudeModel
+  let accounts = isClaudeModel
     ? allAccounts.filter(a => !a.claudeDeprecated)
     : allAccounts;
+
+  // Strictly pin models with targetAccount (e.g. argon-low, argon-medium, argon-high -> kars60928@gmail.com)
+  // so they ONLY route through the experimental cohort account and never fail over to standard accounts.
+  if (resolved.targetAccount) {
+    const targetLower = resolved.targetAccount.toLowerCase();
+    const pinnedAccounts = accounts.filter(
+      a => a.name.toLowerCase() === targetLower || a.id.toLowerCase() === targetLower
+    );
+    if (pinnedAccounts.length === 0) {
+      return NextResponse.json(
+        {
+          error: {
+            message: `[Dedicated Account Missing]: Model '${requestedModel}' is pinned exclusively to account '${resolved.targetAccount}' (gemini-3.8-flash-exp-a), which is not configured in environment variables.`,
+            type: 'configuration_error',
+            code: 503
+          }
+        },
+        { status: 503, headers: { 'Access-Control-Allow-Origin': '*' } }
+      );
+    }
+    accounts = pinnedAccounts;
+  }
 
   const now = Date.now();
   const availableAccounts = accounts.filter(a => a.cooldownUntil <= now);
