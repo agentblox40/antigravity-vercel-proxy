@@ -17,7 +17,11 @@ import {
 } from '../lib/antigravity';
 import {
   OPENCODE_MODELS,
+  OPENCODE_GUEST_ACCOUNTS,
+  OPENCODE_OFFICIAL_TOOLS,
   resolveOpenCodeModel,
+  generateOpenCodeSessionId,
+  generateOpenCodeRequestId,
 } from '../lib/opencode';
 import {
   extractSessionOverview,
@@ -336,9 +340,11 @@ async function main() {
   console.log('✅ Upstream Wire History Sanitization passed.\n');
 
   // ==========================================
-  // 6. OpenCode Free Models Verification
+  // 6. OpenCode Free Models & CLI Contract Verification
   // ==========================================
-  console.log('Test 6: OpenCode Free Models Verification');
+  console.log('Test 6: OpenCode Free Models & CLI Contract Verification');
+
+  // 6.1 Model Resolution & Thinking variants
   const openCodeFast = resolveOpenCodeModel('big-pickle-fast');
   assert.ok(openCodeFast, 'big-pickle-fast should resolve');
   assert.strictEqual(openCodeFast.isFast, true);
@@ -349,6 +355,68 @@ async function main() {
   assert.strictEqual(openCodeThink.isFast, false);
   assert.strictEqual(openCodeThink.wireModel, 'big-pickle');
 
+  // Space Bunny & Snow Bunny alias
+  const spaceBunny = resolveOpenCodeModel('space-bunny-free');
+  assert.ok(spaceBunny, 'space-bunny-free should resolve');
+  assert.strictEqual(spaceBunny.isFast, false);
+  assert.strictEqual(spaceBunny.wireModel, 'space-bunny-free');
+
+  const snowBunny = resolveOpenCodeModel('snow-bunny');
+  assert.ok(snowBunny, 'snow-bunny alias should resolve to space-bunny-free');
+  assert.strictEqual(snowBunny.wireModel, 'space-bunny-free');
+  assert.strictEqual(snowBunny.isFast, false);
+
+  const snowBunnyFast = resolveOpenCodeModel('snow-bunny-fast');
+  assert.ok(snowBunnyFast, 'snow-bunny-fast should resolve to space-bunny-free fast');
+  assert.strictEqual(snowBunnyFast.wireModel, 'space-bunny-free');
+  assert.strictEqual(snowBunnyFast.isFast, true);
+
+  // Cat Jam
+  const catJam = resolveOpenCodeModel('cat-jam-free');
+  assert.ok(catJam, 'cat-jam-free should resolve');
+  assert.strictEqual(catJam.isFast, false);
+
+  const catJamFast = resolveOpenCodeModel('cat-jam-free-fast');
+  assert.ok(catJamFast, 'cat-jam-free-fast should resolve');
+  assert.strictEqual(catJamFast.isFast, true);
+
+  // MiMo v2.6 & v2.5 alias
+  const mimo26 = resolveOpenCodeModel('mimo-v2.6-flash-free');
+  assert.ok(mimo26, 'mimo-v2.6-flash-free should resolve');
+  assert.strictEqual(mimo26.wireModel, 'mimo-v2.6-flash-free');
+
+  const mimo25 = resolveOpenCodeModel('mimo-v2.5-free');
+  assert.ok(mimo25, 'mimo-v2.5-free should resolve to mimo-v2.6-flash-free');
+  assert.strictEqual(mimo25.wireModel, 'mimo-v2.6-flash-free');
+
+  // LongCat 2.5
+  const longCat = resolveOpenCodeModel('longcat-2.5-preview-free');
+  assert.ok(longCat, 'longcat-2.5-preview-free should resolve');
+  assert.strictEqual(longCat.isFast, false);
+
+  const longCatFast = resolveOpenCodeModel('longcat-2.5-preview-free-fast');
+  assert.ok(longCatFast, 'longcat-2.5-preview-free-fast should resolve');
+  assert.strictEqual(longCatFast.isFast, true);
+
+  // Step 5
+  const step5 = resolveOpenCodeModel('step-5-preview-free');
+  assert.ok(step5, 'step-5-preview-free should resolve');
+  assert.strictEqual(step5.isFast, false);
+
+  const step5Fast = resolveOpenCodeModel('step-5-preview-free-fast');
+  assert.ok(step5Fast, 'step-5-preview-free-fast should resolve');
+  assert.strictEqual(step5Fast.isFast, true);
+
+  // Nemotron 3.5 Lightning
+  const nemotronLight = resolveOpenCodeModel('nemotron-3.5-lightning-free');
+  assert.ok(nemotronLight, 'nemotron-3.5-lightning-free should resolve');
+  assert.strictEqual(nemotronLight.isFast, false);
+
+  const nemotronLightFast = resolveOpenCodeModel('nemotron-3.5-lightning-free-fast');
+  assert.ok(nemotronLightFast, 'nemotron-3.5-lightning-free-fast should resolve');
+  assert.strictEqual(nemotronLightFast.isFast, true);
+
+  // Nemotron 3 Ultra
   const nemotronFast = resolveOpenCodeModel('nemotron-3-ultra-free-fast');
   assert.ok(nemotronFast, 'nemotron-3-ultra-free-fast should resolve');
   assert.strictEqual(nemotronFast.isFast, true);
@@ -356,7 +424,30 @@ async function main() {
   const nemotronThink = resolveOpenCodeModel('nemotron-3-ultra-free');
   assert.ok(nemotronThink, 'nemotron-3-ultra-free should resolve');
   assert.strictEqual(nemotronThink.isFast, false);
-  console.log('✅ OpenCode Free Models Verification passed.\n');
+
+  // 6.2 Canonical ID Generation Verification
+  const sampleSes = generateOpenCodeSessionId();
+  const sampleMsg = generateOpenCodeRequestId();
+  const sesRegex = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
+  const msgRegex = /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
+
+  assert.ok(sesRegex.test(sampleSes), `Session ID '${sampleSes}' must match ses_<12hex><14base62>`);
+  assert.ok(msgRegex.test(sampleMsg), `Request ID '${sampleMsg}' must match msg_<12hex><14base62>`);
+  assert.strictEqual(sampleSes.length, 30, 'ses_ + 26 chars = 30 chars');
+  assert.strictEqual(sampleMsg.length, 30, 'msg_ + 26 chars = 30 chars');
+
+  // 6.3 Guest Accounts Pool Verification
+  assert.strictEqual(OPENCODE_GUEST_ACCOUNTS.length, 16, 'Pool must contain 16 accounts');
+  for (const acc of OPENCODE_GUEST_ACCOUNTS) {
+    assert.ok(sesRegex.test(acc.sessionId), `Account ${acc.id} sessionId '${acc.sessionId}' must be canonical ses_ format`);
+  }
+
+  // 6.4 Official Tools Contract Verification
+  assert.strictEqual(OPENCODE_OFFICIAL_TOOLS.length, 6, 'Must contain 6 official tools');
+  const toolNames = OPENCODE_OFFICIAL_TOOLS.map(t => t.function.name);
+  assert.deepStrictEqual(toolNames.sort(), ['bash', 'edit', 'glob', 'grep', 'read', 'write'].sort());
+
+  console.log('✅ OpenCode Free Models & CLI Contract Verification passed.\n');
 
   // ==========================================
   // 7. Memory & Chat Logs Architecture Tests

@@ -1,0 +1,310 @@
+[
+  {
+    "modelId": "big-pickle",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 1501,
+    "ok": true,
+    "hasReasoning": false,
+    "sampleOutput": "Hello there",
+    "reasoningSnippet": "",
+    "error": ""
+  },
+  {
+    "modelId": "space-bunny-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 746,
+    "ok": true,
+    "hasReasoning": true,
+    "sampleOutput": "",
+    "reasoningSnippet": "user asks: \"Say hello in 3 words.\" 3 words. \"Hello, nice to ",
+    "error": ""
+  },
+  {
+    "modelId": "snow-bunny",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 316,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "cat-jam-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 774,
+    "ok": true,
+    "hasReasoning": true,
+    "sampleOutput": "Hello, hello, hello.",
+    "reasoningSnippet": "The user wants me to say hello in 3 words. Simple. I'll just",
+    "error": ""
+  },
+  {
+    "modelId": "mimo-v2.6-flash-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 5750,
+    "ok": true,
+    "hasReasoning": true,
+    "sampleOutput": "Hello there",
+    "reasoningSnippet": "The user wants me to say hello in 3 words.",
+    "error": ""
+  },
+  {
+    "modelId": "mimo-v2.5-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 410,
+    "duration": 327,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Model mimo-v2.5-free has been deprecated. Use mimo-v2.6-flash-free instead."
+  },
+  {
+    "modelId": "ling-3.1-flash-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 429,
+    "duration": 825,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Endpoint is unavailable."
+  },
+  {
+    "modelId": "ling-3.0-flash-fin-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 309,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "longcat-2.5-preview-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 2331,
+    "ok": true,
+    "hasReasoning": true,
+    "sampleOutput": "Hello there,",
+    "reasoningSnippet": "The say hello words.",
+    "error": ""
+  },
+  {
+    "modelId": "step-5-preview-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 1084,
+    "ok": true,
+    "hasReasoning": true,
+    "sampleOutput": "Hello to you!",
+    "reasoningSnippet": "The user wants a3-word greeting.",
+    "error": ""
+  },
+  {
+    "modelId": "nemotron-3.5-lightning-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 532,
+    "ok": true,
+    "hasReasoning": true,
+    "sampleOutput": "Hello there friend",
+    "reasoningSnippet": "\" hello in words.\"'s simple: respond threeibly \"Hello, how a",
+    "error": ""
+  },
+  {
+    "modelId": "nemotron-3-ultra-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 200,
+    "duration": 594,
+    "ok": true,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "reasoningSnippet": "",
+    "error": ""
+  },
+  {
+    "modelId": "muse-spark-1.3-contributor-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 344,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Model does not support this protocol."
+  },
+  {
+    "modelId": "muse-spark-1.2-contributor-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 310,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Model does not support this protocol."
+  },
+  {
+    "modelId": "jev-1.13-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 318,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Model does not support this protocol."
+  },
+  {
+    "modelId": "exo-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 410,
+    "duration": 320,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Model exo-free has been deprecated."
+  },
+  {
+    "modelId": "fledge-alpha-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 410,
+    "duration": 362,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Model fledge-alpha-free has been deprecated."
+  },
+  {
+    "modelId": "x-preview-f-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 321,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "laguna-s-2.1-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 310,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "glm-4.7-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 318,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "glm-5-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 321,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "ring-2.6-1t-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 328,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "north-mini-code-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 342,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "trinity-large-preview-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 315,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "deepseek-v4-flash-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 370,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "hy3-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 322,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "kimi-k2.5-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 311,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "minimax-m2.5-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 302,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "minimax-m3-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 316,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  },
+  {
+    "modelId": "qwen3.6-plus-free",
+    "endpoint": "https://opencode.ai/zen/v1/chat/completions",
+    "status": 400,
+    "duration": 464,
+    "ok": false,
+    "hasReasoning": false,
+    "sampleOutput": "",
+    "error": "Upstream request failed: Model is unavailable."
+  }
+]

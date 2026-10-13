@@ -79,7 +79,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, mimo-v2.5-free, mimo-v2.5-free-fast, ling-3.0-flash-fin-free, ling-3.0-flash-fin-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -111,14 +111,24 @@ export async function handleChatCompletions(req: NextRequest) {
             'claude-sonnet-4-6-fast',
             'big-pickle',
             'big-pickle-fast',
+            'space-bunny-free',
+            'space-bunny-free-fast',
+            'cat-jam-free',
+            'cat-jam-free-fast',
+            'mimo-v2.6-flash-free',
+            'mimo-v2.6-flash-free-fast',
             'mimo-v2.5-free',
             'mimo-v2.5-free-fast',
-            'ling-3.0-flash-fin-free',
-            'ling-3.0-flash-fin-free-fast',
+            'longcat-2.5-preview-free',
+            'longcat-2.5-preview-free-fast',
+            'step-5-preview-free',
+            'step-5-preview-free-fast',
+            'nemotron-3.5-lightning-free',
+            'nemotron-3.5-lightning-free-fast',
             'nemotron-3-ultra-free',
             'nemotron-3-ultra-free-fast',
-            'nemotron-3.5-lightning-free',
-            'nemotron-3.5-lightning-free-fast'
+            'ling-3.0-flash-fin-free',
+            'ling-3.0-flash-fin-free-fast'
           ]
         }
       },

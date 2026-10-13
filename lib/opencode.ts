@@ -22,9 +22,144 @@ export interface OpenCodeGuestAccount {
   successCount: number;
 }
 
+// Canonical OpenCode ID generation algorithm reverse-engineered from local CLI (@opencode/cli v2.0.26)
+const D = 26;
+const BASE62_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+let lastIdTimestamp = 0;
+let idCounter = 0;
+
+/**
+ * Generate OpenCode canonical ID matching OpenCode CLI's dz() generator:
+ * - descending (ses_): inverted timestamp, used for sessions
+ * - ascending (msg_): normal timestamp, used for messages/requests
+ */
+export function generateOpenCodeId(isDescending: boolean, prefix = ''): string {
+  const now = Date.now();
+  if (now !== lastIdTimestamp) {
+    lastIdTimestamp = now;
+    idCounter = 0;
+  }
+  idCounter++;
+  const counterVal = BigInt(now) * 0x1000n + BigInt(idCounter);
+  const timeVal = isDescending ? ~counterVal : counterVal;
+  const hexPrefix = Array.from({ length: 6 }, (_, m) =>
+    Number((timeVal >> BigInt(40 - 8 * m)) & 0xffn)
+      .toString(16)
+      .padStart(2, '0')
+  ).join('');
+  const randomBytes = crypto.getRandomValues(new Uint8Array(D - 12));
+  const base62Suffix = Array.from(randomBytes, (d) => BASE62_CHARS[d % 62]).join('');
+  return prefix + hexPrefix + base62Suffix;
+}
+
+export function generateOpenCodeSessionId(): string {
+  return generateOpenCodeId(true, 'ses_');
+}
+
+export function generateOpenCodeRequestId(): string {
+  return generateOpenCodeId(false, 'msg_');
+}
+
+export const OPENCODE_USER_AGENT = 'opencode/2.0.26 ai-sdk/provider-utils/4.0.21 runtime/bun/1.4.2';
+
+// OpenCode CLI official tools definitions required by upstream free tier gate
+export const OPENCODE_OFFICIAL_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'bash',
+      description: 'Execute a bash command in the terminal.',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: { type: 'string', description: 'The bash command to execute' },
+        },
+        required: ['command'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read',
+      description: 'Read the contents of a file or directory. Each line is prefixed with line numbers.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File or directory to read' },
+          offset: { type: 'number', description: 'Line or directory entry offset (1-based)' },
+          limit: { type: 'number', description: 'Maximum lines or entries to read (default 2000)' },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write',
+      description: 'Writes a file to the local filesystem, overwriting if one exists.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Path to the file to write to' },
+          content: { type: 'string', description: 'Content to write to the file' },
+        },
+        required: ['path', 'content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'edit',
+      description: 'Edit a file by replacing target text with new text.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File to edit' },
+          oldString: { type: 'string', description: 'Exact text to find and replace' },
+          newString: { type: 'string', description: 'Replacement text' },
+        },
+        required: ['path', 'oldString', 'newString'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'glob',
+      description: 'Find files matching a glob pattern.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Glob pattern to match files against' },
+          directory: { type: 'string', description: 'Directory to search in' },
+        },
+        required: ['pattern'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'grep',
+      description: 'Search for text or regex pattern across files.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Regular expression or literal text to match' },
+          path: { type: 'string', description: 'File or directory to search' },
+        },
+        required: ['pattern'],
+      },
+    },
+  },
+];
+
 // Verified working OpenCode free models & their no-think / fast variants
 export const OPENCODE_MODELS: OpenCodeModelSpec[] = [
-  // 1. Big Pickle (DeepSeek Thinking & Fast)
+  // 1. Big Pickle (DeepSeek Reasoning & Fast)
   {
     id: 'big-pickle',
     name: 'Big Pickle (DeepSeek Thinking)',
@@ -48,16 +183,86 @@ export const OPENCODE_MODELS: OpenCodeModelSpec[] = [
     isFast: true,
   },
 
-  // 2. Xiaomi MiMo v2.5 Free & Fast
+  // 2. Space Bunny Free / Snow Bunny (Reasoning & Fast)
   {
-    id: 'mimo-v2.5-free',
-    name: 'Xiaomi MiMo v2.5 Free',
+    id: 'space-bunny-free',
+    name: 'Space Bunny Free (Snow Bunny)',
+    tier: 'OpenCode / Reasoning',
+    badge: 'Bunny Reasoning',
+    thinking: 'Enabled',
+    context: '128K Context',
+    desc: 'Space Bunny (Snow Bunny) high-capacity reasoning model on OpenCode free tier.',
+    wireModel: 'space-bunny-free',
+    isFast: false,
+  },
+  {
+    id: 'space-bunny-free-fast',
+    name: 'Space Bunny Free (Fast / No-Think)',
+    tier: 'OpenCode / Fast',
+    badge: 'No-Think',
+    thinking: 'Disabled (0 Tokens)',
+    context: '128K Context',
+    desc: 'Space Bunny Free with reasoning disabled for high-speed dialogue.',
+    wireModel: 'space-bunny-free',
+    isFast: true,
+  },
+
+  // 3. Cat Jam Free (Reasoning & Fast)
+  {
+    id: 'cat-jam-free',
+    name: 'Cat Jam Free',
+    tier: 'OpenCode / Reasoning',
+    badge: 'Cat Jam Thinking',
+    thinking: 'Enabled',
+    context: '128K Context',
+    desc: 'Cat Jam high-speed reasoning model on OpenCode free tier.',
+    wireModel: 'cat-jam-free',
+    isFast: false,
+  },
+  {
+    id: 'cat-jam-free-fast',
+    name: 'Cat Jam Free (Fast / No-Think)',
+    tier: 'OpenCode / Fast',
+    badge: 'No-Think',
+    thinking: 'Disabled (0 Tokens)',
+    context: '128K Context',
+    desc: 'Cat Jam Free with reasoning disabled for rapid completions.',
+    wireModel: 'cat-jam-free',
+    isFast: true,
+  },
+
+  // 4. Xiaomi MiMo v2.6 Flash Free (Upgraded from v2.5) & Fast
+  {
+    id: 'mimo-v2.6-flash-free',
+    name: 'Xiaomi MiMo v2.6 Flash Free',
     tier: 'OpenCode / Xiaomi',
     badge: 'MiMo Reasoning',
     thinking: 'Enabled',
     context: '128K Context',
-    desc: 'Xiaomi MiMo v2.5 flagship multimodal reasoning model on OpenCode.',
-    wireModel: 'mimo-v2.5-free',
+    desc: 'Xiaomi MiMo v2.6 Flash flagship multimodal reasoning model on OpenCode.',
+    wireModel: 'mimo-v2.6-flash-free',
+    isFast: false,
+  },
+  {
+    id: 'mimo-v2.6-flash-free-fast',
+    name: 'Xiaomi MiMo v2.6 Flash Free (Fast / No-Think)',
+    tier: 'OpenCode / Fast',
+    badge: 'No-Think',
+    thinking: 'Disabled (0 Tokens)',
+    context: '128K Context',
+    desc: 'Xiaomi MiMo v2.6 Flash with reasoning disabled for rapid dialog generation.',
+    wireModel: 'mimo-v2.6-flash-free',
+    isFast: true,
+  },
+  {
+    id: 'mimo-v2.5-free',
+    name: 'Xiaomi MiMo v2.5 Free (Auto-Upgraded to v2.6)',
+    tier: 'OpenCode / Xiaomi',
+    badge: 'MiMo Reasoning',
+    thinking: 'Enabled',
+    context: '128K Context',
+    desc: 'Legacy MiMo v2.5 alias seamlessly upgraded to active MiMo v2.6 Flash upstream.',
+    wireModel: 'mimo-v2.6-flash-free',
     isFast: false,
   },
   {
@@ -67,60 +272,60 @@ export const OPENCODE_MODELS: OpenCodeModelSpec[] = [
     badge: 'No-Think',
     thinking: 'Disabled (0 Tokens)',
     context: '128K Context',
-    desc: 'Xiaomi MiMo v2.5 with reasoning disabled for rapid dialog generation.',
-    wireModel: 'mimo-v2.5-free',
+    desc: 'Legacy MiMo v2.5 Fast alias seamlessly upgraded to active MiMo v2.6 Flash Fast.',
+    wireModel: 'mimo-v2.6-flash-free',
     isFast: true,
   },
 
-  // 3. Ling 3.0 Flash Free & Fast
+  // 5. Meituan LongCat 2.5 Preview Free & Fast
   {
-    id: 'ling-3.0-flash-fin-free',
-    name: 'Ling 3.0 Flash Free',
-    tier: 'OpenCode / Ling',
-    badge: 'Ling Reasoning',
+    id: 'longcat-2.5-preview-free',
+    name: 'Meituan LongCat 2.5 Preview Free',
+    tier: 'OpenCode / Meituan',
+    badge: 'LongCat Reasoning',
     thinking: 'Enabled',
     context: '128K Context',
-    desc: 'Ling 3.0 Flash financial and general intelligence reasoning model on OpenCode.',
-    wireModel: 'ling-3.0-flash-fin-free',
+    desc: 'Meituan LongCat 2.5 Preview extended-context reasoning model on OpenCode.',
+    wireModel: 'longcat-2.5-preview-free',
     isFast: false,
   },
   {
-    id: 'ling-3.0-flash-fin-free-fast',
-    name: 'Ling 3.0 Flash Free (Fast / No-Think)',
+    id: 'longcat-2.5-preview-free-fast',
+    name: 'Meituan LongCat 2.5 Preview Free (Fast / No-Think)',
     tier: 'OpenCode / Fast',
     badge: 'No-Think',
     thinking: 'Disabled (0 Tokens)',
     context: '128K Context',
-    desc: 'Ling 3.0 Flash with reasoning disabled for high-speed streaming.',
-    wireModel: 'ling-3.0-flash-fin-free',
+    desc: 'Meituan LongCat 2.5 Preview with reasoning disabled for high-speed streaming.',
+    wireModel: 'longcat-2.5-preview-free',
     isFast: true,
   },
 
-  // 4. NVIDIA Nemotron 3 Ultra Free (1M Context) & Fast
+  // 6. StepFun Step 5 Preview Free & Fast
   {
-    id: 'nemotron-3-ultra-free',
-    name: 'NVIDIA Nemotron 3 Ultra Free',
-    tier: 'OpenCode / NVIDIA',
-    badge: '1M Context Reasoning',
+    id: 'step-5-preview-free',
+    name: 'StepFun Step 5 Preview Free',
+    tier: 'OpenCode / StepFun',
+    badge: 'Step 5 Reasoning',
     thinking: 'Enabled',
-    context: '1M Context',
-    desc: 'NVIDIA Nemotron 3 Ultra with massive 1M context and deep reasoning on OpenCode.',
-    wireModel: 'nemotron-3-ultra-free',
+    context: '128K Context',
+    desc: 'StepFun Step 5 Preview flagship reasoning and problem-solving model on OpenCode.',
+    wireModel: 'step-5-preview-free',
     isFast: false,
   },
   {
-    id: 'nemotron-3-ultra-free-fast',
-    name: 'NVIDIA Nemotron 3 Ultra Free (Fast / No-Think)',
+    id: 'step-5-preview-free-fast',
+    name: 'StepFun Step 5 Preview Free (Fast / No-Think)',
     tier: 'OpenCode / Fast',
-    badge: '1M Context No-Think',
+    badge: 'No-Think',
     thinking: 'Disabled (0 Tokens)',
-    context: '1M Context',
-    desc: 'NVIDIA Nemotron 3 Ultra with 1M context and reasoning disabled for low latency.',
-    wireModel: 'nemotron-3-ultra-free',
+    context: '128K Context',
+    desc: 'StepFun Step 5 Preview with reasoning disabled for low-latency dialogue.',
+    wireModel: 'step-5-preview-free',
     isFast: true,
   },
 
-  // 5. NVIDIA Nemotron 3.5 Lightning Free (1M Context) & Fast
+  // 7. NVIDIA Nemotron 3.5 Lightning Free (1M Context) & Fast
   {
     id: 'nemotron-3.5-lightning-free',
     name: 'NVIDIA Nemotron 3.5 Lightning Free',
@@ -143,26 +348,74 @@ export const OPENCODE_MODELS: OpenCodeModelSpec[] = [
     wireModel: 'nemotron-3.5-lightning-free',
     isFast: true,
   },
+
+  // 8. NVIDIA Nemotron 3 Ultra Free (1M Context) & Fast
+  {
+    id: 'nemotron-3-ultra-free',
+    name: 'NVIDIA Nemotron 3 Ultra Free',
+    tier: 'OpenCode / NVIDIA',
+    badge: '1M Context Ultra',
+    thinking: 'Enabled',
+    context: '1M Context',
+    desc: 'NVIDIA Nemotron 3 Ultra with massive 1M context on OpenCode.',
+    wireModel: 'nemotron-3-ultra-free',
+    isFast: false,
+  },
+  {
+    id: 'nemotron-3-ultra-free-fast',
+    name: 'NVIDIA Nemotron 3 Ultra Free (Fast / No-Think)',
+    tier: 'OpenCode / Fast',
+    badge: '1M Context No-Think',
+    thinking: 'Disabled (0 Tokens)',
+    context: '1M Context',
+    desc: 'NVIDIA Nemotron 3 Ultra with 1M context and reasoning disabled for low latency.',
+    wireModel: 'nemotron-3-ultra-free',
+    isFast: true,
+  },
+
+  // 9. Ling 3.0 / 3.1 Flash Free (Legacy compatibility entry)
+  {
+    id: 'ling-3.0-flash-fin-free',
+    name: 'Ling Flash Free',
+    tier: 'OpenCode / Ling',
+    badge: 'Ling Reasoning',
+    thinking: 'Enabled',
+    context: '128K Context',
+    desc: 'Ling Flash reasoning model on OpenCode.',
+    wireModel: 'ling-3.1-flash-free',
+    isFast: false,
+  },
+  {
+    id: 'ling-3.0-flash-fin-free-fast',
+    name: 'Ling Flash Free (Fast / No-Think)',
+    tier: 'OpenCode / Fast',
+    badge: 'No-Think',
+    thinking: 'Disabled (0 Tokens)',
+    context: '128K Context',
+    desc: 'Ling Flash with reasoning disabled for high-speed streaming.',
+    wireModel: 'ling-3.1-flash-free',
+    isFast: true,
+  },
 ];
 
-// 16 persistent guest sessions with valid RFC4122 v4 UUIDs
+// 16 persistent guest sessions with canonical ses_<12hex><14base62> IDs
 export const OPENCODE_GUEST_ACCOUNTS: OpenCodeGuestAccount[] = [
-  { id: 'opencode-guest-1', name: 'OpenCode Guest 1', sessionId: '3303e814-8561-4baf-a01a-a97a8431e672', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-2', name: 'OpenCode Guest 2', sessionId: '3770d8b1-14dc-4a8b-8e81-97a3c6f39b41', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-3', name: 'OpenCode Guest 3', sessionId: '27ac6e7c-00a7-4f17-8799-612ce7b65a3a', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-4', name: 'OpenCode Guest 4', sessionId: '0a5b1f29-df24-40ec-bfb6-65ebc9880f61', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-5', name: 'OpenCode Guest 5', sessionId: '4e82c538-7b59-48a1-b9ca-7f0f64b9c1e8', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-6', name: 'OpenCode Guest 6', sessionId: 'b9f62bc9-a498-4126-b81e-10dbf590ed68', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-7', name: 'OpenCode Guest 7', sessionId: 'dc3767b5-21d1-4070-9e3f-297fd106978c', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-8', name: 'OpenCode Guest 8', sessionId: '49e06623-74bb-4d4a-bc3a-4b93e96ce83b', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-9', name: 'OpenCode Guest 9', sessionId: '50cc645f-bb95-48aa-8a9b-5919262c46b9', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-10', name: 'OpenCode Guest 10', sessionId: '75895cf9-b774-402a-b4c8-ab89700dd7fe', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-11', name: 'OpenCode Guest 11', sessionId: '337af0f2-29fe-47f4-9311-064c1ede530e', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-12', name: 'OpenCode Guest 12', sessionId: 'f8d63aae-e5ec-460e-af89-790fd1950e6f', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-13', name: 'OpenCode Guest 13', sessionId: 'c4415758-5ee0-4c65-b177-16687ace9509', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-14', name: 'OpenCode Guest 14', sessionId: 'af65da7f-7f46-46d5-9d18-3bbf583c88b7', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-15', name: 'OpenCode Guest 15', sessionId: '31230694-7e1f-4b73-8958-a74a0bd706af', cooldownUntil: 0, failCount: 0, successCount: 0 },
-  { id: 'opencode-guest-16', name: 'OpenCode Guest 16', sessionId: '2b3c3ed1-6797-487a-a2df-cea32bba38b5', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-1', name: 'OpenCode Guest 1', sessionId: 'ses_ec968ed07ffe5PC6QhKNuI2ZfL', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-2', name: 'OpenCode Guest 2', sessionId: 'ses_ec968ed07ffdV3I3VrQ7ANdaqa', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-3', name: 'OpenCode Guest 3', sessionId: 'ses_ec968ed07ffcHzXJFmiUUeaBLE', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-4', name: 'OpenCode Guest 4', sessionId: 'ses_ec968ed07ffbliF47FQbc63hJB', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-5', name: 'OpenCode Guest 5', sessionId: 'ses_ec968ed07ffaBAuaBWszak0iKu', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-6', name: 'OpenCode Guest 6', sessionId: 'ses_ec968ed07ff96Z0FxiOlzoUDXi', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-7', name: 'OpenCode Guest 7', sessionId: 'ses_ec968ed07ff8UBQTnNizAyCMZg', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-8', name: 'OpenCode Guest 8', sessionId: 'ses_ec968ed07ff7t14n2Zj1eYmmyz', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-9', name: 'OpenCode Guest 9', sessionId: 'ses_ec968ed07ff6MJNUHgkKNVacY0', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-10', name: 'OpenCode Guest 10', sessionId: 'ses_ec968ed07ff5yI62E50iZ1FvGH', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-11', name: 'OpenCode Guest 11', sessionId: 'ses_ec968ed07ff4FAffaTtv5IRDp3', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-12', name: 'OpenCode Guest 12', sessionId: 'ses_ec968ed07ff3stw191aTIQXqpe', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-13', name: 'OpenCode Guest 13', sessionId: 'ses_ec968ed07ff25IRWuO4WSJM7M8', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-14', name: 'OpenCode Guest 14', sessionId: 'ses_ec968ed07ff1GjTu1HTSDtdkBO', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-15', name: 'OpenCode Guest 15', sessionId: 'ses_ec968ed07ff00lx3ynhg7xNjkB', cooldownUntil: 0, failCount: 0, successCount: 0 },
+  { id: 'opencode-guest-16', name: 'OpenCode Guest 16', sessionId: 'ses_ec968ed07fefmRpnZoShKe7gfg', cooldownUntil: 0, failCount: 0, successCount: 0 },
 ];
 
 let nextGuestIdx = 0;
@@ -198,11 +451,11 @@ export function resolveOpenCodeModel(modelId?: string): ResolvedOpenCodeModel | 
   if (!modelId || !modelId.trim()) return null;
   let clean = modelId.trim().toLowerCase();
 
-  // Strip common provider prefixes (e.g. opencode/big-pickle, models/mimo-v2.5-free)
+  // Strip common provider prefixes (e.g. opencode/big-pickle, models/mimo-v2.6-flash-free)
   clean = clean.replace(/^(models\/|opencode\/)/, '');
 
   // Exclude non-working or delisted models explicitly
-  if (clean.includes('deepseek-v4-flash') || clean.includes('muse-spark')) {
+  if (clean.includes('deepseek-v4-flash') || clean.includes('muse-spark') || clean.includes('exo-free')) {
     return null;
   }
 
@@ -249,7 +502,7 @@ export function resolveOpenCodeModel(modelId?: string): ResolvedOpenCodeModel | 
     return null;
   };
 
-  // 1. Big Pickle
+  // 1. Big Pickle (DeepSeek Thinking)
   const bigPickleMatch = matchModelVariant(
     ['big-pickle'],
     'big-pickle',
@@ -257,37 +510,88 @@ export function resolveOpenCodeModel(modelId?: string): ResolvedOpenCodeModel | 
   );
   if (bigPickleMatch) return bigPickleMatch;
 
-  // 2. Xiaomi MiMo v2.5 Free
+  // 2. Space Bunny Free / Snow Bunny
+  const spaceBunnyMatch = matchModelVariant(
+    ['space-bunny-free', 'space-bunny', 'snow-bunny-free', 'snow-bunny', 'snowbunny'],
+    'space-bunny-free',
+    'space-bunny-free'
+  );
+  if (spaceBunnyMatch) return spaceBunnyMatch;
+
+  // 3. Cat Jam Free
+  const catJamMatch = matchModelVariant(
+    ['cat-jam-free', 'cat-jam', 'catjam-free', 'catjam'],
+    'cat-jam-free',
+    'cat-jam-free'
+  );
+  if (catJamMatch) return catJamMatch;
+
+  // 4. Xiaomi MiMo v2.6 Flash Free (and legacy v2.5 alias upgrade)
   const mimoMatch = matchModelVariant(
-    ['mimo-v2.5-free', 'mimo-v2.5', 'mimo-2.5-free', 'mimo-2.5'],
-    'mimo-v2.5-free',
-    'mimo-v2.5-free'
+    [
+      'mimo-v2.6-flash-free', 'mimo-v2.6-flash', 'mimo-v2.6-free', 'mimo-v2.6',
+      'mimo-2.6-flash-free', 'mimo-2.6-flash', 'mimo-2.6-free', 'mimo-2.6',
+      'mimo-v2.5-free', 'mimo-v2.5', 'mimo-2.5-free', 'mimo-2.5'
+    ],
+    'mimo-v2.6-flash-free',
+    'mimo-v2.6-flash-free'
   );
   if (mimoMatch) return mimoMatch;
 
-  // 3. Ling 3.0 Flash Free
-  const lingMatch = matchModelVariant(
-    ['ling-3.0-flash-fin-free', 'ling-3.0-flash-free', 'ling-3.0-flash-fin', 'ling-3.0-flash'],
-    'ling-3.0-flash-fin-free',
-    'ling-3.0-flash-fin-free'
+  // 5. Meituan LongCat 2.5 Preview Free
+  const longCatMatch = matchModelVariant(
+    [
+      'longcat-2.5-preview-free', 'longcat-2.5-preview', 'longcat-2.5-free', 'longcat-2.5',
+      'longcat-free', 'longcat'
+    ],
+    'longcat-2.5-preview-free',
+    'longcat-2.5-preview-free'
   );
-  if (lingMatch) return lingMatch;
+  if (longCatMatch) return longCatMatch;
 
-  // 4. NVIDIA Nemotron 3 Ultra Free
+  // 6. StepFun Step 5 Preview Free
+  const step5Match = matchModelVariant(
+    [
+      'step-5-preview-free', 'step-5-preview', 'step-5-free', 'step-5',
+      'step5-preview-free', 'step5-preview', 'step5-free', 'step5'
+    ],
+    'step-5-preview-free',
+    'step-5-preview-free'
+  );
+  if (step5Match) return step5Match;
+
+  // 7. NVIDIA Nemotron 3.5 Lightning Free
+  const nemotronLightningMatch = matchModelVariant(
+    [
+      'nemotron-3.5-lightning-free', 'nemotron-3.5-lightning', 'nemotron-3.5-free', 'nemotron-3.5',
+      'nemotron-lightning-free', 'nemotron-lightning'
+    ],
+    'nemotron-3.5-lightning-free',
+    'nemotron-3.5-lightning-free'
+  );
+  if (nemotronLightningMatch) return nemotronLightningMatch;
+
+  // 8. NVIDIA Nemotron 3 Ultra Free
   const nemotronUltraMatch = matchModelVariant(
-    ['nemotron-3-ultra-free', 'nemotron-3-ultra', 'nemotron-ultra-free', 'nemotron-ultra'],
+    [
+      'nemotron-3-ultra-free', 'nemotron-3-ultra', 'nemotron-3-free', 'nemotron-3',
+      'nemotron-ultra-free', 'nemotron-ultra'
+    ],
     'nemotron-3-ultra-free',
     'nemotron-3-ultra-free'
   );
   if (nemotronUltraMatch) return nemotronUltraMatch;
 
-  // 5. NVIDIA Nemotron 3.5 Lightning Free
-  const nemotronLightningMatch = matchModelVariant(
-    ['nemotron-3.5-lightning-free', 'nemotron-3.5-lightning', 'nemotron-lightning-free', 'nemotron-lightning'],
-    'nemotron-3.5-lightning-free',
-    'nemotron-3.5-lightning-free'
+  // 9. Ling 3.0 / 3.1 Flash Free
+  const lingMatch = matchModelVariant(
+    [
+      'ling-3.1-flash-free', 'ling-3.1-flash', 'ling-3.1-free', 'ling-3.1',
+      'ling-3.0-flash-fin-free', 'ling-3.0-flash-free', 'ling-3.0-flash-fin', 'ling-3.0-flash'
+    ],
+    'ling-3.1-flash-free',
+    'ling-3.0-flash-fin-free'
   );
-  if (nemotronLightningMatch) return nemotronLightningMatch;
+  if (lingMatch) return lingMatch;
 
   return null;
 }
@@ -344,13 +648,38 @@ export async function executeOpenCodeCompletion({
     );
   }
 
-  // Construct pure OpenAI compatible payload for OpenCode
+  // Construct OpenAI compatible payload for OpenCode upstream
   const opencodePayload: any = { ...body };
   opencodePayload.model = resolvedModel.wireModel;
+
+  // Upstream Free Tier MUST always receive stream: true
+  opencodePayload.stream = true;
 
   // Strip proxy-internal flags
   delete opencodePayload.bypass_injections;
   delete opencodePayload.disable_memory;
+
+  // Tools Contract Gate & Direct Chat Guard
+  const downstreamHasTools = Array.isArray(body.tools) && body.tools.length > 0;
+  if (!downstreamHasTools) {
+    // Inject official tools definitions to satisfy upstream free tier gate
+    opencodePayload.tools = OPENCODE_OFFICIAL_TOOLS;
+
+    // Direct Chat Guard: Instruct model not to execute tools during direct chat
+    const toolGuardDirective = '[Direct Chat Constraint]: You are in direct conversational mode with the user. You MUST NOT call, execute, or mention any workspace tools or functions (such as bash, read, write, edit, glob, grep). Respond directly in plain natural conversational text.';
+    const msgs = Array.isArray(opencodePayload.messages) ? [...opencodePayload.messages] : [];
+    const sysIdx = msgs.findIndex((m: any) => m && m.role === 'system');
+    if (sysIdx !== -1) {
+      const existing = typeof msgs[sysIdx].content === 'string' ? msgs[sysIdx].content : '';
+      msgs[sysIdx] = {
+        ...msgs[sysIdx],
+        content: `${existing}\n\n${toolGuardDirective}`,
+      };
+    } else {
+      msgs.unshift({ role: 'system', content: toolGuardDirective });
+    }
+    opencodePayload.messages = msgs;
+  }
 
   // Handle No-Think / Fast parameter configuration
   const shouldDisableThinking =
@@ -393,29 +722,68 @@ export async function executeOpenCodeCompletion({
   let lastError = '';
   let lastStatus = 500;
 
+  // Upstream endpoints: primary zen/v1 (emits reasoning_content), secondary inference/v1
+  const UPSTREAM_ENDPOINTS = [
+    'https://opencode.ai/zen/v1/chat/completions',
+    'https://opencode.ai/inference/v1/chat/completions',
+  ];
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const account = candidateAccounts[attempt];
-    const requestId = crypto.randomUUID();
+    const requestId = generateOpenCodeRequestId();
+
+    // Verify session ID format: must be canonical ses_ format
+    if (!account.sessionId || !account.sessionId.startsWith('ses_')) {
+      account.sessionId = generateOpenCodeSessionId();
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer public',
+      'User-Agent': OPENCODE_USER_AGENT,
+      'x-opencode-client': 'cli',
+      'x-opencode-project': 'global',
+      'x-opencode-session': account.sessionId,
+      'x-opencode-request': requestId,
+    };
 
     try {
-      const abortCtrl = new AbortController();
-      const timeoutMs = 50000;
-      const timeoutId = setTimeout(() => abortCtrl.abort(), timeoutMs);
+      let upstreamRes: Response | null = null;
+      let endpointUsed = UPSTREAM_ENDPOINTS[0];
 
-      const upstreamRes = await fetch('https://opencode.ai/zen/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'opencode-cli/1.0.0',
-          'x-opencode-client': 'cli',
-          'x-opencode-project': 'global',
-          'x-opencode-session': account.sessionId,
-          'x-opencode-request': requestId,
-        },
-        body: JSON.stringify(opencodePayload),
-        signal: abortCtrl.signal,
-      });
-      clearTimeout(timeoutId);
+      for (const endpoint of UPSTREAM_ENDPOINTS) {
+        endpointUsed = endpoint;
+        const abortCtrl = new AbortController();
+        const timeoutMs = 50000;
+        const timeoutId = setTimeout(() => abortCtrl.abort(), timeoutMs);
+
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(opencodePayload),
+            signal: abortCtrl.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (res.status === 404 && endpoint === UPSTREAM_ENDPOINTS[0]) {
+            // Fallback to secondary endpoint on 404
+            continue;
+          }
+          upstreamRes = res;
+          break;
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          if (endpoint === UPSTREAM_ENDPOINTS[0]) {
+            continue;
+          }
+          throw fetchErr;
+        }
+      }
+
+      if (!upstreamRes) {
+        throw new Error('Failed to connect to OpenCode upstream endpoints.');
+      }
 
       if (upstreamRes.status === 429) {
         account.cooldownUntil = Date.now() + 20000;
@@ -431,7 +799,6 @@ export async function executeOpenCodeCompletion({
         const errorText = await upstreamRes.text().catch(() => '');
         lastError = `Server error on OpenCode (${upstreamRes.status}) - ${errorText.slice(0, 200)}`;
 
-        // Allow up to 3-4 attempts with backoff before aborting, preventing false lockouts during GPU cold starts
         if (attempt >= Math.min(candidateAccounts.length - 1, 3)) {
           return NextResponse.json(
             {
@@ -446,7 +813,6 @@ export async function executeOpenCodeCompletion({
           );
         }
 
-        // Asynchronous backoff delay (1000ms * (attempt + 1) + jitter) to allow upstream container warm-up
         const backoffMs = 1000 * (attempt + 1) + Math.floor(Math.random() * 300);
         await new Promise(r => setTimeout(r, backoffMs));
         continue;
@@ -471,7 +837,9 @@ export async function executeOpenCodeCompletion({
       account.failCount = 0;
       account.successCount++;
 
-      // 1. STREAMING SSE RESPONSE
+      // ==========================================
+      // 1. STREAMING SSE RESPONSE (when client requested stream: true)
+      // ==========================================
       if (isStream) {
         const reader = upstreamRes.body?.getReader();
         if (!reader) {
@@ -506,7 +874,6 @@ export async function executeOpenCodeCompletion({
                   }
 
                   if (trimmed.startsWith(':')) {
-                    // Pass-through SSE comments (e.g. : keep-alive)
                     if (!hasTerminated) {
                       controller.enqueue(encoder.encode(line + '\n'));
                     }
@@ -521,7 +888,6 @@ export async function executeOpenCodeCompletion({
                     continue;
                   }
 
-                  // Drop any post-[DONE] metadata chunks from upstream
                   if (hasTerminated) {
                     continue;
                   }
@@ -529,7 +895,6 @@ export async function executeOpenCodeCompletion({
                   if (trimmed.startsWith('data: ')) {
                     try {
                       const json = JSON.parse(trimmed.slice(6));
-                      // Skip empty choices chunks without usage data
                       if (Array.isArray(json.choices) && json.choices.length === 0 && !json.usage) {
                         continue;
                       }
@@ -537,8 +902,15 @@ export async function executeOpenCodeCompletion({
                       // Normalize model name to client's requested model
                       json.model = modelId;
 
-                      const delta = json.choices?.[0]?.delta;
+                      const choice = json.choices?.[0];
+                      const delta = choice?.delta;
                       if (delta) {
+                        // Tool Guard: strip accidental tool calls if downstream did not request tools
+                        if (!downstreamHasTools) {
+                          if (delta.tool_calls) delete delta.tool_calls;
+                          if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
+                        }
+
                         // Preserve and dual-map thinking tokens
                         const reasoning = delta.reasoning_content || delta.reasoning || '';
                         if (reasoning) {
@@ -572,8 +944,13 @@ export async function executeOpenCodeCompletion({
                     const json = JSON.parse(trimmed.slice(6));
                     if (!Array.isArray(json.choices) || json.choices.length > 0 || json.usage) {
                       json.model = modelId;
-                      const delta = json.choices?.[0]?.delta;
+                      const choice = json.choices?.[0];
+                      const delta = choice?.delta;
                       if (delta) {
+                        if (!downstreamHasTools) {
+                          if (delta.tool_calls) delete delta.tool_calls;
+                          if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
+                        }
                         const reasoning = delta.reasoning_content || delta.reasoning || '';
                         if (reasoning) {
                           delta.reasoning_content = reasoning;
@@ -590,7 +967,6 @@ export async function executeOpenCodeCompletion({
                 }
               }
 
-              // Guarantee terminal [DONE] event
               if (!hasTerminated) {
                 controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 hasTerminated = true;
@@ -637,22 +1013,61 @@ export async function executeOpenCodeCompletion({
         });
       }
 
-      // 2. NON-STREAMING JSON RESPONSE
-      const json: any = await upstreamRes.json();
-      json.model = modelId;
+      // ==========================================
+      // 2. NON-STREAMING BUFFERED JSON RESPONSE (when client requested stream: false)
+      // ==========================================
+      // Upstream enforces stream: true, so buffer the SSE stream in memory and construct standard JSON
+      const reader = upstreamRes.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get readable stream from OpenCode.');
+      }
 
-      const choice = json.choices?.[0];
-      if (choice?.message) {
-        const reasoning = choice.message.reasoning_content || choice.message.reasoning || '';
-        if (reasoning) {
-          choice.message.reasoning_content = reasoning;
-          choice.message.reasoning = reasoning;
+      const decoder = new TextDecoder();
+      let streamBuffer = '';
+      let fullContent = '';
+      let fullThinking = '';
+      let finishReason = 'stop';
+      let usage: any = null;
+      let upstreamId = `chatcmpl-${crypto.randomUUID().slice(0, 12)}`;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        streamBuffer += decoder.decode(value, { stream: true });
+        const lines = streamBuffer.split('\n');
+        streamBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith(':') || trimmed === 'data: [DONE]') continue;
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const json = JSON.parse(trimmed.slice(6));
+              if (json.id) upstreamId = json.id;
+              if (json.usage) usage = json.usage;
+
+              const choice = json.choices?.[0];
+              if (choice) {
+                if (choice.finish_reason && choice.finish_reason !== 'tool_calls') {
+                  finishReason = choice.finish_reason;
+                }
+                const delta = choice.delta;
+                if (delta) {
+                  if (delta.content) fullContent += delta.content;
+                  const reasoning = delta.reasoning_content || delta.reasoning || '';
+                  if (reasoning) fullThinking += reasoning;
+                }
+              }
+            } catch {}
+          }
         }
-        if (onFinish) {
-          try {
-            onFinish(choice.message.content || '', reasoning);
-          } catch {}
-        }
+      }
+
+      if (onFinish) {
+        try {
+          onFinish(fullContent, fullThinking);
+        } catch {}
       }
 
       if (onStreamDone) {
@@ -661,10 +1076,33 @@ export async function executeOpenCodeCompletion({
         } catch {}
       }
 
-      return NextResponse.json(json, {
+      const responseJson: any = {
+        id: upstreamId,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: modelId,
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: fullContent,
+              ...(fullThinking ? { reasoning_content: fullThinking, reasoning: fullThinking } : {}),
+            },
+            finish_reason: finishReason,
+          },
+        ],
+        usage: usage || {
+          prompt_tokens: 0,
+          completion_tokens: fullContent.length ? Math.ceil(fullContent.length / 4) : 0,
+          total_tokens: fullContent.length ? Math.ceil(fullContent.length / 4) : 0,
+        },
+      };
+
+      return NextResponse.json(responseJson, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-        }
+        },
       });
 
     } catch (err: any) {

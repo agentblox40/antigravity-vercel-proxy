@@ -8,13 +8,27 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.6.4';
+export const CURRENT_VERSION = '3.7.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
   {
+    version: '3.7.0',
+    tag: 'MAJOR',
+    title: 'OpenCode Free Tier Contract Fix & Multi-Model Integration',
+    date: 'Oct 14, 2026',
+    commit: 'latest',
+    description: 'Reverse-engineered and implemented the exact 4-part OpenCode CLI contract (canonical ses_/msg_ base62 IDs, official tools injection with direct-chat guard, Bun User-Agent, and forced upstream stream:true with non-streaming buffer) unlocking 8 verified live free models (big-pickle, space-bunny-free, cat-jam-free, mimo-v2.6-flash-free, longcat-2.5-preview-free, step-5-preview-free, nemotron-3.5-lightning-free, nemotron-3-ultra-free).',
+    highlights: [
+      'Exact 4-Part Upstream Contract: Implemented Authorization: Bearer public, opencode/2.0.26 Bun User-Agent, canonical ses_<12hex><14base62> session IDs, and msg_<12hex><14base62> request IDs.',
+      'Official Tools Injection & Tool Guard: Satisfies upstream free tier gate by injecting the CLI\'s official tools array while instructing models to ignore tools during chat and stripping accidental tool_calls deltas for downstream clients.',
+      'Universal Stream & Non-Stream Support: Always forces stream: true upstream while buffering in-memory to assemble complete OpenAI-standard JSON responses for clients requesting stream: false.',
+      '8 Verified Live Free Models: Fully tested and registered big-pickle, space-bunny-free (snow-bunny), cat-jam-free, mimo-v2.6-flash-free, longcat-2.5-preview-free, step-5-preview-free, nemotron-3.5-lightning-free, and nemotron-3-ultra-free.'
+    ]
+  },
+  {
     version: '3.6.4',
-    tag: 'LATEST',
+    tag: 'PATCH',
     title: 'Argon Exp-A Dedicated Models & Antigravity 2.22.0 Wire Header Upgrade',
     date: 'Oct 12, 2026',
     commit: 'latest',
