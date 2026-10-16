@@ -14,6 +14,7 @@ import {
 import {
   resolveWireModel,
   transformOpenAIToAntigravity,
+  isPenaltySupported,
 } from '../lib/antigravity';
 import {
   OPENCODE_MODELS,
@@ -272,9 +273,11 @@ async function main() {
   console.log('✅ Model Presets as Single Source of Truth for Thinking Tiers passed.\n');
 
   // ==========================================
-  // 4. Pure Client Pass-Through Wire Parameter Mapping
+  // 4. Pure Client Pass-Through Wire Parameter Mapping & Penalty Safeguarding
   // ==========================================
-  console.log('Test 4: Pure Client Pass-Through Wire Parameter Mapping');
+  console.log('Test 4: Pure Client Pass-Through Wire Parameter Mapping & Penalty Safeguarding');
+  
+  // 4.1 Supported models (gemini-3.7-flash) pass through penalties unmodified
   const clientRequest = {
     model: 'gemini-3.7-flash',
     messages: [{ role: 'user', content: 'Hello' }],
@@ -292,11 +295,87 @@ async function main() {
   assert.strictEqual(wireConfig.temperature, 1.15, 'Client temperature must pass through unmodified');
   assert.strictEqual(wireConfig.topP, 0.85, 'Client top_p must pass through unmodified');
   assert.strictEqual(wireConfig.topK, 65, 'Client top_k must pass through unmodified');
-  assert.strictEqual(wireConfig.presencePenalty, 0.45, 'Client presence_penalty must pass through unmodified');
-  assert.strictEqual(wireConfig.frequencyPenalty, -0.25, 'Client frequency_penalty must pass through unmodified');
+  assert.strictEqual(wireConfig.presencePenalty, 0.45, 'Client presence_penalty must pass through unmodified for 3.7');
+  assert.strictEqual(wireConfig.frequencyPenalty, -0.25, 'Client frequency_penalty must pass through unmodified for 3.7');
   // Upstream maxOutputTokens decouples thinking tokens: max(16384, 4096 + 8192) = 16384
   assert.strictEqual(wireConfig.maxOutputTokens, 16384, 'Decoupled maxOutputTokens headroom must be preserved');
-  console.log('✅ Pure Client Pass-Through Wire Parameter Mapping passed.\n');
+
+  // 4.2 Helper function isPenaltySupported
+  assert.strictEqual(isPenaltySupported('gemini-3.8-flash'), false, 'gemini-3.8-flash does not support penalties');
+  assert.strictEqual(isPenaltySupported('gemini-3.8-flash-fast'), false, 'gemini-3.8-flash-fast does not support penalties');
+  assert.strictEqual(isPenaltySupported('gemini-3.8-flash-tiered'), false, 'gemini-3.8-flash-tiered does not support penalties');
+  assert.strictEqual(isPenaltySupported('gemini-3.8-flash-high'), false, 'gemini-3.8-flash-high does not support penalties');
+  assert.strictEqual(isPenaltySupported('argon-low'), false, 'argon-low does not support penalties');
+  assert.strictEqual(isPenaltySupported('gemini-3.7-flash'), true, 'gemini-3.7-flash supports penalties');
+  assert.strictEqual(isPenaltySupported('gemini-3.1-pro'), true, 'gemini-3.1-pro supports penalties');
+
+  // 4.3 Unsupported models (gemini-3.8-flash-fast) strip presence_penalty / frequency_penalty to prevent HTTP 400
+  const clientRequest38Fast = {
+    model: 'gemini-3.8-flash-fast',
+    messages: [{ role: 'user', content: 'Hello' }],
+    temperature: 0.9,
+    top_p: 0.95,
+    top_k: 40,
+    presence_penalty: 0.5,
+    frequency_penalty: 0.2,
+  };
+  const resolved38Fast = resolveWireModel(clientRequest38Fast.model);
+  const wireConfig38Fast = transformOpenAIToAntigravity(clientRequest38Fast, resolved38Fast!, 'proj-123').request.generationConfig;
+
+  assert.strictEqual(wireConfig38Fast.temperature, 0.9, 'temperature must pass through unmodified');
+  assert.strictEqual(wireConfig38Fast.topP, 0.95, 'top_p must pass through unmodified');
+  assert.strictEqual(wireConfig38Fast.topK, 40, 'top_k must pass through unmodified');
+  assert.strictEqual(wireConfig38Fast.presencePenalty, undefined, 'presencePenalty must be stripped for gemini-3.8-flash-fast');
+  assert.strictEqual(wireConfig38Fast.frequencyPenalty, undefined, 'frequencyPenalty must be stripped for gemini-3.8-flash-fast');
+
+  // 4.4 Standard gemini-3.8-flash and argon-low strip presence_penalty / frequency_penalty
+  const clientRequest38Std = {
+    model: 'gemini-3.8-flash',
+    messages: [{ role: 'user', content: 'Hello' }],
+    presence_penalty: 0.75,
+    frequency_penalty: -0.5,
+  };
+  const resolved38Std = resolveWireModel(clientRequest38Std.model);
+  const wireConfig38Std = transformOpenAIToAntigravity(clientRequest38Std, resolved38Std!, 'proj-123').request.generationConfig;
+  assert.strictEqual(wireConfig38Std.presencePenalty, undefined, 'presencePenalty must be stripped for gemini-3.8-flash');
+  assert.strictEqual(wireConfig38Std.frequencyPenalty, undefined, 'frequencyPenalty must be stripped for gemini-3.8-flash');
+
+  const clientRequestArgon = {
+    model: 'argon-low',
+    messages: [{ role: 'user', content: 'Hello' }],
+    presence_penalty: 0.6,
+    frequency_penalty: 0.4,
+  };
+  const resolvedArgon = resolveWireModel(clientRequestArgon.model);
+  const wireConfigArgon = transformOpenAIToAntigravity(clientRequestArgon, resolvedArgon!, 'proj-123').request.generationConfig;
+  assert.strictEqual(wireConfigArgon.presencePenalty, undefined, 'presencePenalty must be stripped for argon-low');
+  assert.strictEqual(wireConfigArgon.frequencyPenalty, undefined, 'frequencyPenalty must be stripped for argon-low');
+
+  // 4.5 Auto-recovery simulation: simulate a 400 error with "Penalty is not enabled for this model"
+  const simulatedEnvelope: any = {
+    model: 'gemini-3.8-flash-fast',
+    request: {
+      generationConfig: {
+        temperature: 0.7,
+        presencePenalty: 0.5,
+        frequencyPenalty: 0.3,
+      }
+    }
+  };
+  const simulatedErrText = '{\n  "error": {\n    "code": 400,\n    "message": "Penalty is not enabled for this model",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n';
+  const isPenaltyError =
+    simulatedErrText.toLowerCase().includes('penalty is not enabled') ||
+    simulatedErrText.toLowerCase().includes('penalty is not supported');
+  assert.strictEqual(isPenaltyError, true, 'Penalty error signature must be detected');
+  if (isPenaltyError && simulatedEnvelope.request?.generationConfig) {
+    delete simulatedEnvelope.request.generationConfig.presencePenalty;
+    delete simulatedEnvelope.request.generationConfig.frequencyPenalty;
+  }
+  assert.strictEqual(simulatedEnvelope.request.generationConfig.presencePenalty, undefined);
+  assert.strictEqual(simulatedEnvelope.request.generationConfig.frequencyPenalty, undefined);
+  assert.strictEqual(simulatedEnvelope.request.generationConfig.temperature, 0.7);
+
+  console.log('✅ Pure Client Pass-Through Wire Parameter Mapping & Penalty Safeguarding passed.\n');
 
   // ==========================================
   // 5. Upstream Wire History Sanitization

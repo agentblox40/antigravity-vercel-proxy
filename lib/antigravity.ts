@@ -448,6 +448,23 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   return null;
 }
 
+/**
+ * Determines whether the upstream Google CloudCode PA model supports
+ * presencePenalty and frequencyPenalty generation parameters.
+ *
+ * Google CloudCode PA rejects penalty parameters with HTTP 400
+ * ("Penalty is not enabled for this model") on Gemini 3.8 models,
+ * Gemini 3.8 tiered/experimental variants, and Argon cohorts.
+ */
+export function isPenaltySupported(modelId?: string, wireModel?: string): boolean {
+  const m = (modelId || '').toLowerCase();
+  const w = (wireModel || '').toLowerCase();
+  if (m.includes('3.8') || w.includes('3.8') || m.startsWith('argon-') || w.startsWith('argon-')) {
+    return false;
+  }
+  return true;
+}
+
 export function transformOpenAIToAntigravity(
   body: any,
   resolved: { wireModel: string; defaultThinkingBudget: number },
@@ -608,11 +625,13 @@ export function transformOpenAIToAntigravity(
     topP: typeof body.top_p === 'number' ? body.top_p : 1
   };
 
-  if (typeof body.presence_penalty === 'number' && body.presence_penalty !== 0) {
-    generationConfig.presencePenalty = body.presence_penalty;
-  }
-  if (typeof body.frequency_penalty === 'number' && body.frequency_penalty !== 0) {
-    generationConfig.frequencyPenalty = body.frequency_penalty;
+  if (isPenaltySupported(body.model, resolved.wireModel)) {
+    if (typeof body.presence_penalty === 'number' && !Number.isNaN(body.presence_penalty) && body.presence_penalty !== 0) {
+      generationConfig.presencePenalty = body.presence_penalty;
+    }
+    if (typeof body.frequency_penalty === 'number' && !Number.isNaN(body.frequency_penalty) && body.frequency_penalty !== 0) {
+      generationConfig.frequencyPenalty = body.frequency_penalty;
+    }
   }
 
   if (thinkingBudget > 0) {

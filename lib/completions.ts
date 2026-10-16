@@ -486,7 +486,44 @@ export async function handleChatCompletions(req: NextRequest) {
             break;
           }
 
-          const errText = await res.text();
+          let errText = await res.text();
+
+          // Auto-recovery: If upstream rejects presence_penalty/frequency_penalty with HTTP 400 ("Penalty is not enabled for this model"),
+          // dynamically strip penalties from generationConfig and retry immediately on the same upstream pipe without exhausting account quota.
+          const isPenaltyError =
+            res.status === 400 &&
+            (errText.toLowerCase().includes('penalty is not enabled') ||
+              errText.toLowerCase().includes('penalty is not supported'));
+
+          if (
+            isPenaltyError &&
+            envelope.request?.generationConfig &&
+            (envelope.request.generationConfig.presencePenalty !== undefined ||
+              envelope.request.generationConfig.frequencyPenalty !== undefined)
+          ) {
+            console.warn(
+              `[Auto-Recovery]: Upstream rejected penalties for model '${envelope.model}' on ${upstreamUrl}. Stripping penalties and retrying immediately...`
+            );
+            delete envelope.request.generationConfig.presencePenalty;
+            delete envelope.request.generationConfig.frequencyPenalty;
+
+            res = await fetch(upstreamUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                Accept: 'text/event-stream',
+                'User-Agent': 'antigravity/2.22.0 windows/amd64',
+              },
+              body: JSON.stringify(envelope),
+            });
+
+            if (res.ok) {
+              upstreamRes = res;
+              break;
+            }
+            errText = await res.text();
+          }
 
           if (res.status === 429) {
             attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}: ${errText.slice(0, 300)}` });

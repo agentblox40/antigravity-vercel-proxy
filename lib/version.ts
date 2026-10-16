@@ -8,10 +8,23 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.7.0';
+export const CURRENT_VERSION = '3.7.1';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.7.1',
+    tag: 'PATCH',
+    title: 'Sampling Penalty Safeguarding & Upstream Auto-Recovery',
+    date: 'Oct 16, 2026',
+    commit: 'latest',
+    description: 'Proactively omitted unsupported presence_penalty and frequency_penalty fields on Gemini 3.8 and Argon models to eliminate HTTP 400 "Penalty is not enabled for this model" errors, paired with dynamic runtime auto-recovery that strips penalties and retries on the same connection.',
+    highlights: [
+      'Proactive Penalty Stripping: isPenaltySupported() strips presence_penalty and frequency_penalty for Gemini 3.8 and Argon variants before dispatching to Google CloudCode PA.',
+      'Zero-Quota Dynamic Auto-Recovery: Catches HTTP 400 "Penalty is not enabled for this model" across any model, strips penalties from generationConfig, and retries on the same upstream pipe without burning account cooldowns.',
+      'Unbroken Pure Client Pass-Through: Other supported models (like Gemini 3.7 Flash) continue passing penalties cleanly without affecting client sliders.'
+    ]
+  },
   {
     version: '3.7.0',
     tag: 'MAJOR',
