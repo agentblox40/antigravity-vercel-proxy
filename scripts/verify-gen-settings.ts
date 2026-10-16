@@ -305,7 +305,11 @@ async function main() {
   assert.strictEqual(isPenaltySupported('gemini-3.8-flash-fast'), false, 'gemini-3.8-flash-fast does not support penalties');
   assert.strictEqual(isPenaltySupported('gemini-3.8-flash-tiered'), false, 'gemini-3.8-flash-tiered does not support penalties');
   assert.strictEqual(isPenaltySupported('gemini-3.8-flash-high'), false, 'gemini-3.8-flash-high does not support penalties');
+  assert.strictEqual(isPenaltySupported('argon'), false, 'argon (exact) does not support penalties');
+  assert.strictEqual(isPenaltySupported('argon:low'), false, 'argon:low does not support penalties');
   assert.strictEqual(isPenaltySupported('argon-low'), false, 'argon-low does not support penalties');
+  assert.strictEqual(isPenaltySupported('claude-sonnet-4-6'), false, 'claude-sonnet-4-6 does not support penalties');
+  assert.strictEqual(isPenaltySupported('claude-opus-4-6-thinking'), false, 'claude-opus-4-6-thinking does not support penalties');
   assert.strictEqual(isPenaltySupported('gemini-3.7-flash'), true, 'gemini-3.7-flash supports penalties');
   assert.strictEqual(isPenaltySupported('gemini-3.1-pro'), true, 'gemini-3.1-pro supports penalties');
 
@@ -351,9 +355,26 @@ async function main() {
   assert.strictEqual(wireConfigArgon.presencePenalty, undefined, 'presencePenalty must be stripped for argon-low');
   assert.strictEqual(wireConfigArgon.frequencyPenalty, undefined, 'frequencyPenalty must be stripped for argon-low');
 
-  // 4.5 Auto-recovery simulation: simulate a 400 error with "Penalty is not enabled for this model"
-  const simulatedEnvelope: any = {
-    model: 'gemini-3.8-flash-fast',
+  // 4.5 Auto-recovery simulation: simulate diverse 400 error signatures
+  const penaltyErrorSignatures = [
+    '{\n  "error": {\n    "code": 400,\n    "message": "Penalty is not enabled for this model",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n',
+    '{\n  "error": {\n    "code": 400,\n    "message": "Penalty is not supported for this model",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n',
+    '{\n  "error": {\n    "code": 400,\n    "message": "Penalties are not enabled",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n',
+    '{\n  "error": {\n    "code": 400,\n    "message": "presence_penalty parameter is not allowed for this model",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n',
+    '{\n  "error": {\n    "code": 400,\n    "message": "frequency penalty is unsupported",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n',
+  ];
+
+  const penaltyRegex = /penalt(y|ies)/i;
+  const statusRegex = /(not enabled|not supported|unsupported|disabled|invalid|not allowed)/i;
+
+  for (const sig of penaltyErrorSignatures) {
+    const isPen = penaltyRegex.test(sig) && statusRegex.test(sig);
+    assert.strictEqual(isPen, true, `Signature must match: ${sig}`);
+  }
+
+  // 4.6 Auto-recovery with upgraded -high model integrity
+  let activeEnvelope: any = {
+    model: 'gemini-3.8-flash-tiered',
     request: {
       generationConfig: {
         temperature: 0.7,
@@ -362,18 +383,36 @@ async function main() {
       }
     }
   };
-  const simulatedErrText = '{\n  "error": {\n    "code": 400,\n    "message": "Penalty is not enabled for this model",\n    "status": "INVALID_ARGUMENT"\n  }\n}\n';
-  const isPenaltyError =
-    simulatedErrText.toLowerCase().includes('penalty is not enabled') ||
-    simulatedErrText.toLowerCase().includes('penalty is not supported');
-  assert.strictEqual(isPenaltyError, true, 'Penalty error signature must be detected');
-  if (isPenaltyError && simulatedEnvelope.request?.generationConfig) {
-    delete simulatedEnvelope.request.generationConfig.presencePenalty;
-    delete simulatedEnvelope.request.generationConfig.frequencyPenalty;
+  const simulatedBody: any = {
+    model: 'gemini-3.8-flash',
+    presence_penalty: 0.5,
+    frequency_penalty: 0.3,
+  };
+
+  // Simulate 404 auto-upgrade to -high
+  if (activeEnvelope.model.endsWith('-tiered')) {
+    activeEnvelope = {
+      ...activeEnvelope,
+      model: activeEnvelope.model.replace(/-tiered$/, '-high'),
+    };
   }
-  assert.strictEqual(simulatedEnvelope.request.generationConfig.presencePenalty, undefined);
-  assert.strictEqual(simulatedEnvelope.request.generationConfig.frequencyPenalty, undefined);
-  assert.strictEqual(simulatedEnvelope.request.generationConfig.temperature, 0.7);
+  assert.strictEqual(activeEnvelope.model, 'gemini-3.8-flash-high', 'Model must be upgraded to -high');
+
+  // Simulate penalty 400 error on -high
+  const isErr = penaltyRegex.test(penaltyErrorSignatures[0]) && statusRegex.test(penaltyErrorSignatures[0]);
+  if (isErr && activeEnvelope.request?.generationConfig) {
+    delete activeEnvelope.request.generationConfig.presencePenalty;
+    delete activeEnvelope.request.generationConfig.frequencyPenalty;
+    delete simulatedBody.presence_penalty;
+    delete simulatedBody.frequency_penalty;
+  }
+
+  assert.strictEqual(activeEnvelope.model, 'gemini-3.8-flash-high', 'Active envelope model must remain -high upon penalty retry');
+  assert.strictEqual(activeEnvelope.request.generationConfig.presencePenalty, undefined);
+  assert.strictEqual(activeEnvelope.request.generationConfig.frequencyPenalty, undefined);
+  assert.strictEqual(activeEnvelope.request.generationConfig.temperature, 0.7);
+  assert.strictEqual(simulatedBody.presence_penalty, undefined, 'Body must have presence_penalty sanitized');
+  assert.strictEqual(simulatedBody.frequency_penalty, undefined, 'Body must have frequency_penalty sanitized');
 
   console.log('✅ Pure Client Pass-Through Wire Parameter Mapping & Penalty Safeguarding passed.\n');
 

@@ -449,6 +449,7 @@ export async function handleChatCompletions(req: NextRequest) {
       );
 
       let upstreamRes: Response | null = null;
+      let activeEnvelope = envelope;
       for (const upstreamUrl of UPSTREAM_URLS) {
         try {
           let res = await fetch(upstreamUrl, {
@@ -459,15 +460,15 @@ export async function handleChatCompletions(req: NextRequest) {
               Accept: 'text/event-stream',
               'User-Agent': 'antigravity/2.22.0 windows/amd64',
             },
-            body: JSON.stringify(envelope),
+            body: JSON.stringify(activeEnvelope),
           });
 
           // If daily-cloudcode-pa returns 404 for legacy -tiered model ID, auto-upgrade to -high on same pipe
-          if (res.status === 404 && envelope.model.endsWith('-tiered')) {
-            const upgradedEnvelope = {
-              ...envelope,
-              project: envelope.project || 'aicode-consumers',
-              model: envelope.model.replace(/-tiered$/, '-high'),
+          if (res.status === 404 && activeEnvelope.model.endsWith('-tiered')) {
+            activeEnvelope = {
+              ...activeEnvelope,
+              project: activeEnvelope.project || 'aicode-consumers',
+              model: activeEnvelope.model.replace(/-tiered$/, '-high'),
             };
             res = await fetch(upstreamUrl, {
               method: 'POST',
@@ -477,7 +478,7 @@ export async function handleChatCompletions(req: NextRequest) {
                 Accept: 'text/event-stream',
                 'User-Agent': 'antigravity/2.22.0 windows/amd64',
               },
-              body: JSON.stringify(upgradedEnvelope),
+              body: JSON.stringify(activeEnvelope),
             });
           }
 
@@ -492,20 +493,22 @@ export async function handleChatCompletions(req: NextRequest) {
           // dynamically strip penalties from generationConfig and retry immediately on the same upstream pipe without exhausting account quota.
           const isPenaltyError =
             res.status === 400 &&
-            (errText.toLowerCase().includes('penalty is not enabled') ||
-              errText.toLowerCase().includes('penalty is not supported'));
+            /penalt(y|ies)/i.test(errText) &&
+            /(not enabled|not supported|unsupported|disabled|invalid|not allowed)/i.test(errText);
 
           if (
             isPenaltyError &&
-            envelope.request?.generationConfig &&
-            (envelope.request.generationConfig.presencePenalty !== undefined ||
-              envelope.request.generationConfig.frequencyPenalty !== undefined)
+            activeEnvelope.request?.generationConfig &&
+            (activeEnvelope.request.generationConfig.presencePenalty !== undefined ||
+              activeEnvelope.request.generationConfig.frequencyPenalty !== undefined)
           ) {
             console.warn(
-              `[Auto-Recovery]: Upstream rejected penalties for model '${envelope.model}' on ${upstreamUrl}. Stripping penalties and retrying immediately...`
+              `[Auto-Recovery]: Upstream rejected penalties for model '${activeEnvelope.model}' on ${upstreamUrl}. Stripping penalties and retrying immediately...`
             );
-            delete envelope.request.generationConfig.presencePenalty;
-            delete envelope.request.generationConfig.frequencyPenalty;
+            delete activeEnvelope.request.generationConfig.presencePenalty;
+            delete activeEnvelope.request.generationConfig.frequencyPenalty;
+            delete body.presence_penalty;
+            delete body.frequency_penalty;
 
             res = await fetch(upstreamUrl, {
               method: 'POST',
@@ -515,7 +518,7 @@ export async function handleChatCompletions(req: NextRequest) {
                 Accept: 'text/event-stream',
                 'User-Agent': 'antigravity/2.22.0 windows/amd64',
               },
-              body: JSON.stringify(envelope),
+              body: JSON.stringify(activeEnvelope),
             });
 
             if (res.ok) {

@@ -459,7 +459,14 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
 export function isPenaltySupported(modelId?: string, wireModel?: string): boolean {
   const m = (modelId || '').toLowerCase();
   const w = (wireModel || '').toLowerCase();
-  if (m.includes('3.8') || w.includes('3.8') || m.startsWith('argon-') || w.startsWith('argon-')) {
+  if (
+    m.includes('3.8') ||
+    w.includes('3.8') ||
+    m.startsWith('argon') ||
+    w.startsWith('argon') ||
+    m.includes('claude') ||
+    w.includes('claude')
+  ) {
     return false;
   }
   return true;

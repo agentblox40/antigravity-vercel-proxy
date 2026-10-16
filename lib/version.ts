@@ -8,16 +8,30 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.7.1';
+export const CURRENT_VERSION = '3.7.2';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.7.2',
+    tag: 'PATCH',
+    title: 'Hardened Upstream Penalty Auto-Recovery & Active Envelope Preservation',
+    date: 'Oct 16, 2026',
+    commit: 'latest',
+    description: 'Fixed active envelope model regression during auto-recovery retries, broadened error signature regex matching, sanitized client body parameters across account failovers, and expanded proactive penalty omission to all Argon and Claude aliases.',
+    highlights: [
+      'Active Envelope Preservation: Ensured auto-recovery retries preserve dynamic upstream model upgrades (-high) instead of reverting to stale -tiered payloads that trigger 404s.',
+      'Robust Signature Matching: Upgraded penalty rejection detection to regex pattern /penalt(y|ies)/i to capture all upstream Google error phrasings.',
+      'Failover Sanitization: Stripped presence_penalty and frequency_penalty from request body upon first rejection to prevent multi-account cascading penalty errors.',
+      'Expanded Alias Coverage: Added exact "argon", "argon:*" aliases and Claude models to proactive penalty stripping.'
+    ]
+  },
   {
     version: '3.7.1',
     tag: 'PATCH',
     title: 'Sampling Penalty Safeguarding & Upstream Auto-Recovery',
     date: 'Oct 16, 2026',
-    commit: 'latest',
+    commit: '1acf636',
     description: 'Proactively omitted unsupported presence_penalty and frequency_penalty fields on Gemini 3.8 and Argon models to eliminate HTTP 400 "Penalty is not enabled for this model" errors, paired with dynamic runtime auto-recovery that strips penalties and retries on the same connection.',
     highlights: [
       'Proactive Penalty Stripping: isPenaltySupported() strips presence_penalty and frequency_penalty for Gemini 3.8 and Argon variants before dispatching to Google CloudCode PA.',
