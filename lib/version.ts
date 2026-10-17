@@ -8,10 +8,24 @@ export interface ChangelogEntry {
   highlights: string[];
 }
 
-export const CURRENT_VERSION = '3.7.2';
+export const CURRENT_VERSION = '3.8.0';
 export const GITHUB_REPO_URL = 'https://github.com/agentblox40/antigravity-vercel-proxy';
 
 export const CHANGELOG_HISTORY: ChangelogEntry[] = [
+  {
+    version: '3.8.0',
+    tag: 'LATEST',
+    title: 'Card Exporter Virtual Model & Zero-Quota Character Card Extraction',
+    date: 'Oct 17, 2026',
+    commit: 'latest',
+    description: 'Introduced card-exporter virtual utility model allowing instant extraction of hidden bot definitions, system prompts, greetings, and world lore into clean Markdown and 1-click importable SillyTavern V2 JSON at 0 API quota and <5ms response latency.',
+    highlights: [
+      'Zero-Quota Virtual Execution: Resolves 100% locally on proxy serverless edge without consuming Google CloudCode PA or OpenCode API quota.',
+      'Dual Format Export: Generates structured Markdown breakdown alongside valid, copy-pasteable SillyTavern V2 JSON specification.',
+      'Comprehensive Extraction Engine: Parses character name, multi-tier system blocks, initial greetings, active lorebook entries, and token stats.',
+      'Universal Model Aliases & Discovery: Recognized across card-exporter, card-export, character-exporter, prompt-exporter, and card-extractor with full /v1/models catalog discovery.'
+    ]
+  },
   {
     version: '3.7.2',
     tag: 'PATCH',

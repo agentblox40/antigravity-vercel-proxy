@@ -11,10 +11,15 @@ import {
   getLastRedisError,
   DEFAULT_INJECTIONS,
 } from '../lib/injections';
+import { NextRequest } from 'next/server';
+import { handleChatCompletions } from '../lib/completions';
+import { exportCharacterCard } from '../lib/cardExporter';
 import {
   resolveWireModel,
   transformOpenAIToAntigravity,
   isPenaltySupported,
+  isCardExporterModel,
+  FALLBACK_MODELS,
 } from '../lib/antigravity';
 import {
   OPENCODE_MODELS,
@@ -954,6 +959,168 @@ async function main() {
   assert.strictEqual(argonHigh!.targetAccount, 'kars60928@gmail.com');
 
   console.log('✅ Claude Token Optimization & Argon Cohort Pinning Suite passed.\n');
+
+  // ==========================================
+  // 10. Card Exporter Virtual Utility Model & Character Card Extraction Suite
+  // ==========================================
+  console.log('Test 10: Card Exporter Virtual Utility Model & Character Card Extraction Suite');
+
+  // 10.1 Model alias recognition
+  const validAliases = [
+    'card-exporter',
+    'card-export',
+    'character-exporter',
+    'character-card-exporter',
+    'prompt-exporter',
+    'card-extractor',
+    'models/card-exporter',
+    'publishers/google/models/card-export',
+    'card_exporter',
+    'card-exporter:latest',
+    'CARD-EXPORTER',
+  ];
+  for (const alias of validAliases) {
+    assert.strictEqual(
+      isCardExporterModel(alias),
+      true,
+      `Expected isCardExporterModel("${alias}") to be true`
+    );
+  }
+
+  const nonExporterModels = [
+    'gemini-3.7-flash',
+    'gemini-3.8-flash',
+    'claude-sonnet-4-6',
+    'claude-opus-4-6-thinking',
+    'big-pickle',
+    'unknown-model',
+    '',
+    undefined,
+  ];
+  for (const nonModel of nonExporterModels) {
+    assert.strictEqual(
+      isCardExporterModel(nonModel),
+      false,
+      `Expected isCardExporterModel("${nonModel}") to be false`
+    );
+  }
+  console.log('  10.1 Model alias recognition passed.');
+
+  // 10.2 Fallback model registry
+  const cardExporterSpec = FALLBACK_MODELS.find(m => m.id === 'card-exporter');
+  assert.ok(cardExporterSpec, 'card-exporter must be present in FALLBACK_MODELS');
+  assert.strictEqual(cardExporterSpec!.tier, 'Utility');
+  assert.strictEqual(cardExporterSpec!.badge, '0 Quota / Instant');
+  assert.strictEqual(cardExporterSpec!.thinking, 'None');
+  assert.strictEqual(cardExporterSpec!.context, 'Instant');
+  console.log('  10.2 FALLBACK_MODELS registry passed.');
+
+  // 10.3 exportCharacterCard unit extraction & SillyTavern V2 JSON spec compliance
+  const sampleSystem = `
+<char_name>Lyra Nightshade</char_name>
+<description>A skilled elven rogue with silver hair, dark leather gear, and twin daggers named Whisper and Fang.</description>
+<personality>Sarcastic, observant, guarded, fiercely protective of allies, loves rare poisons and dark taverns.</personality>
+<scenario>The Dim Lantern Tavern in the lower catacombs of Highspire.</scenario>
+<mes_example>
+<START>
+{{user}}: What are you drinking?
+{{char}}: *smiles faintly* "Something stronger than what you can handle."
+</mes_example>
+`;
+  const sampleMessages = [
+    { role: 'system', content: sampleSystem },
+    { role: 'assistant', content: '*She twirls her dagger on the wooden table, looking up through the dim tavern smoke.* "Looking for work, or just looking at me?"' },
+    { role: 'user', content: '*I sit across from you with a smirk.* "A bit of both."' },
+    { role: 'user', content: '<world_info title="Highspire Catacombs">Ancient undercity beneath the imperial capital, rife with thieves and forgotten crypts.</world_info>' },
+  ];
+
+  const cardOutput = exportCharacterCard(sampleMessages, sampleSystem, undefined);
+  assert.ok(cardOutput.includes('# 📋 Character Card Export: Lyra Nightshade'), 'Markdown must contain character name title');
+  assert.ok(cardOutput.includes('0 Upstream Quota Consumed'), 'Markdown must show 0 quota badge');
+  assert.ok(cardOutput.includes('Highspire Catacombs'), 'Markdown must include extracted world info');
+  assert.ok(cardOutput.includes('SillyTavern V2 Character Card'), 'Markdown must include SillyTavern V2 section');
+
+  // Verify JSON extraction and spec compliance
+  const jsonMatch = cardOutput.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(jsonMatch && jsonMatch[1], 'Must contain fenced JSON code block');
+  const parsedCard = JSON.parse(jsonMatch![1]);
+  assert.strictEqual(parsedCard.spec, 'chara_card_v2');
+  assert.strictEqual(parsedCard.spec_version, '2.0');
+  assert.strictEqual(parsedCard.data.name, 'Lyra Nightshade');
+  assert.ok(parsedCard.data.description.includes('twin daggers'));
+  assert.ok(parsedCard.data.personality.includes('Sarcastic'));
+  assert.ok(parsedCard.data.scenario.includes('Dim Lantern Tavern'));
+  assert.ok(parsedCard.data.first_mes.includes('Looking for work'));
+  assert.ok(parsedCard.data.character_book, 'character_book should be populated from injected world info');
+  assert.strictEqual(parsedCard.data.character_book.entries.length, 1);
+  assert.strictEqual(parsedCard.data.character_book.entries[0].comment, 'Highspire Catacombs');
+
+  // Header override test
+  const headerOverridden = exportCharacterCard(sampleMessages, sampleSystem, { get: (k: string) => k === 'x-character-name' ? 'Custom Override Name' : null });
+  assert.ok(headerOverridden.includes('# 📋 Character Card Export: Custom Override Name'), 'x-character-name header must override character name');
+
+  // Empty fallback test
+  const emptyOutput = exportCharacterCard([], '', undefined);
+  assert.ok(emptyOutput.includes('# 📋 Character Card Export: Character'), 'Empty input must fall back safely');
+  const emptyJsonMatch = emptyOutput.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(emptyJsonMatch && emptyJsonMatch[1]);
+  const parsedEmpty = JSON.parse(emptyJsonMatch![1]);
+  assert.strictEqual(parsedEmpty.spec, 'chara_card_v2');
+  assert.strictEqual(parsedEmpty.data.name, 'Character');
+  console.log('  10.3 exportCharacterCard unit extraction and Tavern V2 JSON spec passed.');
+
+  // 10.4 E2E handleChatCompletions interception (streaming and non-streaming)
+  const streamReq = new NextRequest('http://localhost:3000/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'card-exporter',
+      messages: sampleMessages,
+      stream: true,
+    }),
+  });
+  const streamRes = await handleChatCompletions(streamReq);
+  assert.strictEqual(streamRes.status, 200, `Expected 200 OK for card-exporter stream, got ${streamRes.status}`);
+  assert.ok(
+    streamRes.headers.get('content-type')?.includes('text/event-stream'),
+    `Expected text/event-stream, got ${streamRes.headers.get('content-type')}`
+  );
+
+  const streamReader = streamRes.body?.getReader();
+  assert.ok(streamReader, 'Stream reader must be defined');
+  const streamDecoder = new TextDecoder();
+  let streamText = '';
+  let streamDone = false;
+  while (true) {
+    const { done, value } = await streamReader!.read();
+    if (done) break;
+    const chunk = streamDecoder.decode(value);
+    streamText += chunk;
+    if (chunk.includes('data: [DONE]')) streamDone = true;
+  }
+  assert.strictEqual(streamDone, true, 'Stream must conclude with data: [DONE]');
+  assert.ok(streamText.includes('chat.completion.chunk'), 'Stream must contain OpenAI chat.completion.chunk');
+  assert.ok(streamText.includes('Lyra Nightshade'), 'Stream chunks must contain extracted character data');
+
+  const jsonReq = new NextRequest('http://localhost:3000/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'card-export',
+      messages: sampleMessages,
+      stream: false,
+    }),
+  });
+  const jsonRes = await handleChatCompletions(jsonReq);
+  assert.strictEqual(jsonRes.status, 200, `Expected 200 OK for card-export JSON, got ${jsonRes.status}`);
+  const jsonData = await jsonRes.json();
+  assert.strictEqual(jsonData.object, 'chat.completion');
+  assert.strictEqual(jsonData.model, 'card-export');
+  assert.ok(jsonData.choices?.[0]?.message?.content?.includes('# 📋 Character Card Export: Lyra Nightshade'));
+  assert.ok(jsonData.choices?.[0]?.message?.content?.includes('"spec": "chara_card_v2"'));
+
+  console.log('  10.4 handleChatCompletions streaming & non-streaming interception passed.');
+  console.log('✅ Card Exporter Virtual Utility Model & Character Card Extraction Suite passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }

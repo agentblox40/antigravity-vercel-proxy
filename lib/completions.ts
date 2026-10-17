@@ -6,7 +6,9 @@ import {
   getAccessToken,
   transformOpenAIToAntigravity,
   resolveWireModel,
+  isCardExporterModel,
 } from './antigravity';
+import { exportCharacterCard } from './cardExporter';
 import {
   deriveChatFingerprint,
   getOrCreateChatSession,
@@ -72,19 +74,21 @@ export async function handleChatCompletions(req: NextRequest) {
 
   const stream = body.stream === true;
   const requestedModel = (body.model || 'gemini-3.7-flash').trim();
-  const openCodeResolved = resolveOpenCodeModel(requestedModel);
-  const resolved = openCodeResolved ? null : resolveWireModel(requestedModel);
+  const isCardExport = isCardExporterModel(requestedModel);
+  const openCodeResolved = isCardExport ? null : resolveOpenCodeModel(requestedModel);
+  const resolved = isCardExport || openCodeResolved ? null : resolveWireModel(requestedModel);
 
-  if (!openCodeResolved && !resolved) {
+  if (!isCardExport && !openCodeResolved && !resolved) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
           requested_model: requestedModel,
           available_models: [
+            'card-exporter',
             'argon-low',
             'argon-medium',
             'argon-high',
@@ -181,6 +185,38 @@ export async function handleChatCompletions(req: NextRequest) {
     }
   } catch (memErr) {
     console.warn('Memory fingerprint non-blocking warning:', memErr);
+  }
+
+  // Check for Card Exporter Virtual Utility Model (0 quota, instant character card extraction)
+  if (isCardExport) {
+    const cardOutput = exportCharacterCard(messages, rawSystemText, req.headers);
+
+    // Record card export into session asynchronously for visibility in dashboard
+    if (sessionPromise) {
+      const recordTask = async () => {
+        try {
+          const session = await sessionPromise;
+          if (session) {
+            await recordTurnsIntoSession(session, messages, cardOutput, undefined, undefined, undefined);
+          }
+        } catch {}
+      };
+      try {
+        if (typeof after === 'function') {
+          after(recordTask);
+        } else {
+          recordTask().catch(() => {});
+        }
+      } catch {
+        recordTask().catch(() => {});
+      }
+    }
+
+    if (body.stream === true || body.stream === 'true') {
+      return buildImmediateCommandStreamResponse(cardOutput, modelId);
+    } else {
+      return buildImmediateCommandJsonResponse(cardOutput, modelId);
+    }
   }
 
   // Check for In-Chat Roleplay Control Commands (<MYSETTINGS>, <GENSETTINGS>, <SET: ...>, <RESET_SETTINGS>, <ENABLE: ...>, <DISABLE: ...>)

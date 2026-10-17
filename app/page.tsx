@@ -1353,9 +1353,9 @@ export default function AntigravityControlCenter() {
                         letterSpacing: '0.05em',
                         padding: '2px 7px',
                         borderRadius: 4,
-                        background: colors.badgeBg,
-                        border: `1px solid ${colors.badgeBorder}`,
-                        color: colors.textMain
+                        background: m.tier === 'Utility' ? 'rgba(16, 185, 129, 0.12)' : colors.badgeBg,
+                        border: `1px solid ${m.tier === 'Utility' ? 'rgba(16, 185, 129, 0.3)' : colors.badgeBorder}`,
+                        color: m.tier === 'Utility' ? '#10b981' : colors.textMain
                       }}>
                         {m.badge || 'Live'}
                       </span>
@@ -3102,6 +3102,7 @@ export default function AntigravityControlCenter() {
                 <div><span style={{ color: colors.textSub }}>Reverse Proxy URL: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{baseUrl}</code></div>
                 <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
                 <div><span style={{ color: colors.textSub }}>Recommended Models: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.8-flash-high</code> <span style={{ color: colors.textMuted }}>•</span> <code style={{ color: colors.textMain, fontWeight: 600 }}>claude-sonnet-4-6-fast</code></div>
+                <div><span style={{ color: colors.textSub }}>Card Exporter: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>card-exporter</code> <span style={{ color: colors.textMuted }}>(0 Quota Tavern V2 JSON)</span></div>
               </div>
 
               <button
@@ -3122,6 +3123,7 @@ export default function AntigravityControlCenter() {
                 <div><span style={{ color: colors.textSub }}>API Key: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>{apiKey || 'YOUR_API_KEY'}</code></div>
                 <div><span style={{ color: colors.textSub }}>Streaming: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>Enabled (SSE)</code></div>
                 <div><span style={{ color: colors.textSub }}>Recommended Models: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>gemini-3.8-flash-high</code> <span style={{ color: colors.textMuted }}>•</span> <code style={{ color: colors.textMain, fontWeight: 600 }}>claude-sonnet-4-6-fast</code></div>
+                <div><span style={{ color: colors.textSub }}>Card Exporter: </span> <code style={{ color: colors.textMain, fontWeight: 600 }}>card-exporter</code> <span style={{ color: colors.textMuted }}>(0 Quota Tavern V2 JSON)</span></div>
               </div>
 
               <button

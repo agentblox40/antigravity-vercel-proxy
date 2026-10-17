@@ -50,6 +50,7 @@ export const UNRESTRICTED_SAFETY_SETTINGS = [
 ];
 
 export const FALLBACK_MODELS: ModelSpec[] = [
+  { id: 'card-exporter', name: 'Card Exporter (Bot Definition & Prompt Extractor)', tier: 'Utility', badge: '0 Quota / Instant', thinking: 'None', context: 'Instant', desc: 'Intercepts generation requests to export character definitions, system prompts, greetings, and SillyTavern V2 JSON without calling upstream models.' },
   { id: 'argon-low', name: 'Argon Low (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '2K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Low (2K) thinking.' },
   { id: 'argon-medium', name: 'Argon Medium (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '8K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Medium (8K) thinking.' },
   { id: 'argon-high', name: 'Argon High (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '24K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with High (24K) thinking.' },
@@ -272,6 +273,25 @@ export function pickAccount(candidateAccounts?: AccountConfig[], sessionSeed?: s
     if (acc.cooldownUntil < best.cooldownUntil) best = acc;
   }
   return best;
+}
+
+// Identify Card Exporter Virtual Utility Model and all its aliases
+export function isCardExporterModel(modelId?: string): boolean {
+  if (!modelId) return false;
+  const clean = modelId
+    .toLowerCase()
+    .trim()
+    .replace(/^(models\/|publishers\/google\/models\/)/, '')
+    .replace(/:(latest|default)$/, '')
+    .replace(/_/g, '-');
+  return (
+    clean === 'card-exporter' ||
+    clean === 'card-export' ||
+    clean === 'character-exporter' ||
+    clean === 'character-card-exporter' ||
+    clean === 'prompt-exporter' ||
+    clean === 'card-extractor'
+  );
 }
 
 // Strictly resolve requested model ID to Google Antigravity wire model without silent fallbacks

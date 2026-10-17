@@ -36,6 +36,17 @@ export async function GET(req: NextRequest) {
   }
 
   const models = await getAntigravityLiveModels();
+  if (!models.some((m) => m.id === 'card-exporter')) {
+    models.unshift({
+      id: 'card-exporter',
+      name: 'Card Exporter (Bot Definition & Prompt Extractor)',
+      tier: 'Utility',
+      badge: '0 Quota / Instant',
+      thinking: 'None',
+      context: 'Instant',
+      desc: 'Intercepts generation requests to export character definitions, system prompts, greetings, and SillyTavern V2 JSON without calling upstream models.',
+    });
+  }
 
   return NextResponse.json(
     {
@@ -44,7 +55,11 @@ export async function GET(req: NextRequest) {
         id: m.id,
         object: 'model',
         created: 1710000000,
-        owned_by: m.tier?.includes('OpenCode') ? 'opencode' : 'google-antigravity',
+        owned_by: m.tier?.includes('OpenCode')
+          ? 'opencode'
+          : m.tier === 'Utility'
+          ? 'utility'
+          : 'google-antigravity',
         permission: [],
         root: m.id,
         parent: null,
