@@ -193,11 +193,12 @@ export async function handleChatCompletions(req: NextRequest) {
 
     // Record card export into session asynchronously for visibility in dashboard
     if (sessionPromise) {
+      const cardInjectedLore = extractInjectedLore(messages, rawSystemText);
       const recordTask = async () => {
         try {
           const session = await sessionPromise;
           if (session) {
-            await recordTurnsIntoSession(session, messages, cardOutput, undefined, undefined, undefined);
+            await recordTurnsIntoSession(session, messages, cardOutput, undefined, cardInjectedLore, undefined);
           }
         } catch {}
       };
@@ -212,10 +213,10 @@ export async function handleChatCompletions(req: NextRequest) {
       }
     }
 
-    if (body.stream === true || body.stream === 'true') {
-      return buildImmediateCommandStreamResponse(cardOutput, modelId);
-    } else {
+    if (body.stream === false || body.stream === 'false') {
       return buildImmediateCommandJsonResponse(cardOutput, modelId);
+    } else {
+      return buildImmediateCommandStreamResponse(cardOutput, modelId);
     }
   }
 

@@ -281,8 +281,9 @@ export function isCardExporterModel(modelId?: string): boolean {
   const clean = modelId
     .toLowerCase()
     .trim()
+    .replace(/^([a-z0-9_\-.]+\/)+/, '')
     .replace(/^(models\/|publishers\/google\/models\/)/, '')
-    .replace(/:(latest|default)$/, '')
+    .replace(/:[a-z0-9_\-.]+$/, '')
     .replace(/_/g, '-');
   return (
     clean === 'card-exporter' ||
@@ -290,7 +291,12 @@ export function isCardExporterModel(modelId?: string): boolean {
     clean === 'character-exporter' ||
     clean === 'character-card-exporter' ||
     clean === 'prompt-exporter' ||
-    clean === 'card-extractor'
+    clean === 'card-extractor' ||
+    clean === 'chara-card-exporter' ||
+    clean === 'char-exporter' ||
+    clean === 'character-card-export' ||
+    clean === 'chara-exporter' ||
+    clean === 'bot-exporter'
   );
 }
 

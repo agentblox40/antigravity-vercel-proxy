@@ -47,28 +47,60 @@ function getMessageText(m: any): string {
 export function exportCharacterCard(
   messages: any[] = [],
   rawSystemText: string = '',
-  headers?: { get: (name: string) => string | null } | Headers
+  headers?: { get: (name: string) => string | null } | Headers | Record<string, any>
 ): string {
   const safeMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
 
-  // 1. Resolve Character Name
+  // 1. Resolve Header Helper (supports Web API Headers, mock objects with .get, and plain Record objects)
+  const getHeader = (key: string): string | null => {
+    if (!headers) return null;
+    if (typeof (headers as any).get === 'function') {
+      return (headers as any).get(key) || (headers as any).get(key.toLowerCase());
+    }
+    if (typeof headers === 'object') {
+      const lowerKey = key.toLowerCase();
+      for (const [k, v] of Object.entries(headers)) {
+        if (k.toLowerCase() === lowerKey && typeof v === 'string') return v;
+      }
+    }
+    return null;
+  };
+
   const customHeaderName =
-    headers && typeof (headers as any).get === 'function'
-      ? (headers as any).get('x-character-name') || (headers as any).get('character-name')
-      : null;
+    getHeader('x-character-name') ||
+    getHeader('character-name') ||
+    getHeader('x-char-name') ||
+    getHeader('char-name') ||
+    getHeader('x-bot-name') ||
+    getHeader('bot-name');
 
   let characterName = (customHeaderName || '').trim();
+
+  // Explicit XML tag check in system prompt
+  if (!characterName) {
+    const explicitNameMatch = rawSystemText.match(/<(?:char_name|character_name|char|bot_name|name)\s*>([^<]+)<\/(?:char_name|character_name|char|bot_name|name)>/i);
+    if (explicitNameMatch && explicitNameMatch[1] && explicitNameMatch[1].trim()) {
+      characterName = explicitNameMatch[1].trim();
+    }
+  }
+
   if (!characterName) {
     characterName = extractCharacterName(rawSystemText, safeMessages);
   }
+
   if (!characterName || characterName.toLowerCase() === 'character' || characterName.toLowerCase() === 'assistant') {
     // Attempt fallback from earliest assistant message greeting
     const firstAssistantMsg = safeMessages.find(m => m.role === 'assistant');
     if (firstAssistantMsg) {
       const text = getMessageText(firstAssistantMsg).trim();
-      const match = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,25})\s*:/);
-      if (match && match[1]) {
-        characterName = match[1];
+      const prefixMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,25})\s*:/);
+      if (prefixMatch && prefixMatch[1]) {
+        characterName = prefixMatch[1];
+      } else {
+        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,25})\b/);
+        if (actionMatch && actionMatch[1]) {
+          characterName = actionMatch[1];
+        }
       }
     }
   }
@@ -76,18 +108,30 @@ export function exportCharacterCard(
     characterName = 'Character';
   }
 
-  // 2. Extract First Message / Greeting
-  let firstMes = '';
-  const firstAssistant = safeMessages.find(m => m.role === 'assistant');
-  if (firstAssistant) {
-    firstMes = getMessageText(firstAssistant).trim();
+  // 2. Extract First Message / Greeting (Prompt declarations take precedence; fallback to earliest assistant message)
+  const firstMesPatterns = [
+    /<first_mes>([\s\S]*?)<\/first_mes>/i,
+    /<first_message>([\s\S]*?)<\/first_message>/i,
+    /<greeting>([\s\S]*?)<\/greeting>/i,
+    /<starter>([\s\S]*?)<\/starter>/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:First Message|Initial Greeting|Greeting|Starter Message|Starter)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|\n\s*(?:Personality|Scenario|Appearance|Description|Examples?|Dialogue|World):?|$))/i,
+    /\[(?:First Message|Greeting|Starter)\s*:\s*([^\]]+)\]/i,
+    /(?:FirstMessage|Greeting)\("([^"]+)"\)/i,
+  ];
+
+  let firstMes = extractSectionByRegex(rawSystemText, firstMesPatterns);
+  if (!firstMes) {
+    const firstAssistant = safeMessages.find(m => m.role === 'assistant');
+    if (firstAssistant) {
+      firstMes = getMessageText(firstAssistant).trim();
+    }
   }
 
-  // 3. Extract Specific Character Definition Sections
+  // 3. Extract Specific Character Definition Sections (supporting optional colons on markdown headers)
   const personalityPatterns = [
     /<personality>([\s\S]*?)<\/personality>/i,
-    /<char_persona[^>]*>([\s\S]*?)<\/char_persona>/i,
-    /(?:^|\n)\s*(?:###\s*)?(?:Personality|Persona|Traits|Psychological Profile)\s*:\s*([\s\S]*?)(?=(?:\n\s*(?:###\s*)?(?:Scenario|Appearance|Description|Setting|World|System Instructions?|First Message|Examples?|Rules?):|\n\s*###|$))/i,
+    /<traits>([\s\S]*?)<\/traits>/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Personality|Persona Traits|Traits|Psychological Profile)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Scenario|Appearance|Description|Setting|World|System Instructions?|First Message|Greeting|Examples?|Rules?):?|\n\s*#{1,4}|$))/i,
     /\[(?:Personality|Traits)\s*:\s*([^\]]+)\]/i,
     /Personality\("([^"]+)"\)/i,
   ];
@@ -95,62 +139,123 @@ export function exportCharacterCard(
   const scenarioPatterns = [
     /<scenario>([\s\S]*?)<\/scenario>/i,
     /<world>([\s\S]*?)<\/world>/i,
-    /(?:^|\n)\s*(?:###\s*)?(?:Scenario|Setting|World Info|World Setting|Context)\s*:\s*([\s\S]*?)(?=(?:\n\s*(?:###\s*)?(?:Personality|Appearance|Description|First Message|Examples?|Rules?|System Instructions?):|\n\s*###|$))/i,
+    /<setting>([\s\S]*?)<\/setting>/i,
+    /<context>([\s\S]*?)<\/context>/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Scenario|Setting|World Info|World Setting|Context)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Personality|Appearance|Description|First Message|Greeting|Examples?|Rules?|System Instructions?):?|\n\s*#{1,4}|$))/i,
     /\[(?:Scenario|Setting)\s*:\s*([^\]]+)\]/i,
     /Scenario\("([^"]+)"\)/i,
   ];
 
   const descriptionPatterns = [
     /<description>([\s\S]*?)<\/description>/i,
+    /<char_description>([\s\S]*?)<\/char_description>/i,
+    /<bot_description>([\s\S]*?)<\/bot_description>/i,
+    /<character_description>([\s\S]*?)<\/character_description>/i,
+    /<char_persona[^>]*>([\s\S]*?)<\/char_persona>/i,
+    /<persona>([\s\S]*?)<\/persona>/i,
     /<appearance>([\s\S]*?)<\/appearance>/i,
-    /(?:^|\n)\s*(?:###\s*)?(?:Description|Appearance|Physical Appearance|Background|Backstory|Overview)\s*:\s*([\s\S]*?)(?=(?:\n\s*(?:###\s*)?(?:Scenario|Personality|Setting|World|Rules?|System Instructions?):|\n\s*###|$))/i,
-    /\[(?:Description|Appearance)\s*:\s*([^\]]+)\]/i,
-    /Description\("([^"]+)"\)/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Description|Appearance|Physical Appearance|Background|Backstory|Overview|Character Persona|Persona)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Scenario|Personality|Setting|World|Rules?|System Instructions?|First Message|Greeting|Examples?):?|\n\s*#{1,4}|$))/i,
+    /\[(?:Description|Appearance|Persona)\s*:\s*([^\]]+)\]/i,
+    /(?:Description|Appearance)\("([^"]+)"\)/i,
   ];
 
   const examplePatterns = [
     /<mes_example>([\s\S]*?)<\/mes_example>/i,
     /<example_dialogue>([\s\S]*?)<\/example_dialogue>/i,
+    /<dialogue_examples>([\s\S]*?)<\/dialogue_examples>/i,
+    /<examples>([\s\S]*?)<\/examples>/i,
     /<dialogue>([\s\S]*?)<\/dialogue>/i,
-    /(?:^|\n)\s*(?:<START>|### Example Dialogues?)([\s\S]*?)(?:###|<END>|$)/i,
-    /(?:^|\n)\s*Example Dialogue\s*:\s*([\s\S]*?)(?=(?:\n\s*###|$))/i,
+    /(?:^|\n)\s*(?:<START>|#{1,4}\s*Example Dialogues?)([\s\S]*?)(?:#{1,4}|<END>|$)/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?Example Dialogue(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|$))/i,
+  ];
+
+  const systemPromptPatterns = [
+    /<system_prompt>([\s\S]*?)<\/system_prompt>/i,
+    /<system_instructions>([\s\S]*?)<\/system_instructions>/i,
+    /<jailbreak>([\s\S]*?)<\/jailbreak>/i,
+    /<custom_instructions>([\s\S]*?)<\/custom_instructions>/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:System Instructions?|Jailbreak|Custom Instructions?)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|$))/i,
   ];
 
   const extractedPersonality = extractSectionByRegex(rawSystemText, personalityPatterns);
   const extractedScenario = extractSectionByRegex(rawSystemText, scenarioPatterns);
   const extractedDescription = extractSectionByRegex(rawSystemText, descriptionPatterns);
   const extractedExamples = extractSectionByRegex(rawSystemText, examplePatterns);
+  const extractedSystemPrompt = extractSectionByRegex(rawSystemText, systemPromptPatterns);
 
-  // If description wasn't specifically subdivided, default to rawSystemText
-  const finalDescription = (extractedDescription || rawSystemText || '').trim();
-
-  // 4. Extract Multi-System Messages (Separate Jailbreak / User Directives)
-  const systemMessages = safeMessages.filter(m => m.role === 'system');
-  let separateSystemInstructions = '';
-  if (systemMessages.length > 1) {
-    const extraBlocks: string[] = [];
-    for (let i = 1; i < systemMessages.length; i++) {
-      const blockText = getMessageText(systemMessages[i]).trim();
-      if (blockText) {
-        extraBlocks.push(`[System Block ${i + 1}]:\n${blockText}`);
-      }
-    }
-    separateSystemInstructions = extraBlocks.join('\n\n');
+  // If description wasn't specifically subdivided, clean out already-extracted tags if present
+  let finalDescription = extractedDescription;
+  if (!finalDescription) {
+    const strippedFallback = rawSystemText
+      .replace(/<(?:char_name|character_name|char|bot_name|name)\s*>[\s\S]*?<\/(?:char_name|character_name|char|bot_name|name)>/gi, '')
+      .replace(/<(?:personality|traits)>[\s\S]*?<\/(?:personality|traits)>/gi, '')
+      .replace(/<(?:scenario|setting|world)>[\s\S]*?<\/(?:scenario|setting|world)>/gi, '')
+      .replace(/<(?:first_mes|first_message|greeting|starter)>[\s\S]*?<\/(?:first_mes|first_message|greeting|starter)>/gi, '')
+      .replace(/<(?:mes_example|example_dialogue|dialogue)>[\s\S]*?<\/(?:mes_example|example_dialogue|dialogue)>/gi, '')
+      .replace(/<(?:system_prompt|jailbreak|system_instructions|custom_instructions)>[\s\S]*?<\/(?:system_prompt|jailbreak|system_instructions|custom_instructions)>/gi, '')
+      .trim();
+    finalDescription = (strippedFallback || rawSystemText || '').trim();
   }
 
-  // 5. Extract Injected Lore / World Info
-  const injectedLore = extractInjectedLore(safeMessages, rawSystemText);
+  // 4. Extract Multi-System Messages (Preserving distinct jailbreaks & system prompt instructions)
+  const systemMessages = safeMessages.filter(m => m.role === 'system');
+  const systemInstructionBlocks: string[] = [];
+  if (systemMessages.length > 1) {
+    for (let i = 0; i < systemMessages.length; i++) {
+      const blockText = getMessageText(systemMessages[i]).trim();
+      if (!blockText) continue;
+      // Identify non-character system instructions / jailbreaks
+      const isCharDef = /<(?:char|character|char_name|char_persona|personality|scenario|description)\b/i.test(blockText) ||
+                        /(?:###\s*(?:Character|Persona|Personality|Description|Scenario))/i.test(blockText) ||
+                        /\[(?:Character|Personality|Appearance|Scenario)\b/i.test(blockText);
+      const isInstruction = /<(?:system_prompt|jailbreak|system_instructions)>/i.test(blockText) ||
+                            /(?:###\s*(?:System Instructions?|Jailbreak))/i.test(blockText) ||
+                            !isCharDef;
+      if (isInstruction) {
+        systemInstructionBlocks.push(`[System Block ${i + 1}]:\n${blockText}`);
+      }
+    }
+  } else if (extractedSystemPrompt) {
+    systemInstructionBlocks.push(extractedSystemPrompt);
+  }
+  const separateSystemInstructions = systemInstructionBlocks.join('\n\n');
 
-  // 6. Build SillyTavern V2 Character Card Spec Object
+  // 5. Extract Injected Lore / World Info (strictly excluding raw system blocks)
+  const allInjectedLore = extractInjectedLore(safeMessages, rawSystemText);
+  const trueLoreEntries = allInjectedLore.filter(entry => entry.category !== 'system_block');
+
+  // 6. Extract Tags & Creator metadata
+  const tagPatterns = [
+    /<tags>([\s\S]*?)<\/tags>/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?Tags(?::\s*|\s*\n)\s*([^\n\r]+)/i,
+    /\[Tags\s*:\s*([^\]]+)\]/i,
+  ];
+  const extractedTagsStr = extractSectionByRegex(rawSystemText, tagPatterns);
+  let parsedTags = ['Antigravity Proxy', 'Exported Card', 'Roleplay'];
+  if (extractedTagsStr) {
+    const customTags = extractedTagsStr
+      .split(/[,;\n]+/)
+      .map(t => t.trim())
+      .filter(t => t.length > 0 && !parsedTags.includes(t));
+    parsedTags = [...parsedTags, ...customTags];
+  }
+
+  const creatorPatterns = [
+    /<creator>([\s\S]*?)<\/creator>/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Creator|Author)(?::\s*|\s*\n)\s*([^\n\r]+)/i,
+  ];
+  const extractedCreator = extractSectionByRegex(rawSystemText, creatorPatterns);
+
+  // 7. Build SillyTavern V2 Character Card Spec Object
   let characterBook: any = undefined;
-  if (injectedLore.length > 0) {
+  if (trueLoreEntries.length > 0) {
     characterBook = {
       name: `${characterName} Lorebook`,
       description: `Auto-extracted lorebook entries for ${characterName}`,
       scan_depth: 100,
       token_budget: 2048,
       recursive_scanning: false,
-      entries: injectedLore.map((entry, idx) => ({
+      entries: trueLoreEntries.map((entry, idx) => ({
         id: idx + 1,
         keys: [entry.title.toLowerCase().trim()],
         secondary_keys: [],
@@ -183,8 +288,8 @@ export function exportCharacterCard(
       post_history_instructions: '',
       alternate_greetings: [],
       ...(characterBook ? { character_book: characterBook } : {}),
-      tags: ['Antigravity Proxy', 'Exported Card', 'Roleplay'],
-      creator: 'Antigravity Proxy Gateway',
+      tags: parsedTags,
+      creator: extractedCreator || 'Antigravity Proxy Gateway',
       character_version: '2.0',
       extensions: {},
     },
@@ -192,7 +297,7 @@ export function exportCharacterCard(
 
   const jsonOutput = JSON.stringify(cardV2Spec, null, 2);
 
-  // 7. Calculate Telemetry & Stats
+  // 8. Calculate Telemetry & Stats
   const systemChars = rawSystemText.length;
   const greetingChars = firstMes.length;
   const totalDefChars = systemChars + greetingChars;
@@ -206,7 +311,7 @@ export function exportCharacterCard(
 
   const timestampIso = new Date().toISOString();
 
-  // 8. Assemble Clean Markdown Output
+  // 9. Assemble Clean Markdown Output
   const sections: string[] = [];
 
   sections.push(`# 📋 Character Card Export: ${characterName}`);
@@ -215,7 +320,7 @@ export function exportCharacterCard(
 > 📊 **Definition Size**: ${totalDefChars.toLocaleString()} chars (~${estDefTokens.toLocaleString()} tokens)
 > 💬 **Initial Greeting**: ${greetingChars.toLocaleString()} chars (~${estGreetingTokens.toLocaleString()} tokens)
 > 🔄 **Chat History**: ${totalTurns} turns (${userTurns} User • ${assistantTurns} Assistant • ${systemTurns} System)
-> 📚 **Injected Lore Entries**: ${injectedLore.length} active entries
+> 📚 **Injected Lore Entries**: ${trueLoreEntries.length} active entries
 > ⏱️ **Exported At**: \`${timestampIso}\``);
 
   sections.push('---');
@@ -236,9 +341,9 @@ export function exportCharacterCard(
     sections.push(`### 💬 Example Dialogue\n${extractedExamples}`);
   }
 
-  if (injectedLore.length > 0) {
-    const loreLines = injectedLore.map((l, i) => `**${i + 1}. ${l.title}** (${l.category.toUpperCase()} • ~${l.tokens} tokens):\n\`\`\`\n${l.content}\n\`\`\``);
-    sections.push(`### 📚 Injected Lore & World Info (${injectedLore.length})\n${loreLines.join('\n\n')}`);
+  if (trueLoreEntries.length > 0) {
+    const loreLines = trueLoreEntries.map((l, i) => `**${i + 1}. ${l.title}** (${l.category.toUpperCase()} • ~${l.tokens} tokens):\n\`\`\`\n${l.content}\n\`\`\``);
+    sections.push(`### 📚 Injected Lore & World Info (${trueLoreEntries.length})\n${loreLines.join('\n\n')}`);
   }
 
   if (separateSystemInstructions) {

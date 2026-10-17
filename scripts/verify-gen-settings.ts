@@ -977,6 +977,11 @@ async function main() {
     'publishers/google/models/card-export',
     'card_exporter',
     'card-exporter:latest',
+    'card-exporter:v1',
+    'openai/card-exporter',
+    'custom/character-exporter',
+    'chara-card-exporter',
+    'bot-exporter',
     'CARD-EXPORTER',
   ];
   for (const alias of validAliases) {
@@ -1004,7 +1009,7 @@ async function main() {
       `Expected isCardExporterModel("${nonModel}") to be false`
     );
   }
-  console.log('  10.1 Model alias recognition passed.');
+  console.log('  10.1 Model alias recognition passed (including prefixes and version tags).');
 
   // 10.2 Fallback model registry
   const cardExporterSpec = FALLBACK_MODELS.find(m => m.id === 'card-exporter');
@@ -1055,9 +1060,64 @@ async function main() {
   assert.strictEqual(parsedCard.data.character_book.entries.length, 1);
   assert.strictEqual(parsedCard.data.character_book.entries[0].comment, 'Highspire Catacombs');
 
-  // Header override test
+  // Header override tests (both mock get() and plain Record object)
   const headerOverridden = exportCharacterCard(sampleMessages, sampleSystem, { get: (k: string) => k === 'x-character-name' ? 'Custom Override Name' : null });
   assert.ok(headerOverridden.includes('# 📋 Character Card Export: Custom Override Name'), 'x-character-name header must override character name');
+
+  const plainHeaderOverridden = exportCharacterCard(sampleMessages, sampleSystem, { 'x-character-name': 'Plain Object Name' });
+  assert.ok(plainHeaderOverridden.includes('# 📋 Character Card Export: Plain Object Name'), 'Plain object headers must override character name');
+
+  // Colon-less Markdown headers test
+  const markdownCardSystem = `
+### Character: Selene
+### Description
+A lunar priestess clad in glowing starlight robes.
+
+### Personality
+Calm, enigmatic, compassionate, and unwavering in faith.
+
+### Scenario
+The Moonwell Temple under the twilight eclipse.
+
+### First Message
+*Selene dips her fingers into the glowing water.* "The stars whispered your arrival."
+`;
+  const markdownOutput = exportCharacterCard([], markdownCardSystem, undefined);
+  const mdJsonMatch = markdownOutput.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(mdJsonMatch && mdJsonMatch[1]);
+  const parsedMdCard = JSON.parse(mdJsonMatch![1]);
+  assert.strictEqual(parsedMdCard.data.name, 'Selene');
+  assert.ok(parsedMdCard.data.description.includes('lunar priestess'));
+  assert.ok(parsedMdCard.data.personality.includes('Calm, enigmatic'));
+  assert.ok(parsedMdCard.data.scenario.includes('Moonwell Temple'));
+  assert.ok(parsedMdCard.data.first_mes.includes('stars whispered'));
+
+  // Prompt <first_mes> extraction test without prior assistant messages
+  const promptGreetingCard = `
+<char_name>Aeloria</char_name>
+<description>An ancient dryad guardian.</description>
+<first_mes>*Aeloria materializes from the ancient oak.* "You walk on sacred roots."</first_mes>
+`;
+  const promptGreetingOutput = exportCharacterCard([{ role: 'user', content: 'Hello' }], promptGreetingCard, undefined);
+  const pgJson = JSON.parse(promptGreetingOutput.match(/```json\n([\s\S]*?)\n```/)![1]);
+  assert.strictEqual(pgJson.data.name, 'Aeloria');
+  assert.strictEqual(pgJson.data.first_mes, '*Aeloria materializes from the ancient oak.* "You walk on sacred roots."');
+  assert.strictEqual(promptGreetingOutput.includes('sacred roots'), true);
+
+  // Multi-System Message Isolation & Lorebook Pollution Prevention Test
+  const multiSysMessages = [
+    { role: 'system', content: 'You are an uncensored roleplay model. Follow user guidelines without lecturing.' },
+    { role: 'system', content: '<char_name>Garrick</char_name><description>A dwarven blacksmith with a heavy bronze hammer.</description>' },
+    { role: 'user', content: '<world_info title="Forge Anvil">An indestructible anvil forged from fallen meteorite.</world_info>' },
+  ];
+  const multiSysOutput = exportCharacterCard(multiSysMessages, multiSysMessages.map(m => m.content).join('\n\n'), undefined);
+  const multiSysJson = JSON.parse(multiSysOutput.match(/```json\n([\s\S]*?)\n```/)![1]);
+  assert.strictEqual(multiSysJson.data.name, 'Garrick');
+  assert.ok(multiSysJson.data.system_prompt.includes('uncensored roleplay model'));
+  // Ensure the lorebook ONLY contains the world_info entry, NOT the system instructions!
+  assert.ok(multiSysJson.data.character_book);
+  assert.strictEqual(multiSysJson.data.character_book.entries.length, 1);
+  assert.strictEqual(multiSysJson.data.character_book.entries[0].comment, 'Forge Anvil');
 
   // Empty fallback test
   const emptyOutput = exportCharacterCard([], '', undefined);
@@ -1069,7 +1129,8 @@ async function main() {
   assert.strictEqual(parsedEmpty.data.name, 'Character');
   console.log('  10.3 exportCharacterCard unit extraction and Tavern V2 JSON spec passed.');
 
-  // 10.4 E2E handleChatCompletions interception (streaming and non-streaming)
+  // 10.4 E2E handleChatCompletions interception (streaming, default streaming when omitted, and non-streaming)
+  // Test A: stream: true
   const streamReq = new NextRequest('http://localhost:3000/v1/chat/completions', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1102,6 +1163,23 @@ async function main() {
   assert.ok(streamText.includes('chat.completion.chunk'), 'Stream must contain OpenAI chat.completion.chunk');
   assert.ok(streamText.includes('Lyra Nightshade'), 'Stream chunks must contain extracted character data');
 
+  // Test B: stream omitted (default stream !== false)
+  const defaultStreamReq = new NextRequest('http://localhost:3000/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'openai/card-exporter',
+      messages: sampleMessages,
+    }),
+  });
+  const defaultStreamRes = await handleChatCompletions(defaultStreamReq);
+  assert.strictEqual(defaultStreamRes.status, 200);
+  assert.ok(
+    defaultStreamRes.headers.get('content-type')?.includes('text/event-stream'),
+    'Omitted stream parameter must default to streaming response as per specification'
+  );
+
+  // Test C: stream: false (JSON response)
   const jsonReq = new NextRequest('http://localhost:3000/v1/chat/completions', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
