@@ -104,7 +104,7 @@ export function exportCharacterCard(
   }
 
   if (!characterName) {
-    characterName = extractCharacterName(rawSystemText, safeMessages);
+    characterName = extractCharacterName(rawSystemText, safeMessages, headers);
   }
 
   // Guard against characterName being mistakenly set to userName or generic labels
@@ -139,12 +139,14 @@ export function exportCharacterCard(
   }
 
   // 2. Extract First Message / Greeting (Prompt declarations take precedence; fallback to earliest assistant message)
+  const sectionBoundary = '(?=(?:\\n\\s*#{1,4}\\s+|\\n\\s*\\[(?:Character|Scenario|Setting|World|Appearance|Description|Personality|Traits|First Message|Greeting|Starter|Examples?|Dialogue|Rules?|System Instructions?|System Directives?|Jailbreak|User)|\\n\\s*<(?:char|character|scenario|personality|traits|first_mes|greeting|starter|mes_example|example_dialogue|dialogue|system_prompt|system_directive|role_and_identity|guidelines|rules|jailbreak|user_persona|user)|$))';
+
   const firstMesPatterns = [
     /<first_mes>([\s\S]*?)<\/first_mes>/i,
     /<first_message>([\s\S]*?)<\/first_message>/i,
     /<greeting>([\s\S]*?)<\/greeting>/i,
     /<starter>([\s\S]*?)<\/starter>/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:First Message|Initial Greeting|Greeting|Starter Message|Starter)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|\n\s*(?:Personality|Scenario|Appearance|Description|Examples?|Dialogue|World):?|$))/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:First Message|Initial Greeting|Greeting|Starter Message|Starter)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
     /\[(?:First Message|Greeting|Starter)\s*:\s*([^\]]+)\]/i,
     /(?:FirstMessage|Greeting)\("([^"]+)"\)/i,
   ];
@@ -161,7 +163,7 @@ export function exportCharacterCard(
   const personalityPatterns = [
     /<personality>([\s\S]*?)<\/personality>/i,
     /<traits>([\s\S]*?)<\/traits>/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Personality|Persona Traits|Traits|Psychological Profile)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Scenario|Appearance|Description|Setting|World|System Instructions?|First Message|Greeting|Examples?|Rules?):?|\n\s*#{1,4}|$))/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:(?:[A-Z][a-zA-Z0-9_\\-&'\\s]{1,40}['’]s|{{char}}(?:'s)?)\\s+)?(?:Personality|Persona Traits|Traits|Psychological Profile)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
     /\[(?:Personality|Traits)\s*:\s*([^\]]+)\]/i,
     /Personality\("([^"]+)"\)/i,
   ];
@@ -171,7 +173,7 @@ export function exportCharacterCard(
     /<world>([\s\S]*?)<\/world>/i,
     /<setting>([\s\S]*?)<\/setting>/i,
     /<context>([\s\S]*?)<\/context>/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Scenario|Setting|World Info|World Setting|Context)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Personality|Appearance|Description|First Message|Greeting|Examples?|Rules?|System Instructions?):?|\n\s*#{1,4}|$))/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:Scenario|Setting|World Info|World Setting|Context)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
     /\[(?:Scenario|Setting)\s*:\s*([^\]]+)\]/i,
     /Scenario\("([^"]+)"\)/i,
   ];
@@ -181,11 +183,12 @@ export function exportCharacterCard(
     /<char_description>([\s\S]*?)<\/char_description>/i,
     /<bot_description>([\s\S]*?)<\/bot_description>/i,
     /<character_description>([\s\S]*?)<\/character_description>/i,
+    /<character_definition>([\s\S]*?)<\/character_definition>/i,
     /<char_persona[^>]*>([\s\S]*?)<\/char_persona>/i,
     /<persona>([\s\S]*?)<\/persona>/i,
     /<appearance>([\s\S]*?)<\/appearance>/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Character Persona|Character Description|Description|Appearance|Physical Appearance|Background|Backstory|Overview)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Scenario|Personality|Setting|World|Rules?|System Instructions?|First Message|Greeting|Examples?|User(?:'s)?\s*Persona):?|\n\s*#{1,4}|$))/i,
-    /\[(?:Character Persona|Character Description|Description|Appearance)\s*:\s*([^\]]+)\]/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:(?:[A-Z][a-zA-Z0-9_\\-&'\\s]{1,40}['’]s|{{char}}(?:'s)?)\\s+)?(?:Character\\s+)?(?:Persona|Description|Appearance|Physical Appearance|Bio|Profile|Background|Backstory|Overview)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
+    /\[(?:Character Persona|Character Description|Description|Appearance|Persona)\s*:\s*([^\]]+)\]/i,
     /(?:Description|Appearance)\("([^"]+)"\)/i,
   ];
 
@@ -196,15 +199,19 @@ export function exportCharacterCard(
     /<examples>([\s\S]*?)<\/examples>/i,
     /<dialogue>([\s\S]*?)<\/dialogue>/i,
     /(?:^|\n)\s*(?:<START>|#{1,4}\s*Example Dialogues?)([\s\S]*?)(?:#{1,4}|<END>|$)/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?Example Dialogue(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|$))/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?Example Dialogue(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
   ];
 
   const systemPromptPatterns = [
     /<system_prompt>([\s\S]*?)<\/system_prompt>/i,
     /<system_instructions>([\s\S]*?)<\/system_instructions>/i,
+    /<system_directive>([\s\S]*?)(?:<\/system_directive>|(?=\n\s*#{1,4}|\n\s*\[|$))/i,
+    /<role_and_identity>([\s\S]*?)(?:<\/role_and_identity>|(?=\n\s*#{1,4}|\n\s*\[|$))/i,
+    /<guidelines>([\s\S]*?)(?:<\/guidelines>|(?=\n\s*#{1,4}|\n\s*\[|$))/i,
+    /<rules>([\s\S]*?)(?:<\/rules>|(?=\n\s*#{1,4}|\n\s*\[|$))/i,
     /<jailbreak>([\s\S]*?)<\/jailbreak>/i,
     /<custom_instructions>([\s\S]*?)<\/custom_instructions>/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:System Instructions?|Jailbreak|Custom Instructions?)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|$))/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:System Instructions?|System Directives?|Jailbreak|Custom Instructions?|Guidelines|Rules)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
   ];
 
   const extractedPersonality = extractSectionByRegex(rawSystemText, personalityPatterns);
@@ -216,17 +223,40 @@ export function exportCharacterCard(
   // If description wasn't specifically subdivided, clean out already-extracted tags if present
   let finalDescription = extractedDescription;
   if (!finalDescription) {
-    const strippedFallback = rawSystemText
+    let strippedFallback = rawSystemText
       .replace(/<(?:char_name|character_name|char|bot_name|name)\s*>[\s\S]*?<\/(?:char_name|character_name|char|bot_name|name)>/gi, '')
       .replace(/<(?:personality|traits)>[\s\S]*?<\/(?:personality|traits)>/gi, '')
       .replace(/<(?:scenario|setting|world)>[\s\S]*?<\/(?:scenario|setting|world)>/gi, '')
       .replace(/<(?:first_mes|first_message|greeting|starter)>[\s\S]*?<\/(?:first_mes|first_message|greeting|starter)>/gi, '')
       .replace(/<(?:mes_example|example_dialogue|dialogue)>[\s\S]*?<\/(?:mes_example|example_dialogue|dialogue)>/gi, '')
-      .replace(/<(?:system_prompt|jailbreak|system_instructions|custom_instructions)>[\s\S]*?<\/(?:system_prompt|jailbreak|system_instructions|custom_instructions)>/gi, '')
+      .replace(/<(?:system_prompt|jailbreak|system_instructions|custom_instructions|system_directive|role_and_identity|guidelines|rules)>[\s\S]*?(?:<\/(?:system_prompt|jailbreak|system_instructions|custom_instructions|system_directive|role_and_identity|guidelines|rules)>|$)/gi, '')
       .replace(/<(?:user_persona|user_profile|user_description|user_name|user)>[\s\S]*?<\/(?:user_persona|user_profile|user_description|user_name|user)>/gi, '')
       .replace(/\[(?:User's Persona|User Persona|User Description|User Profile|User Definition|User Info|User)\s*:\s*[\s\S]*?\]/gi, '')
-      .trim();
-    finalDescription = (strippedFallback || rawSystemText || '').trim();
+      .replace(/(?:^|\n)\s*(?:#{1,4}\s*)?(?:User(?:'s)?\s*Persona|User(?:'s)?\s*Description|User(?:'s)?\s*Profile|User(?:'s)?\s*Definition|{{user}}(?:'s)?\s*Persona)(?::\s*|\s*\n)[\s\S]*?(?=(?:\n\s*#{1,4}|\n\s*\[|$))/gi, '')
+      .replace(/(?:^|\n)\s*(?:User persona|{{user}}'s persona)\s*:[\s\S]*?(?=(?:\n\s*#{1,4}|\n\s*\[|$))/gi, '')
+      .replace(/(?:^|\n)\s*(?:User's Name|User Name|{{user}}'s Name)\s*:\s*[^\n\r,\]]+/gi, '')
+      .replace(/\[(?:Scenario|Setting)\s*:\s*[^\]]+\]/gi, '')
+      .replace(/\[(?:Personality|Traits)\s*:\s*[^\]]+\]/gi, '')
+      .replace(/\[(?:First Message|Greeting|Starter)\s*:\s*[^\]]+\]/gi, '')
+      .replace(/\[(?:Example Dialogue|Examples?)\s*:\s*[^\]]+\]/gi, '');
+
+    if (extractedScenario) {
+      strippedFallback = strippedFallback.replace(extractedScenario, '');
+      strippedFallback = strippedFallback.replace(/(?:^|\n)\s*(?:#{1,4}\s*)?(?:Scenario|Setting|World Info|World Setting|Context):?\s*/gi, '\n');
+    }
+    if (extractedPersonality) {
+      strippedFallback = strippedFallback.replace(extractedPersonality, '');
+      strippedFallback = strippedFallback.replace(/(?:^|\n)\s*(?:#{1,4}\s*)?(?:Personality|Persona Traits|Traits|Psychological Profile):?\s*/gi, '\n');
+    }
+    if (extractedExamples) {
+      strippedFallback = strippedFallback.replace(extractedExamples, '');
+      strippedFallback = strippedFallback.replace(/(?:^|\n)\s*(?:<START>|#{1,4}\s*Example Dialogues?):?\s*/gi, '\n');
+    }
+    if (extractedSystemPrompt) {
+      strippedFallback = strippedFallback.replace(extractedSystemPrompt, '');
+    }
+
+    finalDescription = strippedFallback.replace(/\n{3,}/g, '\n\n').trim();
   }
 
   // 4. Extract Multi-System Messages (Preserving distinct jailbreaks & system prompt instructions)
@@ -305,6 +335,12 @@ export function exportCharacterCard(
     };
   }
 
+  const cleanUserPersona = userPersona
+    ? (userName && userName !== 'User'
+        ? userPersona.replace(new RegExp(`^${userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[-:,]\\s*`, 'i'), '').trim()
+        : userPersona)
+    : '';
+
   const cardV2Spec: CharacterCardV2Spec = {
     spec: 'chara_card_v2',
     spec_version: '2.0',
@@ -325,7 +361,7 @@ export function exportCharacterCard(
       character_version: '2.0',
       extensions: {
         ...(userName && userName !== 'User' ? { user_name: userName } : {}),
-        ...(userPersona ? { user_persona: userPersona } : {}),
+        ...(cleanUserPersona ? { user_persona: cleanUserPersona } : (userPersona ? { user_persona: userPersona } : {})),
       },
     },
   };
@@ -375,7 +411,7 @@ export function exportCharacterCard(
   const userDefLines: string[] = [];
   userDefLines.push('[User Definition]');
   userDefLines.push(`User Name: ${userName}`);
-  userDefLines.push(`User Persona: ${userPersona ? userPersona : '*(No user persona provided)*'}`);
+  userDefLines.push(`User Persona: ${cleanUserPersona ? cleanUserPersona : '*(No user persona provided)*'}`);
   studioBlocks.push(userDefLines.join('\n'));
 
   // [System Instructions / Formatting Rules]
@@ -408,7 +444,19 @@ export function exportCharacterCard(
     studioBlocks.push(`[First Message / Greeting]\n${firstMes}`);
   }
 
-  const unifiedStudioInstructions = studioBlocks.join('\n\n---\n\n');
+  const rawStudioInstructions = studioBlocks.join('\n\n---\n\n');
+  const resolveStudioMacros = (text: string): string => {
+    if (!text) return '';
+    let res = text;
+    if (characterName && characterName !== 'Character') {
+      res = res.replace(/\{\{char\}\}/gi, characterName);
+    }
+    if (userName && userName !== 'User') {
+      res = res.replace(/\{\{user\}\}/gi, userName);
+    }
+    return res;
+  };
+  const unifiedStudioInstructions = resolveStudioMacros(rawStudioInstructions);
   const fence = unifiedStudioInstructions.includes('```') ? '````' : '```';
 
   // 10. Assemble Clean Markdown Output
@@ -448,7 +496,7 @@ ${fence}`);
 
   sections.push(`### 👤 User Definition & Persona
 > 🏷️ **User Name**: **${userName}**
-${userPersona ? userPersona : '*(No user persona provided)*'}`);
+${cleanUserPersona ? cleanUserPersona : '*(No user persona provided)*'}`);
 
   sections.push(`### 💬 Initial Greeting (First Message)\n${firstMes ? firstMes : '*(No assistant greeting found in history)*'}`);
 

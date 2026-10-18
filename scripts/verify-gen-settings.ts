@@ -1173,6 +1173,13 @@ An adventurer's guild in the floating city of Aethelgard.
   assert.ok(janitorAiOutput.includes('[First Message / Greeting]'), 'Google AI Studio box must contain initial greeting');
   assert.ok(janitorAiOutput.includes('Looking for work or just passing through?'), 'Greeting must contain assistant starter');
 
+  // Assert Scenario does NOT contain [User's Persona: ...]
+  assert.ok(!janitorAiJson.data.scenario.includes('[User\'s Persona:'), 'Scenario must not contain user persona');
+  assert.ok(!janitorAiOutput.includes('[Scenario & World Setting]\nAn adventurer\'s guild in the floating city of Aethelgard.\n\n[User\'s Persona:'), 'Studio scenario must not contain user persona');
+
+  // Assert Character Persona is cleanly extracted
+  assert.ok(janitorAiJson.data.description.includes('Ashley is a fiery crimson-haired swordswoman'), 'Description must contain persona');
+
   // Assert User Definition modular breakdown section is present
   assert.ok(janitorAiOutput.includes('### 👤 User Definition & Persona'), 'Must include User Definition breakdown');
   assert.ok(janitorAiOutput.includes('A wandering dual-blade duelist'), 'Breakdown must display user persona');
@@ -1182,7 +1189,7 @@ An adventurer's guild in the floating city of Aethelgard.
   assert.strictEqual(fpCharName, 'Ashley & Melanie', 'deriveChatFingerprint must resolve Ashley & Melanie');
   console.log('  10.3.1 Janitor AI Ashley & Melanie vs User Kars separation and Google AI Studio unified box passed.');
 
-  // 10.3.2 Edge Cases: User Header Overrides, Assistant Greeting Fallbacks, and Empty Personas
+  // 10.3.2 Edge Cases: User Header Overrides, Assistant Greeting Fallbacks, Multi-Character Lists, and Macro Resolution
   // Case A: Custom user header override
   const headerUserOutput = exportCharacterCard(janitorAiMessages, janitorAiSystemPrompt, { 'x-user-name': 'Commander Shepard' });
   assert.ok(headerUserOutput.includes('**User Name**: **Commander Shepard**'), 'x-user-name header must override user name');
@@ -1202,7 +1209,26 @@ An adventurer's guild in the floating city of Aethelgard.
   const noUserOutput = exportCharacterCard([], '<char_name>Selene</char_name><description>Moon Priestess</description>', undefined);
   assert.ok(noUserOutput.includes('**User Name**: **User**'));
   assert.ok(noUserOutput.includes('*(No user persona provided)*'));
-  console.log('  10.3.2 Edge Cases (Header overrides, assistant greeting fallback, empty persona) passed.');
+
+  // Case D: Multi-character playing lists with commas
+  const multiCharCommaPrompt = 'You are a Character Actor playing Alice, Bob, and Charlie, ambient NPCs, and the living world in a high fantasy kingdom.\n[Scenario: The Royal Castle]';
+  const multiCharCommaOutput = exportCharacterCard([], multiCharCommaPrompt, undefined);
+  const mcJson = JSON.parse(multiCharCommaOutput.match(/```json\n([\s\S]*?)\n```/)![1]);
+  assert.strictEqual(mcJson.data.name, 'Alice, Bob, and Charlie', 'Must capture all 3 characters in comma-separated playing pattern');
+
+  // Case E: Multi-word user name across bracket tags and templates
+  const multiWordUserPrompt = '[User: John Doe, 25 years old, swordmaster]\n[Scenario: Training Grounds]\n<char_name>Valkyrie</char_name>';
+  const multiWordUserOutput = exportCharacterCard([], multiWordUserPrompt, undefined);
+  assert.ok(multiWordUserOutput.includes('**User Name**: **John Doe**'), 'Must parse multi-word user name John Doe');
+  assert.ok(multiWordUserOutput.includes('25 years old, swordmaster'), 'User persona must be preserved');
+
+  // Case F: Studio Macro resolution ({{char}} and {{user}} resolved in Google AI Studio box)
+  const macroPrompt = '<char_name>Selene</char_name>\n{{user}}\'s persona: Kars - a warrior.\nDescription: {{char}} greets {{user}} with respect.';
+  const macroOutput = exportCharacterCard([], macroPrompt, undefined);
+  const studioBoxMatch = macroOutput.match(/### 📦 Google AI Studio System Instructions \(Single Box Copy-Paste\)[\s\S]*?```markdown\n([\s\S]*?)\n```/);
+  assert.ok(studioBoxMatch && studioBoxMatch[1], 'Studio box must exist');
+  assert.ok(studioBoxMatch[1].includes('Selene greets Kars with respect'), 'Studio box must resolve {{char}} and {{user}} macros');
+  console.log('  10.3.2 Edge Cases (Header overrides, assistant greeting fallback, multi-char lists, multi-word names, macros) passed.');
 
   // 10.4 E2E handleChatCompletions interception (streaming, default streaming when omitted, and non-streaming)
   // Test A: stream: true

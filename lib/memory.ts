@@ -145,13 +145,15 @@ export function extractUserInfo(
   }
 
   // 2. Bracket and markdown patterns for user persona in prompt
+  const sectionBoundaryLookahead = '(?=(?:\\n\\s*#{1,4}\\s+|\\n\\s*\\[(?:Character|Scenario|Appearance|Description|Setting|World|Personality|Traits|First Message|Greeting|Starter|Examples?|Rules?|System Instructions?|User)|\\n\\s*<(?:char|character|scenario|personality|traits|first_mes|greeting|starter|mes_example|example_dialogue|dialogue|system_prompt|system_directive|role_and_identity|guidelines|rules|jailbreak|user_persona|user)|$))';
+
   if (cleanPrompt && !userPersona) {
     const userPersonaPatterns = [
       /\[(?:User's Persona|User Persona|User Description|User Profile|User Definition|User Info)\s*:\s*([\s\S]*?)\]/i,
       /\[User\s*:\s*([\s\S]*?)\]/i,
-      /(?:^|\n)\s*(?:#{1,4}\s*)?(?:User(?:'s)?\s*Persona|User(?:'s)?\s*Description|User(?:'s)?\s*Profile|User(?:'s)?\s*Definition|{{user}}(?:'s)?\s*Persona)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Character|Scenario|Appearance|Description|Setting|World|System Instructions?|First Message|Greeting|Examples?|Rules?):?|\n\s*#{1,4}|$))/i,
-      /(?:^|\n)\s*(?:User persona|{{user}}'s persona)\s*:\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Character|Scenario|Appearance|Description|Setting|World|System Instructions?|First Message|Greeting|Examples?|Rules?):?|\n\s*#{1,4}|$))/i,
-      /\{\{user\}\}'s persona:\s*([\s\S]*?)(?=(?:\n\s*#{1,4}|$))/i,
+      new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:User(?:'s)?\\s*Persona|User(?:'s)?\\s*Description|User(?:'s)?\\s*Profile|User(?:'s)?\\s*Definition|{{user}}(?:'s)?\\s*Persona)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundaryLookahead}`, 'i'),
+      new RegExp(`(?:^|\\n)\\s*(?:User persona|{{user}}'s persona)\\s*:\\s*([\\s\\S]*?)${sectionBoundaryLookahead}`, 'i'),
+      new RegExp(`{{user}}'s persona:\\s*([\\s\\S]*?)${sectionBoundaryLookahead}`, 'i'),
     ];
 
     for (const p of userPersonaPatterns) {
@@ -167,15 +169,15 @@ export function extractUserInfo(
   if (cleanPrompt && !userName) {
     const namePatterns = [
       /(?:^|\n)\s*(?:User's Name|User Name|{{user}}'s Name)\s*:\s*([^\n\r,\]]+)/i,
-      /\{\{user\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-]{1,25})\b/i,
-      /\[(?:User's Persona|User Persona|User)\s*:\s*([A-Z][a-zA-Z0-9_\-]{1,25})\s*(?:[-:\n\r]|\])/i,
-      /(?:^|\n)\s*(?:User|{{user}})\s*:\s*([A-Z][a-zA-Z0-9_\-]{1,25})\b/i,
+      /\{\{user\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\b/i,
+      /\[(?:User's Persona|User Persona|User)\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\s*(?:[-:\n\r,]|\]|$)/i,
+      /(?:^|\n)\s*(?:User|{{user}})\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\b/i,
     ];
     for (const np of namePatterns) {
       const match = cleanPrompt.match(np);
       if (match && match[1] && match[1].trim()) {
         const candidate = match[1].trim();
-        if (!STOP_WORDS.has(candidate.toLowerCase())) {
+        if (!STOP_WORDS.has(candidate.toLowerCase()) && !/^(?:user|user's|persona)$/i.test(candidate)) {
           userName = candidate;
           break;
         }
@@ -192,21 +194,21 @@ export function extractUserInfo(
           : (Array.isArray(m.content) ? m.content.map((p: any) => p?.text || '').join('\n').trim() : '');
         if (!text) continue;
 
-        // Speaker prefix: "Kars: ..."
-        const spkMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,25}):\s+/);
+        // Speaker prefix: "Kars: ..." or "John Doe: ..."
+        const spkMatch = text.match(/^([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3}):\s+/);
         if (spkMatch && spkMatch[1]) {
           const spk = spkMatch[1].trim();
-          if (!STOP_WORDS.has(spk.toLowerCase())) {
+          if (!STOP_WORDS.has(spk.toLowerCase()) && !/^(?:user|user's)$/i.test(spk)) {
             userName = spk;
             break;
           }
         }
 
-        // Action prefix: "*Kars looks around...*"
-        const actMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,25})\s+[a-z]+\b/);
+        // Action prefix: "*Kars looks around...*" or "*John Doe draws weapon...*"
+        const actMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\s+[a-z]+\b/);
         if (actMatch && actMatch[1]) {
           const act = actMatch[1].trim();
-          if (!STOP_WORDS.has(act.toLowerCase())) {
+          if (!STOP_WORDS.has(act.toLowerCase()) && !/^(?:user|user's)$/i.test(act)) {
             userName = act;
             break;
           }
@@ -217,12 +219,12 @@ export function extractUserInfo(
 
   // 5. If userPersona is present, check if it specifies a name
   if (userPersona && !userName) {
-    const personaNameMatch = userPersona.match(/(?:^|\n)\s*(?:Name|Full Name)\s*:\s*([A-Z][a-zA-Z0-9_\-]{1,25})\b/i);
+    const personaNameMatch = userPersona.match(/(?:^|\n)\s*(?:Name|Full Name)\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\b/i);
     if (personaNameMatch && personaNameMatch[1]) {
       userName = personaNameMatch[1].trim();
     } else {
-      const prefixMatch = userPersona.match(/^([A-Z][a-zA-Z0-9_\-]{1,25})\s*(?:[-:\n\r]|is\b|was\b|a\b|an\b|the\b)/);
-      if (prefixMatch && prefixMatch[1] && !STOP_WORDS.has(prefixMatch[1].toLowerCase())) {
+      const prefixMatch = userPersona.match(/^([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\s*(?:[-:\n\r,]|is\b|was\b|a\b|an\b|the\b)/);
+      if (prefixMatch && prefixMatch[1] && !STOP_WORDS.has(prefixMatch[1].toLowerCase()) && !/^(?:user|user's)$/i.test(prefixMatch[1])) {
         userName = prefixMatch[1].trim();
       }
     }
@@ -239,6 +241,11 @@ export function extractUserInfo(
     if (specMatch && specMatch[1] && specMatch[1].trim()) {
       userPersona = specMatch[1].trim();
     }
+  }
+
+  // 7. Clean up userPersona if it's identical to userName
+  if (userName && userPersona && userPersona.trim().toLowerCase() === userName.trim().toLowerCase()) {
+    userPersona = '';
   }
 
   if (!userName) {
@@ -265,18 +272,18 @@ function cleanCandidate(raw: string): string {
 }
 
 // Extract Character Name from System Prompt or dialogue cues
-export function extractCharacterName(systemPrompt: string, messages?: any[]): string {
+export function extractCharacterName(systemPrompt: string, messages?: any[], headers?: any): string {
   const cleanPrompt = systemPrompt ? systemPrompt.replace(/\r\n/g, '\n') : '';
   const safeMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
 
   // Detect user info first so we never confuse user name with character name
-  const { userName: detectedUserName } = extractUserInfo(cleanPrompt, safeMessages);
+  const { userName: detectedUserName } = extractUserInfo(cleanPrompt, safeMessages, headers);
 
   // Tier 1: Explicit metadata declarations in system prompt
   if (cleanPrompt) {
     const strictPatterns = [
-      // Playing or multi-character patterns (e.g. "playing Ashley & Melanie, ambient NPCs...")
-      /(?:Character Actor playing|actor playing|playing as|playing|roleplaying as|play as|operat(?:e|ing) as)\s+([A-Z][a-zA-Z0-9_\-'’\s&]+?)(?=[,.\n\r]|\s+and\s+(?:the\s+living|ambient|all\s+other|NPCs|other|the\s+world)|$)/i,
+      // Playing or multi-character patterns (e.g. "playing Ashley & Melanie", "playing Alice, Bob, and Charlie, ambient NPCs...")
+      /(?:Character Actor playing|actor playing|playing as|playing|roleplaying as|play as|operat(?:e|ing) as)\s+([A-Z][a-zA-Z0-9_\-'’]*(?:(?:\s*,\s*(?:and\s+)?|\s+(?:&|and)\s+)(?!NPCs?\b|ambient\b|living\b|world\b|other\b|the\b)[A-Z][a-zA-Z0-9_\-'’]*)+|[A-Z][a-zA-Z0-9_\-'’\s&]+?)(?=[,.\n\r]|\s+and\s+(?:the\s+living|ambient|all\s+other|NPCs?|other|the\s+world)|\s+in\s+an\s+ongoing|$)/i,
       /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
       /<char_persona\s+name=["']([^"']+)["']/i,
       /<(?:bot_name|character_name)\s*>([^<]+)<\/(?:bot_name|character_name)>/i,
@@ -285,8 +292,8 @@ export function extractCharacterName(systemPrompt: string, messages?: any[]): st
       /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Character)(?:\*\*|\s*):+\s*([^\n\r\[\]\(\);:,]{1,40})/i,
       /\{\{char\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([^\n\r\[\]\(\);:,]{1,40})/i,
       // Persona headings, excluding User/{{user}}
-      /(?:^|\n)\s*###\s+(?!User\b|{{user}}\b)([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*(?:\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)(?:['\u2019]s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
-      /(?:^|\n)\s*(?!User\b|{{user}}\b)([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*(?:\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)['\u2019]s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)\s*:/i,
+      /(?:^|\n)\s*#{1,4}\s+(?!User\b|{{user}}\b)([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*(?:\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)(?:['\u2019]s\s+(?:Persona|Description|Appearance|Background|Profile|Scenario)|$)/i,
+      /(?:^|\n)\s*(?!User\b|{{user}}\b)([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*(?:\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)['\u2019]s\s+(?:Persona|Description|Appearance|Background|Personality|Profile)(?:\s*:|\s*\n)/i,
       /(?:You are interacting with|Interacting with|Roleplay with|Chat with|You will roleplay as|You roleplay as|You are playing as|You play as|You operate as)\s+(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)(?=[.,\n\r\[\]\(\);:\s]|$)/i,
       /(?:Write|Roleplay)\s+(?:as\s+)?([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)(?:'s|\s+in|\s+with)/i,
       /\bnamed\s+([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)\b/i,
@@ -375,7 +382,7 @@ export function deriveChatFingerprint(
   const customChatId = headers?.get('x-chat-id') || headers?.get('chat-id') || headers?.get('x-session-id') || headers?.get('session-id');
   const customCharName = headers?.get('x-character-name') || headers?.get('character-name');
 
-  const charName = customCharName || extractCharacterName(systemPrompt, messages);
+  const charName = customCharName || extractCharacterName(systemPrompt, messages, headers);
   const characterId = 'char_' + hashString((charName + (systemPrompt || '').slice(0, 300)).trim().toLowerCase());
 
   const nonSystem = (messages || []).filter(m => m && m.role !== 'system');
