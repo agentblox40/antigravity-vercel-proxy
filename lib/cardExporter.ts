@@ -1,4 +1,4 @@
-import { extractCharacterName, extractInjectedLore, InjectedLoreEntry } from './memory';
+import { extractCharacterName, extractUserInfo, extractInjectedLore, InjectedLoreEntry } from './memory';
 
 export interface CharacterCardV2Data {
   name: string;
@@ -66,6 +66,22 @@ export function exportCharacterCard(
     return null;
   };
 
+  // 1. Resolve User Information (Name & Persona)
+  const extractedUserInfo = extractUserInfo(rawSystemText, safeMessages, headers);
+  let userName = extractedUserInfo.userName;
+  let userPersona = extractedUserInfo.userPersona;
+
+  // Header overrides
+  const customUserName =
+    getHeader('x-user-name') ||
+    getHeader('user-name') ||
+    getHeader('x-user') ||
+    getHeader('user');
+  if (customUserName && customUserName.trim()) {
+    userName = customUserName.trim();
+  }
+
+  // 2. Resolve Character Name
   const customHeaderName =
     getHeader('x-character-name') ||
     getHeader('character-name') ||
@@ -78,9 +94,12 @@ export function exportCharacterCard(
 
   // Explicit XML tag check in system prompt
   if (!characterName) {
-    const explicitNameMatch = rawSystemText.match(/<(?:char_name|character_name|char|bot_name|name)\s*>([^<]+)<\/(?:char_name|character_name|char|bot_name|name)>/i);
+    const explicitNameMatch = rawSystemText.match(/<(?:char_name|character_name|char|bot_name)\s*>([^<]+)<\/(?:char_name|character_name|char|bot_name)>/i);
     if (explicitNameMatch && explicitNameMatch[1] && explicitNameMatch[1].trim()) {
-      characterName = explicitNameMatch[1].trim();
+      const candidate = explicitNameMatch[1].trim();
+      if (!userName || candidate.toLowerCase() !== userName.toLowerCase()) {
+        characterName = candidate;
+      }
     }
   }
 
@@ -88,23 +107,34 @@ export function exportCharacterCard(
     characterName = extractCharacterName(rawSystemText, safeMessages);
   }
 
+  // Guard against characterName being mistakenly set to userName or generic labels
+  if (userName && characterName.toLowerCase() === userName.toLowerCase()) {
+    characterName = 'Character';
+  }
+
   if (!characterName || characterName.toLowerCase() === 'character' || characterName.toLowerCase() === 'assistant') {
     // Attempt fallback from earliest assistant message greeting
     const firstAssistantMsg = safeMessages.find(m => m.role === 'assistant');
     if (firstAssistantMsg) {
       const text = getMessageText(firstAssistantMsg).trim();
-      const prefixMatch = text.match(/^([A-Z][a-zA-Z0-9_\-]{1,25})\s*:/);
+      const prefixMatch = text.match(/^([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)\s*:/);
       if (prefixMatch && prefixMatch[1]) {
-        characterName = prefixMatch[1];
+        const cand = prefixMatch[1].trim();
+        if (!userName || cand.toLowerCase() !== userName.toLowerCase()) {
+          characterName = cand;
+        }
       } else {
-        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-]{1,25})\b/);
+        const actionMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-&]{1,25}(?:\s+(?:&|and)\s+[A-Z][a-zA-Z0-9_\-]{1,25})*)\b/);
         if (actionMatch && actionMatch[1]) {
-          characterName = actionMatch[1];
+          const cand = actionMatch[1].trim();
+          if (!userName || cand.toLowerCase() !== userName.toLowerCase()) {
+            characterName = cand;
+          }
         }
       }
     }
   }
-  if (!characterName) {
+  if (!characterName || (userName && characterName.toLowerCase() === userName.toLowerCase())) {
     characterName = 'Character';
   }
 
@@ -154,8 +184,8 @@ export function exportCharacterCard(
     /<char_persona[^>]*>([\s\S]*?)<\/char_persona>/i,
     /<persona>([\s\S]*?)<\/persona>/i,
     /<appearance>([\s\S]*?)<\/appearance>/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Description|Appearance|Physical Appearance|Background|Backstory|Overview|Character Persona|Persona)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Scenario|Personality|Setting|World|Rules?|System Instructions?|First Message|Greeting|Examples?):?|\n\s*#{1,4}|$))/i,
-    /\[(?:Description|Appearance|Persona)\s*:\s*([^\]]+)\]/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Character Persona|Character Description|Description|Appearance|Physical Appearance|Background|Backstory|Overview)(?::\s*|\s*\n)\s*([\s\S]*?)(?=(?:\n\s*(?:#{1,4}\s*)?(?:Scenario|Personality|Setting|World|Rules?|System Instructions?|First Message|Greeting|Examples?|User(?:'s)?\s*Persona):?|\n\s*#{1,4}|$))/i,
+    /\[(?:Character Persona|Character Description|Description|Appearance)\s*:\s*([^\]]+)\]/i,
     /(?:Description|Appearance)\("([^"]+)"\)/i,
   ];
 
@@ -193,6 +223,8 @@ export function exportCharacterCard(
       .replace(/<(?:first_mes|first_message|greeting|starter)>[\s\S]*?<\/(?:first_mes|first_message|greeting|starter)>/gi, '')
       .replace(/<(?:mes_example|example_dialogue|dialogue)>[\s\S]*?<\/(?:mes_example|example_dialogue|dialogue)>/gi, '')
       .replace(/<(?:system_prompt|jailbreak|system_instructions|custom_instructions)>[\s\S]*?<\/(?:system_prompt|jailbreak|system_instructions|custom_instructions)>/gi, '')
+      .replace(/<(?:user_persona|user_profile|user_description|user_name|user)>[\s\S]*?<\/(?:user_persona|user_profile|user_description|user_name|user)>/gi, '')
+      .replace(/\[(?:User's Persona|User Persona|User Description|User Profile|User Definition|User Info|User)\s*:\s*[\s\S]*?\]/gi, '')
       .trim();
     finalDescription = (strippedFallback || rawSystemText || '').trim();
   }
@@ -283,7 +315,7 @@ export function exportCharacterCard(
       scenario: extractedScenario,
       first_mes: firstMes,
       mes_example: extractedExamples,
-      creator_notes: 'Exported via Google Antigravity Card Exporter Gateway (prototype-1-nextjs)',
+      creator_notes: `Exported via Google Antigravity Card Exporter Gateway (prototype-1-nextjs)${userName && userName !== 'User' ? ` • Roleplaying with ${userName}` : ''}`,
       system_prompt: separateSystemInstructions || '',
       post_history_instructions: '',
       alternate_greetings: [],
@@ -291,7 +323,10 @@ export function exportCharacterCard(
       tags: parsedTags,
       creator: extractedCreator || 'Antigravity Proxy Gateway',
       character_version: '2.0',
-      extensions: {},
+      extensions: {
+        ...(userName && userName !== 'User' ? { user_name: userName } : {}),
+        ...(userPersona ? { user_persona: userPersona } : {}),
+      },
     },
   };
 
@@ -311,17 +346,93 @@ export function exportCharacterCard(
 
   const timestampIso = new Date().toISOString();
 
-  // 9. Assemble Clean Markdown Output
+  // 9. Assemble Google AI Studio System Instructions (Single Box Copy-Paste)
+  const studioBlocks: string[] = [];
+
+  // [Character Definition]
+  const charDefLines: string[] = [];
+  charDefLines.push('[Character Definition]');
+  charDefLines.push(`Character Name: ${characterName}`);
+  if (finalDescription) {
+    charDefLines.push(`\n[Persona & Description]\n${finalDescription}`);
+  }
+  if (extractedPersonality) {
+    charDefLines.push(`\n[Personality & Traits]\n${extractedPersonality}`);
+  }
+  if (extractedScenario) {
+    charDefLines.push(`\n[Scenario & World Setting]\n${extractedScenario}`);
+  }
+  if (extractedExamples) {
+    charDefLines.push(`\n[Example Dialogue]\n${extractedExamples}`);
+  }
+  if (trueLoreEntries.length > 0) {
+    const loreContent = trueLoreEntries.map(e => `• ${e.title}:\n${e.content}`).join('\n\n');
+    charDefLines.push(`\n[World Lore & Knowledge]\n${loreContent}`);
+  }
+  studioBlocks.push(charDefLines.join('\n'));
+
+  // [User Definition]
+  const userDefLines: string[] = [];
+  userDefLines.push('[User Definition]');
+  userDefLines.push(`User Name: ${userName}`);
+  userDefLines.push(`User Persona: ${userPersona ? userPersona : '*(No user persona provided)*'}`);
+  studioBlocks.push(userDefLines.join('\n'));
+
+  // [System Instructions / Formatting Rules]
+  const sysRuleLines: string[] = [];
+  sysRuleLines.push('[System Instructions / Formatting Rules]');
+  if (separateSystemInstructions) {
+    sysRuleLines.push(separateSystemInstructions);
+    sysRuleLines.push(
+      `• Maintain full immersion in ${characterName}'s persona without breaking character.\n` +
+      `• Wrap actions, scene narration, and expressions in *asterisks* (e.g. *smiles faintly*).\n` +
+      `• Wrap spoken dialogue in "double quotes" (e.g. "What brings you here?").\n` +
+      `• Inner thoughts in \`backticks\`.\n` +
+      `• Never speak, act, or make decisions on behalf of ${userName}.`
+    );
+  } else {
+    sysRuleLines.push(
+      `• Maintain full immersion in ${characterName}'s persona, lore, tone, and speech habits without breaking character.\n` +
+      `• Adhere strictly to roleplay markdown syntax:\n` +
+      `  - Wrap character actions, expressions, and physical movements in *asterisks* (e.g. *she looks over, smiling faintly*).\n` +
+      `  - Wrap all spoken dialogue in "double quotes" (e.g. "What brings you here?").\n` +
+      `  - Wrap internal thoughts or monologues in \`backticks\` (e.g. \`I hope they didn't notice...\`).\n` +
+      `• Never speak, act, narrate, or decide on behalf of ${userName}.\n` +
+      `• Drive the narrative forward with engaging, multi-layered responses.`
+    );
+  }
+  studioBlocks.push(sysRuleLines.join('\n'));
+
+  // [First Message / Greeting]
+  if (firstMes) {
+    studioBlocks.push(`[First Message / Greeting]\n${firstMes}`);
+  }
+
+  const unifiedStudioInstructions = studioBlocks.join('\n\n---\n\n');
+  const fence = unifiedStudioInstructions.includes('```') ? '````' : '```';
+
+  // 10. Assemble Clean Markdown Output
   const sections: string[] = [];
 
   sections.push(`# 📋 Character Card Export: ${characterName}`);
   sections.push(`> ⚡ **Model**: \`card-exporter\` *(Virtual Edge Utility • 0 Upstream Quota Consumed)*
 > 🏷️ **Character Name**: **${characterName}**
+> 👤 **User Name**: **${userName}**
 > 📊 **Definition Size**: ${totalDefChars.toLocaleString()} chars (~${estDefTokens.toLocaleString()} tokens)
 > 💬 **Initial Greeting**: ${greetingChars.toLocaleString()} chars (~${estGreetingTokens.toLocaleString()} tokens)
 > 🔄 **Chat History**: ${totalTurns} turns (${userTurns} User • ${assistantTurns} Assistant • ${systemTurns} System)
 > 📚 **Injected Lore Entries**: ${trueLoreEntries.length} active entries
 > ⏱️ **Exported At**: \`${timestampIso}\``);
+
+  sections.push('---');
+
+  // Google AI Studio System Instructions (Single Box Copy-Paste)
+  sections.push(`### 📦 Google AI Studio System Instructions (Single Box Copy-Paste)
+*Copy the single block below and paste it directly into Google AI Studio's "System Instructions" box to start roleplaying:*
+
+${fence}markdown
+${unifiedStudioInstructions}
+${fence}`);
 
   sections.push('---');
 
@@ -334,6 +445,10 @@ export function exportCharacterCard(
   if (extractedScenario) {
     sections.push(`### 🎭 Scenario & World Setting\n${extractedScenario}`);
   }
+
+  sections.push(`### 👤 User Definition & Persona
+> 🏷️ **User Name**: **${userName}**
+${userPersona ? userPersona : '*(No user persona provided)*'}`);
 
   sections.push(`### 💬 Initial Greeting (First Message)\n${firstMes ? firstMes : '*(No assistant greeting found in history)*'}`);
 

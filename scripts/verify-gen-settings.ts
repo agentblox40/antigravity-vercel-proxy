@@ -37,6 +37,7 @@ import {
   deleteChatSession,
   deleteAllChatSessions,
   recordTurnsIntoSession,
+  deriveChatFingerprint,
   ChatSession,
 } from '../lib/memory';
 
@@ -1128,6 +1129,80 @@ The Moonwell Temple under the twilight eclipse.
   assert.strictEqual(parsedEmpty.spec, 'chara_card_v2');
   assert.strictEqual(parsedEmpty.data.name, 'Character');
   console.log('  10.3 exportCharacterCard unit extraction and Tavern V2 JSON spec passed.');
+
+  // 10.3.1 Janitor AI Multi-Character & User Persona Separation Test (Ashley & Melanie vs Kars)
+  const janitorAiSystemPrompt = `
+<system_directive>
+<role_and_identity>
+You are a Light Novel Author and immersive Character Actor playing Ashley & Melanie, ambient NPCs, and the living world in an ongoing fantasy adventure.
+</role_and_identity>
+
+### Ashley & Melanie's Persona
+Ashley is a fiery crimson-haired swordswoman. Melanie is a quiet silver-haired spellcaster.
+
+### Scenario
+An adventurer's guild in the floating city of Aethelgard.
+
+[User's Persona: Kars - A wandering dual-blade duelist with a stoic attitude.]
+`;
+
+  const janitorAiMessages = [
+    { role: 'system', content: janitorAiSystemPrompt },
+    { role: 'assistant', content: '*Ashley crosses her arms with a smirk, while Melanie pours tea.* "Looking for work or just passing through?"' },
+    { role: 'user', content: 'Kars: Looking for a contract.' },
+  ];
+
+  const janitorAiOutput = exportCharacterCard(janitorAiMessages, janitorAiSystemPrompt, undefined);
+  const janitorAiJsonMatch = janitorAiOutput.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(janitorAiJsonMatch && janitorAiJsonMatch[1], 'Must produce SillyTavern V2 JSON');
+  const janitorAiJson = JSON.parse(janitorAiJsonMatch[1]);
+
+  // Assert Character Name is "Ashley & Melanie" and NEVER "Kars"
+  assert.strictEqual(janitorAiJson.data.name, 'Ashley & Melanie', 'Character name must be resolved to Ashley & Melanie, not Kars');
+  assert.ok(janitorAiOutput.includes('**Character Name**: **Ashley & Melanie**'), 'Title badge must specify Ashley & Melanie');
+  assert.ok(janitorAiOutput.includes('**User Name**: **Kars**'), 'Header badge must specify User Name: Kars');
+
+  // Assert Google AI Studio Single Box Copy-Paste is present and structured
+  assert.ok(janitorAiOutput.includes('### 📦 Google AI Studio System Instructions (Single Box Copy-Paste)'), 'Must contain Google AI Studio single box section');
+  assert.ok(janitorAiOutput.includes('[Character Definition]'), 'Google AI Studio box must contain [Character Definition]');
+  assert.ok(janitorAiOutput.includes('Character Name: Ashley & Melanie'), 'Character Definition must contain Ashley & Melanie');
+  assert.ok(janitorAiOutput.includes('[User Definition]'), 'Google AI Studio box must contain [User Definition]');
+  assert.ok(janitorAiOutput.includes('User Name: Kars'), 'User Definition must contain Kars');
+  assert.ok(janitorAiOutput.includes('A wandering dual-blade duelist'), 'User Definition must contain Kars persona text');
+  assert.ok(janitorAiOutput.includes('[System Instructions / Formatting Rules]'), 'Google AI Studio box must contain formatting rules');
+  assert.ok(janitorAiOutput.includes('[First Message / Greeting]'), 'Google AI Studio box must contain initial greeting');
+  assert.ok(janitorAiOutput.includes('Looking for work or just passing through?'), 'Greeting must contain assistant starter');
+
+  // Assert User Definition modular breakdown section is present
+  assert.ok(janitorAiOutput.includes('### 👤 User Definition & Persona'), 'Must include User Definition breakdown');
+  assert.ok(janitorAiOutput.includes('A wandering dual-blade duelist'), 'Breakdown must display user persona');
+
+  // Assert deriveChatFingerprint also resolves characterName as Ashley & Melanie
+  const { characterName: fpCharName } = deriveChatFingerprint(janitorAiMessages, janitorAiSystemPrompt, undefined);
+  assert.strictEqual(fpCharName, 'Ashley & Melanie', 'deriveChatFingerprint must resolve Ashley & Melanie');
+  console.log('  10.3.1 Janitor AI Ashley & Melanie vs User Kars separation and Google AI Studio unified box passed.');
+
+  // 10.3.2 Edge Cases: User Header Overrides, Assistant Greeting Fallbacks, and Empty Personas
+  // Case A: Custom user header override
+  const headerUserOutput = exportCharacterCard(janitorAiMessages, janitorAiSystemPrompt, { 'x-user-name': 'Commander Shepard' });
+  assert.ok(headerUserOutput.includes('**User Name**: **Commander Shepard**'), 'x-user-name header must override user name');
+
+  // Case B: Assistant greeting fallback when prompt has user persona but no character tag
+  const fallbackUserCollision = [
+    { role: 'assistant', content: '*Bonnie & Clyde enter the bank with weapons drawn.* "Hands in the air!"' },
+    { role: 'user', content: 'Kars: I am just a bystander.' },
+  ];
+  const fallbackCollisionPrompt = '[User: Kars - a merchant]\nScenario: A bank heist.';
+  const fallbackCollisionOutput = exportCharacterCard(fallbackUserCollision, fallbackCollisionPrompt, undefined);
+  const fbJson = JSON.parse(fallbackCollisionOutput.match(/```json\n([\s\S]*?)\n```/)![1]);
+  assert.strictEqual(fbJson.data.name, 'Bonnie & Clyde', 'Must pick assistant Bonnie & Clyde and reject user Kars');
+  assert.ok(fallbackCollisionOutput.includes('**User Name**: **Kars**'));
+
+  // Case C: Missing user persona defaults gracefully
+  const noUserOutput = exportCharacterCard([], '<char_name>Selene</char_name><description>Moon Priestess</description>', undefined);
+  assert.ok(noUserOutput.includes('**User Name**: **User**'));
+  assert.ok(noUserOutput.includes('*(No user persona provided)*'));
+  console.log('  10.3.2 Edge Cases (Header overrides, assistant greeting fallback, empty persona) passed.');
 
   // 10.4 E2E handleChatCompletions interception (streaming, default streaming when omitted, and non-streaming)
   // Test A: stream: true
