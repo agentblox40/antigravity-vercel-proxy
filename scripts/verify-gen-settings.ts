@@ -20,6 +20,10 @@ import {
   isPenaltySupported,
   isCardExporterModel,
   FALLBACK_MODELS,
+  isWebSearchRequested,
+  createGroundingCollector,
+  recordGroundingMetadata,
+  formatGroundingMarkdown,
 } from '../lib/antigravity';
 import {
   OPENCODE_MODELS,
@@ -1300,6 +1304,83 @@ An adventurer's guild in the floating city of Aethelgard.
 
   console.log('  10.4 handleChatCompletions streaming & non-streaming interception passed.');
   console.log('✅ Card Exporter Virtual Utility Model & Character Card Extraction Suite passed.\n');
+
+  // ==========================================
+  // TEST 11: Web Search Grounding Support Suite
+  // ==========================================
+  console.log('Test 11: Web Search Grounding Support Suite');
+
+  // 11.1 Model registration
+  const searchModels = [
+    'gemini-3.8-flash-search',
+    'gemini-3.8-flash-web',
+    'gemini-3.7-flash-search',
+    'gemini-3.7-flash-web',
+    'gemini-3.1-pro-search',
+    'gemini-3.1-pro-web',
+  ];
+  for (const mId of searchModels) {
+    const found = FALLBACK_MODELS.find(m => m.id === mId);
+    assert.ok(found, `Model ${mId} must exist in FALLBACK_MODELS`);
+    assert.strictEqual(found.tier, mId.includes('pro') ? 'Pro Agent' : 'Search');
+  }
+  console.log('  11.1 Search models registration passed.');
+
+  // 11.2 Model alias resolution
+  const searchTestCases = [
+    { id: 'gemini-3.8-flash-search', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
+    { id: 'gemini-3.8-flash:search', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
+    { id: 'gemini-3.8-flash-web', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
+    { id: 'gemini-3.8-flash:web', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
+    { id: 'gemini-3.7-flash-search', wire: 'gemini-3.7-flash-tiered', budget: 8192 },
+    { id: 'gemini-3.1-pro-search', wire: 'gemini-pro-agent', budget: 32768 },
+    { id: 'gemini-3.1-pro:search', wire: 'gemini-pro-agent', budget: 32768 },
+  ];
+  for (const tc of searchTestCases) {
+    const res = resolveWireModel(tc.id);
+    assert.ok(res, `Model ${tc.id} failed to resolve`);
+    assert.strictEqual(res.wireModel, tc.wire);
+    assert.strictEqual(res.defaultThinkingBudget, tc.budget);
+    assert.strictEqual(res.isWebSearch, true);
+  }
+  console.log('  11.2 Search model alias resolution passed.');
+
+  // 11.3 Request parameter detection & wire injection
+  assert.strictEqual(isWebSearchRequested({ web_search: true }), true);
+  assert.strictEqual(isWebSearchRequested({ search: true }), true);
+  assert.strictEqual(isWebSearchRequested({ grounding: true }), true);
+  assert.strictEqual(isWebSearchRequested({ tools: [{ type: 'web_search' }] }), true);
+  assert.strictEqual(isWebSearchRequested({ tools: [{ type: 'google_search' }] }), true);
+
+  const wireSearch = transformOpenAIToAntigravity(
+    { model: 'gemini-3.8-flash', web_search: true, messages: [{ role: 'user', content: 'What happened today?' }] },
+    resolveWireModel('gemini-3.8-flash')!,
+    'test-proj'
+  );
+  assert.ok(wireSearch.request.tools, 'tools array must be injected');
+  assert.deepStrictEqual(wireSearch.request.tools, [{ googleSearch: {} }]);
+  console.log('  11.3 Parameter detection & wire injection passed.');
+
+  // 11.4 Grounding metadata collection & markdown formatting
+  const collector = createGroundingCollector();
+  recordGroundingMetadata(
+    {
+      webSearchQueries: ['today news'],
+      groundingChunks: [
+        { web: { uri: 'https://example.com/article1', title: 'Article 1' } },
+        { web: { uri: 'https://example.com/article2', title: 'Article 2' } },
+        { web: { uri: 'https://example.com/article1', title: 'Article 1 Dup' } },
+      ]
+    },
+    collector
+  );
+  assert.strictEqual(collector.sources.length, 2, 'Duplicates must be pruned');
+  const markdown = formatGroundingMarkdown(collector);
+  assert.ok(markdown.includes('### Sources:'));
+  assert.ok(markdown.includes('- [Article 1](https://example.com/article1)'));
+  assert.ok(markdown.includes('- [Article 2](https://example.com/article2)'));
+  console.log('  11.4 Grounding metadata formatting passed.');
+  console.log('✅ Web Search Grounding Support Suite passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }

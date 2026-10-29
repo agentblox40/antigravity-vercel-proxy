@@ -7,6 +7,9 @@ import {
   transformOpenAIToAntigravity,
   resolveWireModel,
   isCardExporterModel,
+  createGroundingCollector,
+  recordGroundingMetadata,
+  formatGroundingMarkdown,
 } from './antigravity';
 import { exportCharacterCard } from './cardExporter';
 import {
@@ -82,7 +85,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.7-flash, gemini-3.1-pro, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -93,17 +96,20 @@ export async function handleChatCompletions(req: NextRequest) {
             'argon-medium',
             'argon-high',
             'gemini-3.8-flash',
+            'gemini-3.8-flash-search',
             'gemini-3.8-flash-high',
             'gemini-3.8-flash-max',
             'gemini-3.8-flash-medium',
             'gemini-3.8-flash-low',
             'gemini-3.8-flash-fast',
             'gemini-3.7-flash',
+            'gemini-3.7-flash-search',
             'gemini-3.7-flash-high',
             'gemini-3.7-flash-max',
             'gemini-3.7-flash-medium',
             'gemini-3.7-flash-low',
             'gemini-3.1-pro',
+            'gemini-3.1-pro-search',
             'gemini-3.1-pro-low',
             'gemini-3.1-pro-fast',
             'gemini-3.5-flash',
@@ -600,6 +606,7 @@ export async function handleChatCompletions(req: NextRequest) {
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
         const chatcmplId = `chatcmpl-${crypto.randomUUID().slice(0, 8)}`;
+        const groundingCollector = createGroundingCollector();
 
         let fullAssistantContent = '';
         let fullThoughtContent = '';
@@ -663,6 +670,9 @@ export async function handleChatCompletions(req: NextRequest) {
                     try {
                       const parsed = JSON.parse(line.slice(6));
                       const cand = parsed.response?.candidates?.[0];
+                      if (cand?.groundingMetadata || parsed.response?.groundingMetadata) {
+                        recordGroundingMetadata(cand?.groundingMetadata || parsed.response?.groundingMetadata, groundingCollector);
+                      }
                       const parts = cand?.content?.parts || [];
 
                       for (const part of parts) {
@@ -724,6 +734,9 @@ export async function handleChatCompletions(req: NextRequest) {
                     try {
                       const parsed = JSON.parse(line.slice(6));
                       const cand = parsed.response?.candidates?.[0];
+                      if (cand?.groundingMetadata || parsed.response?.groundingMetadata) {
+                        recordGroundingMetadata(cand?.groundingMetadata || parsed.response?.groundingMetadata, groundingCollector);
+                      }
                       const parts = cand?.content?.parts || [];
 
                       for (const part of parts) {
@@ -777,6 +790,28 @@ export async function handleChatCompletions(req: NextRequest) {
                 buffer = '';
               }
 
+              const sourcesMarkdown = formatGroundingMarkdown(groundingCollector);
+              if (sourcesMarkdown) {
+                fullAssistantContent += sourcesMarkdown;
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      id: chatcmplId,
+                      object: 'chat.completion.chunk',
+                      created: Math.floor(Date.now() / 1000),
+                      model: modelId,
+                      choices: [
+                        {
+                          index: 0,
+                          delta: { content: sourcesMarkdown },
+                          finish_reason: null,
+                        },
+                      ],
+                    })}\n\n`
+                  )
+                );
+              }
+
               controller.enqueue(
                 encoder.encode(
                   `data: ${JSON.stringify({
@@ -822,6 +857,7 @@ export async function handleChatCompletions(req: NextRequest) {
       const rawText = await upstreamRes.text();
       let contentText = '';
       let thoughtText = '';
+      const groundingCollector = createGroundingCollector();
 
       const lines = rawText.split('\n');
       for (const line of lines) {
@@ -829,6 +865,9 @@ export async function handleChatCompletions(req: NextRequest) {
           try {
             const parsed = JSON.parse(line.slice(6));
             const cand = parsed.response?.candidates?.[0];
+            if (cand?.groundingMetadata || parsed.response?.groundingMetadata) {
+              recordGroundingMetadata(cand?.groundingMetadata || parsed.response?.groundingMetadata, groundingCollector);
+            }
             const parts = cand?.content?.parts || [];
             for (const part of parts) {
               if (part.thought) thoughtText += part.text || '';
@@ -836,6 +875,11 @@ export async function handleChatCompletions(req: NextRequest) {
             }
           } catch {}
         }
+      }
+
+      const sourcesMarkdown = formatGroundingMarkdown(groundingCollector);
+      if (sourcesMarkdown && !contentText.includes(sourcesMarkdown.trim())) {
+        contentText += sourcesMarkdown;
       }
 
       if (contentText.includes('is no longer available') && contentText.includes('switch to Claude')) {

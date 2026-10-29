@@ -79,6 +79,12 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'claude-sonnet-4-6-fast', name: 'Claude Sonnet 4.6 (Fast)', tier: 'Claude', badge: 'Fast (0 Thinking)', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low token consumption Claude Sonnet 4.6 for long roleplay sessions.' },
   { id: 'gpt-4o', name: 'GPT-4o (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Maps directly to Gemini 3.7 Flash for Janitor AI / SillyTavern default settings.' },
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Legacy OpenAI default client alias mapped to Gemini 3.7 Flash.' },
+  { id: 'gemini-3.8-flash-search', name: 'Gemini 3.8 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash flagship model with native Google Search grounding.' },
+  { id: 'gemini-3.8-flash-web', name: 'Gemini 3.8 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash with native web search grounding.' },
+  { id: 'gemini-3.7-flash-search', name: 'Gemini 3.7 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash flagship model with native Google Search grounding.' },
+  { id: 'gemini-3.7-flash-web', name: 'Gemini 3.7 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash with native web search grounding.' },
+  { id: 'gemini-3.1-pro-search', name: 'Gemini 3.1 Pro (Search)', tier: 'Pro Agent', badge: 'Search Grounded', thinking: '32K Tokens', context: '1M Context', desc: 'Gemini 3.1 Pro agent engine with native Google Search grounding.' },
+  { id: 'gemini-3.1-pro-web', name: 'Gemini 3.1 Pro (Web)', tier: 'Pro Agent', badge: 'Search Grounded', thinking: '32K Tokens', context: '1M Context', desc: 'Gemini 3.1 Pro agent engine with native web search grounding.' },
   ...OPENCODE_MODELS.map(m => ({
     id: m.id,
     name: m.name,
@@ -301,11 +307,39 @@ export function isCardExporterModel(modelId?: string): boolean {
 }
 
 // Strictly resolve requested model ID to Google Antigravity wire model without silent fallbacks
-export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number; targetAccount?: string } | null {
+export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean } | null {
   if (!modelId || !modelId.trim()) {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
   }
   const clean = modelId.trim().toLowerCase();
+
+  // Search suffix detection (:search, -search, :web, -web)
+  let isWebSearch = false;
+  let baseClean = clean;
+  if (baseClean.endsWith(':search')) {
+    isWebSearch = true;
+    baseClean = baseClean.slice(0, -7);
+  } else if (baseClean.endsWith('-search')) {
+    isWebSearch = true;
+    baseClean = baseClean.slice(0, -7);
+  } else if (baseClean.endsWith(':web')) {
+    isWebSearch = true;
+    baseClean = baseClean.slice(0, -4);
+  } else if (baseClean.endsWith('-web')) {
+    isWebSearch = true;
+    baseClean = baseClean.slice(0, -4);
+  }
+
+  // If search suffix was stripped, resolve the base model with isWebSearch: true
+  if (isWebSearch && baseClean) {
+    const baseResolved = resolveWireModel(baseClean);
+    if (baseResolved) {
+      return {
+        ...baseResolved,
+        isWebSearch: true,
+      };
+    }
+  }
 
   // 0. Argon Experimental Cohort (Dedicated Account #7: kars60928@gmail.com -> gemini-3.8-flash-exp-a)
   if (clean === 'argon-low' || clean === 'argon:low') {
@@ -500,7 +534,7 @@ export function isPenaltySupported(modelId?: string, wireModel?: string): boolea
 
 export function transformOpenAIToAntigravity(
   body: any,
-  resolved: { wireModel: string; defaultThinkingBudget: number },
+  resolved: { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean },
   projectId: string,
   augmentedSystem?: string,
   userInjectionsText?: string,
@@ -698,6 +732,8 @@ export function transformOpenAIToAntigravity(
     sessionId = `-${Date.now()}`;
   }
 
+  const isSearch = isWebSearchRequested(body, body.model, resolved);
+
   const reqObj: any = {
     sessionId,
     contents: merged,
@@ -705,6 +741,10 @@ export function transformOpenAIToAntigravity(
     generationConfig,
     safetySettings: UNRESTRICTED_SAFETY_SETTINGS
   };
+
+  if (isSearch) {
+    reqObj.tools = [{ googleSearch: {} }];
+  }
 
   return {
     project: projectId,
@@ -714,4 +754,106 @@ export function transformOpenAIToAntigravity(
     model: resolved.wireModel,
     request: reqObj
   };
+}
+
+export interface GroundingCollector {
+  webSearchQueries: Set<string>;
+  sources: { title: string; url: string }[];
+  seenUrls: Set<string>;
+}
+
+export function createGroundingCollector(): GroundingCollector {
+  return {
+    webSearchQueries: new Set<string>(),
+    sources: [],
+    seenUrls: new Set<string>(),
+  };
+}
+
+export function isWebSearchRequested(
+  body: any,
+  modelId?: string,
+  resolved?: { isWebSearch?: boolean } | null
+): boolean {
+  if (resolved?.isWebSearch === true) return true;
+  const m = (modelId || body?.model || '').toLowerCase().trim();
+  if (
+    m.endsWith('-search') ||
+    m.endsWith(':search') ||
+    m.endsWith('-web') ||
+    m.endsWith(':web')
+  ) {
+    return true;
+  }
+  if (body?.web_search === true || body?.web_search === 'true' || body?.web_search === 1) return true;
+  if (body?.search === true || body?.search === 'true' || body?.search === 1) return true;
+  if (body?.grounding === true || body?.grounding === 'true' || body?.grounding === 1) return true;
+
+  if (Array.isArray(body?.tools)) {
+    for (const t of body.tools) {
+      if (!t) continue;
+      const type = (typeof t.type === 'string' ? t.type : '').toLowerCase();
+      const fnName = (t.function?.name ? String(t.function.name) : '').toLowerCase();
+      if (
+        type === 'web_search' ||
+        type === 'google_search' ||
+        type === 'search' ||
+        fnName === 'web_search' ||
+        fnName === 'google_search' ||
+        fnName === 'search'
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export function recordGroundingMetadata(metadata: any, target: GroundingCollector): void {
+  if (!metadata || typeof metadata !== 'object') return;
+
+  const queries = metadata.webSearchQueries || metadata.web_search_queries || metadata.searchQueries;
+  if (Array.isArray(queries)) {
+    for (const q of queries) {
+      if (typeof q === 'string' && q.trim()) {
+        target.webSearchQueries.add(q.trim());
+      }
+    }
+  }
+
+  const chunks = metadata.groundingChunks || metadata.grounding_chunks;
+  if (Array.isArray(chunks)) {
+    for (const chunk of chunks) {
+      if (!chunk) continue;
+      const web = chunk.web || chunk;
+      const url = typeof web.uri === 'string' ? web.uri : (typeof web.url === 'string' ? web.url : '');
+      const rawTitle = typeof web.title === 'string' ? web.title.trim() : '';
+      const title = rawTitle || url;
+      if (url && !target.seenUrls.has(url)) {
+        target.seenUrls.add(url);
+        target.sources.push({ title, url });
+      }
+    }
+  }
+}
+
+export function formatGroundingMarkdown(grounding: GroundingCollector): string {
+  if (grounding.sources.length === 0 && grounding.webSearchQueries.size === 0) {
+    return '';
+  }
+
+  const lines: string[] = ['', '', '### Sources:'];
+  if (grounding.sources.length > 0) {
+    for (const src of grounding.sources) {
+      const sanitizedTitle = src.title.replace(/[\[\]]/g, '');
+      lines.push(`- [${sanitizedTitle}](${src.url})`);
+    }
+  } else if (grounding.webSearchQueries.size > 0) {
+    for (const q of grounding.webSearchQueries) {
+      lines.push(`- *Search:* ${q}`);
+    }
+  }
+
+  return lines.join('\n');
 }

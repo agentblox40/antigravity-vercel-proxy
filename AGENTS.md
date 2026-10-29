@@ -3,7 +3,7 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.6.2`  
+> *Current Version*: `v3.9.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
@@ -30,6 +30,7 @@
 15. **Zero-Wait TTFT & Native Serverless Lifecycle**: Hot-path TTFT unblocked from database calls via negative caching, Next.js 15 native after() lifecycle preservation, dual-mapped reasoning tokens (reasoning_content + reasoning), and Gemini 3.1 Pro Fast/Low variants.
 16. **Claude Token Optimization & Stateless System Prompt Adherence**: Fast (0 thinking) and Low (2k thinking) tiers across Claude Sonnet 4.6 and Claude Opus 4.6, 100% pure client pass-through dialogue history (opt-in clamping via `x-clamped-context: true`), unconditionally fresh stateless session IDs (`-${Date.now()}`) to force Google CloudCode PA to parse full character system instructions on every turn without stale IDE session contamination, and zero synthetic proxy-side lockouts with clean 20-second Google rate limit buffers and uninhibited account failover.
 17. **Sampling Penalty Safeguarding & Upstream Auto-Recovery**: Proactively omits unsupported `presence_penalty` and `frequency_penalty` fields on models that reject them (`gemini-3.8-flash*`, `argon-*`) to prevent Google CloudCode PA `HTTP 400 Penalty is not enabled for this model` rejections. If an upstream endpoint ever returns a penalty rejection on any model, dynamic runtime auto-recovery immediately strips penalties from `generationConfig` and retries on the same connection, guaranteeing zero account pool exhaustion and zero client disruptions.
+18. **Native Google Search Grounding & Source Parsing**: Dedicated web search models (`gemini-3.8-flash-search`, `gemini-3.8-flash-web`, `gemini-3.7-flash-search`, `gemini-3.7-flash-web`, `gemini-3.1-pro-search`, `gemini-3.1-pro-web`, and `:search`/`:web` suffixes) and request-level search flags (`web_search`, `search`, `grounding`, or tools with `web_search`/`google_search`). Automatically injects `{ googleSearch: {} }` into upstream Google CloudCode PA wire payload, extracts `groundingMetadata` in streaming SSE chunks and non-streaming responses, and appends deduplicated markdown source citations (`\n\n### Sources:\n- [Title](URL)`).
 
 ---
 
