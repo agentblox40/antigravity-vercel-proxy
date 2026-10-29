@@ -85,7 +85,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -97,6 +97,7 @@ export async function handleChatCompletions(req: NextRequest) {
             'argon-high',
             'gemini-3.8-flash',
             'gemini-3.8-flash-search',
+            'gemini-3.8-flash-web',
             'gemini-3.8-flash-high',
             'gemini-3.8-flash-max',
             'gemini-3.8-flash-medium',
@@ -104,12 +105,14 @@ export async function handleChatCompletions(req: NextRequest) {
             'gemini-3.8-flash-fast',
             'gemini-3.7-flash',
             'gemini-3.7-flash-search',
+            'gemini-3.7-flash-web',
             'gemini-3.7-flash-high',
             'gemini-3.7-flash-max',
             'gemini-3.7-flash-medium',
             'gemini-3.7-flash-low',
             'gemini-3.1-pro',
             'gemini-3.1-pro-search',
+            'gemini-3.1-pro-web',
             'gemini-3.1-pro-low',
             'gemini-3.1-pro-fast',
             'gemini-3.5-flash',
@@ -670,8 +673,9 @@ export async function handleChatCompletions(req: NextRequest) {
                     try {
                       const parsed = JSON.parse(line.slice(6));
                       const cand = parsed.response?.candidates?.[0];
-                      if (cand?.groundingMetadata || parsed.response?.groundingMetadata) {
-                        recordGroundingMetadata(cand?.groundingMetadata || parsed.response?.groundingMetadata, groundingCollector);
+                      const gm = cand?.groundingMetadata || parsed.response?.groundingMetadata || parsed?.groundingMetadata;
+                      if (gm) {
+                        recordGroundingMetadata(gm, groundingCollector);
                       }
                       const parts = cand?.content?.parts || [];
 
@@ -734,8 +738,9 @@ export async function handleChatCompletions(req: NextRequest) {
                     try {
                       const parsed = JSON.parse(line.slice(6));
                       const cand = parsed.response?.candidates?.[0];
-                      if (cand?.groundingMetadata || parsed.response?.groundingMetadata) {
-                        recordGroundingMetadata(cand?.groundingMetadata || parsed.response?.groundingMetadata, groundingCollector);
+                      const gm = cand?.groundingMetadata || parsed.response?.groundingMetadata || parsed?.groundingMetadata;
+                      if (gm) {
+                        recordGroundingMetadata(gm, groundingCollector);
                       }
                       const parts = cand?.content?.parts || [];
 
@@ -865,8 +870,9 @@ export async function handleChatCompletions(req: NextRequest) {
           try {
             const parsed = JSON.parse(line.slice(6));
             const cand = parsed.response?.candidates?.[0];
-            if (cand?.groundingMetadata || parsed.response?.groundingMetadata) {
-              recordGroundingMetadata(cand?.groundingMetadata || parsed.response?.groundingMetadata, groundingCollector);
+            const gm = cand?.groundingMetadata || parsed.response?.groundingMetadata || parsed?.groundingMetadata;
+            if (gm) {
+              recordGroundingMetadata(gm, groundingCollector);
             }
             const parts = cand?.content?.parts || [];
             for (const part of parts) {
@@ -879,7 +885,8 @@ export async function handleChatCompletions(req: NextRequest) {
 
       const sourcesMarkdown = formatGroundingMarkdown(groundingCollector);
       if (sourcesMarkdown && !contentText.includes(sourcesMarkdown.trim())) {
-        contentText += sourcesMarkdown;
+        const trimmed = contentText.trimEnd();
+        contentText = trimmed ? `${trimmed}\n\n${sourcesMarkdown.trimStart()}` : sourcesMarkdown.trimStart();
       }
 
       if (contentText.includes('is no longer available') && contentText.includes('switch to Claude')) {

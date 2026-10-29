@@ -743,7 +743,12 @@ export function transformOpenAIToAntigravity(
   };
 
   if (isSearch) {
-    reqObj.tools = [{ googleSearch: {} }];
+    if (!Array.isArray(reqObj.tools)) {
+      reqObj.tools = [];
+    }
+    if (!reqObj.tools.some((t: any) => t && t.googleSearch)) {
+      reqObj.tools.push({ googleSearch: {} });
+    }
   }
 
   return {
@@ -845,13 +850,27 @@ export function formatGroundingMarkdown(grounding: GroundingCollector): string {
 
   const lines: string[] = ['', '', '### Sources:'];
   if (grounding.sources.length > 0) {
+    const titleCounts = new Map<string, number>();
     for (const src of grounding.sources) {
-      const sanitizedTitle = src.title.replace(/[\[\]]/g, '');
-      lines.push(`- [${sanitizedTitle}](${src.url})`);
+      const clean = src.title.replace(/[\r\n\t]+/g, ' ').replace(/[\[\]]/g, '').trim() || src.url;
+      titleCounts.set(clean, (titleCounts.get(clean) || 0) + 1);
+    }
+    const titleSeen = new Map<string, number>();
+    for (const src of grounding.sources) {
+      const clean = src.title.replace(/[\r\n\t]+/g, ' ').replace(/[\[\]]/g, '').trim() || src.url;
+      const count = titleCounts.get(clean) || 1;
+      let displayTitle = clean;
+      if (count > 1) {
+        const seenIdx = (titleSeen.get(clean) || 0) + 1;
+        titleSeen.set(clean, seenIdx);
+        displayTitle = `${clean} (${seenIdx})`;
+      }
+      lines.push(`- [${displayTitle}](${src.url})`);
     }
   } else if (grounding.webSearchQueries.size > 0) {
     for (const q of grounding.webSearchQueries) {
-      lines.push(`- *Search:* ${q}`);
+      const cleanQuery = q.replace(/[\r\n\t]+/g, ' ').trim();
+      lines.push(`- *Search:* ${cleanQuery}`);
     }
   }
 

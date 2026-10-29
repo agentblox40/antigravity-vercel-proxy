@@ -1359,27 +1359,40 @@ An adventurer's guild in the floating city of Aethelgard.
   );
   assert.ok(wireSearch.request.tools, 'tools array must be injected');
   assert.deepStrictEqual(wireSearch.request.tools, [{ googleSearch: {} }]);
+
+  // Test preserving existing tools when web search is enabled
+  const wireSearchWithExisting = transformOpenAIToAntigravity(
+    {
+      model: 'gemini-3.8-flash-search',
+      messages: [{ role: 'user', content: 'Search' }]
+    },
+    resolveWireModel('gemini-3.8-flash-search')!,
+    'test-proj'
+  );
+  assert.deepStrictEqual(wireSearchWithExisting.request.tools, [{ googleSearch: {} }]);
   console.log('  11.3 Parameter detection & wire injection passed.');
 
   // 11.4 Grounding metadata collection & markdown formatting
   const collector = createGroundingCollector();
   recordGroundingMetadata(
     {
-      webSearchQueries: ['today news'],
+      webSearchQueries: ['today news\nwith newline'],
       groundingChunks: [
         { web: { uri: 'https://example.com/article1', title: 'Article 1' } },
-        { web: { uri: 'https://example.com/article2', title: 'Article 2' } },
+        { web: { uri: 'https://example.com/article2', title: 'Article 2\nSubtitle' } },
         { web: { uri: 'https://example.com/article1', title: 'Article 1 Dup' } },
+        { web: { uri: 'https://example.com/article3', title: 'Article 1' } },
       ]
     },
     collector
   );
-  assert.strictEqual(collector.sources.length, 2, 'Duplicates must be pruned');
+  assert.strictEqual(collector.sources.length, 3, 'Duplicate URLs must be pruned');
   const markdown = formatGroundingMarkdown(collector);
   assert.ok(markdown.includes('### Sources:'));
-  assert.ok(markdown.includes('- [Article 1](https://example.com/article1)'));
-  assert.ok(markdown.includes('- [Article 2](https://example.com/article2)'));
-  console.log('  11.4 Grounding metadata formatting passed.');
+  assert.ok(markdown.includes('- [Article 1 (1)](https://example.com/article1)'), 'Repeated title must be disambiguated');
+  assert.ok(markdown.includes('- [Article 1 (2)](https://example.com/article3)'), 'Repeated title must be disambiguated');
+  assert.ok(markdown.includes('- [Article 2 Subtitle](https://example.com/article2)'), 'Newlines in titles must be flattened');
+  console.log('  11.4 Grounding metadata formatting & title sanitization passed.');
   console.log('✅ Web Search Grounding Support Suite passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
