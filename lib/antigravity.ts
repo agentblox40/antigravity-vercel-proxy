@@ -535,13 +535,19 @@ export function isPenaltySupported(modelId?: string, wireModel?: string): boolea
 /**
  * Parses a standard data URI (e.g. data:image/png;base64,iVBORw0KGgo...)
  * extracting the clean MIME type and raw base64 data string.
+ * Supports RFC 2397 parameters (e.g. ;charset=..., ;name=...), case-insensitive schemes,
+ * and strips interior whitespace/newlines from the base64 payload to prevent upstream proto errors.
  */
 export function parseDataUri(uri: string): { mimeType: string; data: string } | null {
-  const match = uri.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/s);
+  if (typeof uri !== 'string') return null;
+  const trimmed = uri.trim();
+  const match = trimmed.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+)(?:;[a-zA-Z0-9-.+]+(?:=[^;]+)?)*;base64,(.+)$/is);
   if (!match) return null;
+  const rawData = match[2].replace(/\s+/g, '');
+  if (!rawData) return null;
   return {
-    mimeType: match[1],
-    data: match[2].trim(),
+    mimeType: match[1].toLowerCase(),
+    data: rawData,
   };
 }
 
@@ -632,20 +638,32 @@ export function transformOpenAIToAntigravity(
         }
 
         // 2. Multimodal image part
-        if (part.type === 'image_url' && part.image_url) {
-          const rawUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
-          if (typeof rawUrl === 'string' && rawUrl.startsWith('data:')) {
+        const isImage = part.type === 'image_url' || part.type === 'image';
+        if (isImage) {
+          // Anthropic base64 format: { type: 'image', source: { type: 'base64', media_type: 'image/png', data: '...' } }
+          if (part.source?.type === 'base64' && typeof part.source?.data === 'string') {
+            const rawData = part.source.data.replace(/\s+/g, '');
+            if (rawData) {
+              const mimeType = (part.source.media_type || 'image/png').toLowerCase();
+              parts.push({
+                inlineData: { mimeType, data: rawData },
+              });
+              continue;
+            }
+          }
+
+          // OpenAI format: { type: 'image_url', image_url: { url: '...' } } or { url: '...' } or image_url: '...'
+          const rawUrl = typeof part.image_url === 'string'
+            ? part.image_url
+            : (part.image_url?.url || part.url);
+
+          if (typeof rawUrl === 'string') {
             const parsed = parseDataUri(rawUrl);
             if (parsed) {
-              // Convert to Google CloudCode PA / Gemini wire format
+              // Convert to Google CloudCode PA / Gemini wire format (strictly camelCase inlineData)
               parts.push({
                 inlineData: {
                   mimeType: parsed.mimeType,
-                  data: parsed.data,
-                },
-                // Wire safety: include snake_case fallback for upstream proto variations
-                inline_data: {
-                  mime_type: parsed.mimeType,
                   data: parsed.data,
                 },
               });
@@ -723,9 +741,15 @@ export function transformOpenAIToAntigravity(
   if (userInjectionsText && userInjectionsText.trim()) {
     const lastUserTurn = merged[merged.length - 1];
     if (lastUserTurn && lastUserTurn.role === 'user' && Array.isArray(lastUserTurn.parts)) {
-      const textPart = lastUserTurn.parts.find((p: any) => typeof p?.text === 'string');
-      if (textPart) {
-        textPart.text = `${textPart.text}\n\n${userInjectionsText.trim()}`;
+      let lastTextPart: any = null;
+      for (let i = lastUserTurn.parts.length - 1; i >= 0; i--) {
+        if (typeof lastUserTurn.parts[i]?.text === 'string') {
+          lastTextPart = lastUserTurn.parts[i];
+          break;
+        }
+      }
+      if (lastTextPart) {
+        lastTextPart.text = `${lastTextPart.text}\n\n${userInjectionsText.trim()}`;
       } else {
         lastUserTurn.parts.push({ text: userInjectionsText.trim() });
       }

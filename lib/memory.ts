@@ -833,6 +833,14 @@ export function getActiveOOCAnchor(): string {
 
 
 
+function extractContentText(content: any): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map((p: any) => typeof p === 'string' ? p : (p?.text || '')).join('\n');
+  }
+  return '';
+}
+
 // Sync session message history with active incoming prompt (handles message deletions, rewinds, and regenerations)
 export function syncSessionWithIncomingMessages(
   session: ChatSession,
@@ -847,7 +855,7 @@ export function syncSessionWithIncomingMessages(
   // If session is brand new, initialize from incoming
   if (current.length === 0) {
     session.messages = nonSystem.map((m, idx) => ({
-      id: 'msg_' + hashString((m.content || '') + idx).slice(0, 8),
+      id: 'msg_' + hashString((typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')) + idx).slice(0, 8),
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.map((p: any) => p.text || '').join('\n') : ''),
       timestamp: Date.now() - (nonSystem.length - idx) * 1000
@@ -858,18 +866,18 @@ export function syncSessionWithIncomingMessages(
   // Check if incoming is a deletion / rewind / regeneration of previous turns
   const lastIncoming = nonSystem[nonSystem.length - 1];
   if (lastIncoming && lastIncoming.role === 'user') {
-    const lastUserText = (typeof lastIncoming.content === 'string' ? lastIncoming.content : '').trim();
+    const lastUserText = extractContentText(lastIncoming.content).trim();
     const len = current.length;
 
     // Case 1: Simple 1-message regeneration (last bot message deleted/swiped)
-    if (len >= 2 && current[len - 2].role === 'user' && current[len - 2].content.trim() === lastUserText) {
+    if (len >= 2 && current[len - 2].role === 'user' && extractContentText(current[len - 2].content).trim() === lastUserText) {
       current.pop(); // Remove the deleted/swiped bot response so the new response takes its place
       return;
     }
 
     // Case 2: Multi-turn deletion / rewind (user deleted 2+ messages or rewound chat to an earlier point)
     for (let i = current.length - 1; i >= 0; i--) {
-      if (current[i].role === 'user' && current[i].content.trim() === lastUserText) {
+      if (current[i].role === 'user' && extractContentText(current[i].content).trim() === lastUserText) {
         // Keep history up to this user turn (inclusive)
         session.messages = current.slice(0, i + 1);
         return;
@@ -904,7 +912,9 @@ export function stitchLosslessHistory(
       while (archive.length > 0 && archive[archive.length - 1].role !== 'user') {
         archive.pop();
       }
-      if (archive.length === 0 || archive[archive.length - 1].content.trim() !== (latestIncoming.content || '').trim()) {
+      const latestIncomingText = extractContentText(latestIncoming.content).trim();
+      const archiveLastText = extractContentText(archive[archive.length - 1]?.content).trim();
+      if (archive.length === 0 || archiveLastText !== latestIncomingText) {
         archive.push({
           id: 'msg_user_' + Date.now(),
           role: 'user',

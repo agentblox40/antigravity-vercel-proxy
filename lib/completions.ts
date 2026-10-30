@@ -306,9 +306,31 @@ export async function handleChatCompletions(req: NextRequest) {
     if (userInjectionsText && userInjectionsText.trim()) {
       for (let i = preparedMessages.length - 1; i >= 0; i--) {
         if (preparedMessages[i].role === 'user') {
-          preparedMessages[i].content = typeof preparedMessages[i].content === 'string'
-            ? `${preparedMessages[i].content}\n\n${userInjectionsText.trim()}`
-            : userInjectionsText.trim();
+          if (typeof preparedMessages[i].content === 'string') {
+            preparedMessages[i].content = `${preparedMessages[i].content}\n\n${userInjectionsText.trim()}`;
+          } else if (Array.isArray(preparedMessages[i].content)) {
+            const arr = [...preparedMessages[i].content];
+            let lastTextPart: any = null;
+            for (let j = arr.length - 1; j >= 0; j--) {
+              if (arr[j] && (typeof arr[j] === 'string' || (arr[j].type === 'text' && typeof arr[j].text === 'string'))) {
+                lastTextPart = arr[j];
+                break;
+              }
+            }
+            if (lastTextPart) {
+              if (typeof lastTextPart === 'string') {
+                const idx = arr.lastIndexOf(lastTextPart);
+                arr[idx] = `${lastTextPart}\n\n${userInjectionsText.trim()}`;
+              } else {
+                lastTextPart.text = `${lastTextPart.text}\n\n${userInjectionsText.trim()}`;
+              }
+            } else {
+              arr.push({ type: 'text', text: userInjectionsText.trim() });
+            }
+            preparedMessages[i].content = arr;
+          } else {
+            preparedMessages[i].content = userInjectionsText.trim();
+          }
           break;
         }
       }

@@ -43,6 +43,8 @@ import {
   deleteAllChatSessions,
   recordTurnsIntoSession,
   deriveChatFingerprint,
+  stitchLosslessHistory,
+  syncSessionWithIncomingMessages,
   ChatSession,
 } from '../lib/memory';
 
@@ -1437,10 +1439,7 @@ An adventurer's guild in the floating city of Aethelgard.
     mimeType: 'image/png',
     data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
   });
-  assert.deepStrictEqual(res12Multimodal.request.contents[0].parts[1].inline_data, {
-    mime_type: 'image/png',
-    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-  });
+  assert.strictEqual((res12Multimodal.request.contents[0].parts[1] as any).inline_data, undefined, 'Must omit inline_data to avoid protobuf oneof collision');
   console.log('  12.2 Multimodal user message with text + image passed.');
 
   // 12.3 Standalone image part (no text)
@@ -1508,6 +1507,152 @@ An adventurer's guild in the floating city of Aethelgard.
   assert.strictEqual(res12Mixed.request.contents.length, 1);
   assert.strictEqual(res12Mixed.request.contents[0].parts[0].text, 'Hello\nworld\nfrom mixed');
   console.log('  12.5 Mixed array content preservation passed.');
+
+  // 12.6 parseDataUri edge cases: uppercase, whitespace, RFC 2397 params, interior newlines, invalid empty
+  const parsedUpper = parseDataUri('  DATA:IMAGE/JPEG;BASE64,iVBORw0KGgo=  ');
+  assert.strictEqual(parsedUpper?.mimeType, 'image/jpeg');
+  assert.strictEqual(parsedUpper?.data, 'iVBORw0KGgo=');
+
+  const parsedParams = parseDataUri('data:image/png;name=photo.png;charset=utf-8;base64,iVBORw0KGgo=');
+  assert.strictEqual(parsedParams?.mimeType, 'image/png');
+  assert.strictEqual(parsedParams?.data, 'iVBORw0KGgo=');
+
+  const parsedNewlines = parseDataUri('data:image/png;base64,iVBO\r\nRw0K\nGgo=');
+  assert.strictEqual(parsedNewlines?.data, 'iVBORw0KGgo=');
+
+  assert.strictEqual(parseDataUri('data:image/png;base64,'), null, 'Empty base64 data must return null');
+  assert.strictEqual(parseDataUri(null as any), null, 'Null must return null');
+  console.log('  12.6 parseDataUri edge cases (whitespace, uppercase, params, newlines) passed.');
+
+  // 12.7 Flat url and Anthropic image format support
+  const res12FlatUrl = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', url: sample1x1Png } as any
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj'
+  );
+  assert.strictEqual(res12FlatUrl.request.contents[0].parts[0].inlineData.mimeType, 'image/png');
+
+  const res12Anthropic = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'abc\ndef\r\n' } } as any
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj'
+  );
+  assert.strictEqual(res12Anthropic.request.contents[0].parts[0].inlineData.mimeType, 'image/jpeg');
+  assert.strictEqual(res12Anthropic.request.contents[0].parts[0].inlineData.data, 'abcdef');
+  console.log('  12.7 Flat url and Anthropic image format support passed.');
+
+  // 12.8 Terminal prompt injection anchoring with mixed text and images
+  const res12TerminalAnchor = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Initial preamble.' },
+            { type: 'image_url', image_url: { url: sample1x1Png } },
+            { type: 'text', text: 'What is this object?' }
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj',
+    undefined,
+    '[Depth-0 Directive]'
+  );
+  assert.strictEqual(res12TerminalAnchor.request.contents[0].parts[0].text, 'Initial preamble.');
+  assert.ok(res12TerminalAnchor.request.contents[0].parts[1].inlineData);
+  assert.strictEqual(res12TerminalAnchor.request.contents[0].parts[2].text, 'What is this object?\n\n[Depth-0 Directive]');
+  console.log('  12.8 Terminal prompt injection anchoring passed.');
+
+  // 12.9 Lossless history stitching with multimodal array content (no TypeError crash)
+  // Case A: Multimodal turn swipe/regeneration of Turn 2
+  const mockSessionA: ChatSession = {
+    id: 'chat_test_vision',
+    characterId: 'char_test',
+    characterName: 'TestBot',
+    title: 'TestBot • Vision',
+    systemPrompt: 'You are TestBot',
+    messages: [
+      { id: 'm1', role: 'user', content: 'Turn 1', timestamp: 1000 },
+      { id: 'm2', role: 'assistant', content: 'Greeting', timestamp: 2000 },
+      { id: 'm3', role: 'user', content: 'Turn 2', timestamp: 3000 },
+      { id: 'm4', role: 'assistant', content: 'Answer 2', timestamp: 4000 }
+    ],
+    createdAt: 1000,
+    updatedAt: 4000,
+    messageCount: 4
+  };
+
+  const incomingRegen = [
+    { role: 'user', content: 'Turn 1' },
+    { role: 'assistant', content: 'Greeting' },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Turn 2' },
+        { type: 'image_url', image_url: { url: sample1x1Png } }
+      ]
+    }
+  ];
+
+  const stitchedRegen = stitchLosslessHistory(mockSessionA, incomingRegen);
+  assert.strictEqual(stitchedRegen.length, 3, 'Regeneration should pop previous bot answer and keep 3 turns');
+  assert.strictEqual(stitchedRegen[2].role, 'user');
+
+  // Case B: Multimodal message as new turn with longer archive
+  const mockSessionB: ChatSession = {
+    id: 'chat_test_vision_b',
+    characterId: 'char_test',
+    characterName: 'TestBot',
+    title: 'TestBot • Vision',
+    systemPrompt: 'You are TestBot',
+    messages: [
+      { id: 'm1', role: 'user', content: 'Turn 1', timestamp: 1000 },
+      { id: 'm2', role: 'assistant', content: 'Greeting', timestamp: 2000 },
+      { id: 'm3', role: 'user', content: 'Turn 2', timestamp: 3000 },
+      { id: 'm4', role: 'assistant', content: 'Answer 2', timestamp: 4000 }
+    ],
+    createdAt: 1000,
+    updatedAt: 4000,
+    messageCount: 4
+  };
+
+  const incomingNewTurn = [
+    { role: 'user', content: 'Turn 1' },
+    { role: 'assistant', content: 'Greeting' },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Analyze this photo' },
+        { type: 'image_url', image_url: { url: sample1x1Png } }
+      ]
+    }
+  ];
+
+  const stitchedNew = stitchLosslessHistory(mockSessionB, incomingNewTurn);
+  assert.strictEqual(stitchedNew.length, 4, 'Lossless history should preserve previous user turns and append new turn');
+  assert.strictEqual(stitchedNew[3].role, 'user');
+  assert.ok(Array.isArray(stitchedNew[3].content), 'Multimodal user turn must be preserved as array');
+  console.log('  12.9 Lossless history stitching with multimodal array content passed.');
   console.log('✅ Multimodal Image Data URI Support Suite passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
