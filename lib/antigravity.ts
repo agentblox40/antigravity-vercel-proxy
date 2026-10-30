@@ -532,6 +532,19 @@ export function isPenaltySupported(modelId?: string, wireModel?: string): boolea
   return true;
 }
 
+/**
+ * Parses a standard data URI (e.g. data:image/png;base64,iVBORw0KGgo...)
+ * extracting the clean MIME type and raw base64 data string.
+ */
+export function parseDataUri(uri: string): { mimeType: string; data: string } | null {
+  const match = uri.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/s);
+  if (!match) return null;
+  return {
+    mimeType: match[1],
+    data: match[2].trim(),
+  };
+}
+
 export function transformOpenAIToAntigravity(
   body: any,
   resolved: { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean },
@@ -556,35 +569,98 @@ export function transformOpenAIToAntigravity(
   for (const m of messages) {
     if (!m) continue;
     const role = m.role;
-    let text = typeof m.content === 'string' ? m.content : '';
-    if (Array.isArray(m.content)) {
-      text = m.content.map((p: any) => typeof p === 'string' ? p : (p?.text || '')).join('\n');
+
+    // Check system messages
+    if (role === 'system') {
+      const sysText = typeof m.content === 'string'
+        ? m.content.trim()
+        : (Array.isArray(m.content)
+            ? m.content.map((p: any) => typeof p === 'string' ? p : (p?.text || '')).join('\n').trim()
+            : '');
+      if (sysText && !userSystemText.includes(sysText)) {
+        userSystemText = userSystemText ? `${userSystemText}\n\n${sysText}` : sysText;
+      }
+      continue;
     }
-    text = text.trim();
-    if (!text && role !== 'system') continue;
+
+    // Extract text representation for command sanitization
+    const allText = (typeof m.content === 'string'
+      ? m.content
+      : (Array.isArray(m.content)
+          ? m.content.map((p: any) => typeof p === 'string' ? p : (p?.text || '')).join('\n')
+          : '')).trim();
 
     // Sanitize past in-chat settings commands and proxy menu outputs from upstream wire history
-    if (role === 'user' && detectInChatCommand(text)) continue;
+    if (role === 'user' && allText && detectInChatCommand(allText)) continue;
     if (role === 'assistant' && (
-      text.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
-      text.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
-      text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]') ||
-      text.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]') ||
-      text.includes('[ANTIGRAVITY ROLEPLAY COMMANDS GUIDE]') ||
-      text.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
-      text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
-      text.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]') ||
-      text.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS')
+      allText.includes('[ANTIGRAVITY PROXY SETTINGS MENU]') ||
+      allText.includes('[ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+      allText.includes('[ANTIGRAVITY ROLEPLAY COMMANDS & SETTINGS GUIDE]') ||
+      allText.includes('[ANTIGRAVITY ROLEPLAY SAMPLING]') ||
+      allText.includes('[ANTIGRAVITY ROLEPLAY COMMANDS GUIDE]') ||
+      allText.startsWith('⚙️ [ANTIGRAVITY PROXY SETTINGS MENU]') ||
+      allText.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY GENERATION SETTINGS]') ||
+      allText.startsWith('⚙️ [ANTIGRAVITY ROLEPLAY SAMPLING]') ||
+      allText.startsWith('📖 [ANTIGRAVITY ROLEPLAY COMMANDS')
     )) continue;
 
-    if (role === 'system') {
-      if (!userSystemText.includes(text)) {
-        userSystemText = userSystemText ? `${userSystemText}\n\n${text}` : text;
+    const parts: any[] = [];
+    if (typeof m.content === 'string') {
+      if (m.content) {
+        parts.push({ text: m.content });
       }
-    } else if (role === 'user') {
-      contents.push({ role: 'user', parts: [{ text }] });
+    } else if (Array.isArray(m.content)) {
+      for (const part of m.content) {
+        if (!part) continue;
+
+        // 1. Text part
+        let textVal: string | null = null;
+        if (typeof part === 'string') {
+          if (part.trim()) textVal = part;
+        } else if (part.type === 'text' && typeof part.text === 'string' && part.text) {
+          textVal = part.text;
+        }
+
+        if (textVal !== null) {
+          const lastPart = parts[parts.length - 1];
+          if (lastPart && typeof lastPart.text === 'string') {
+            lastPart.text = `${lastPart.text}\n${textVal}`;
+          } else {
+            parts.push({ text: textVal });
+          }
+          continue;
+        }
+
+        // 2. Multimodal image part
+        if (part.type === 'image_url' && part.image_url) {
+          const rawUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+          if (typeof rawUrl === 'string' && rawUrl.startsWith('data:')) {
+            const parsed = parseDataUri(rawUrl);
+            if (parsed) {
+              // Convert to Google CloudCode PA / Gemini wire format
+              parts.push({
+                inlineData: {
+                  mimeType: parsed.mimeType,
+                  data: parsed.data,
+                },
+                // Wire safety: include snake_case fallback for upstream proto variations
+                inline_data: {
+                  mime_type: parsed.mimeType,
+                  data: parsed.data,
+                },
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (parts.length === 0) continue;
+
+    if (role === 'user') {
+      contents.push({ role: 'user', parts });
     } else if (role === 'assistant') {
-      contents.push({ role: 'model', parts: [{ text }] });
+      contents.push({ role: 'model', parts });
     }
   }
 
@@ -597,9 +673,18 @@ export function transformOpenAIToAntigravity(
   for (const c of contents) {
     const prev = merged[merged.length - 1];
     if (prev && prev.role === c.role) {
-      prev.parts[0].text += '\n\n' + c.parts[0].text;
+      if (
+        prev.parts.length === 1 &&
+        typeof prev.parts[0]?.text === 'string' &&
+        c.parts.length === 1 &&
+        typeof c.parts[0]?.text === 'string'
+      ) {
+        prev.parts[0].text += '\n\n' + c.parts[0].text;
+      } else {
+        prev.parts.push(...c.parts);
+      }
     } else {
-      merged.push({ role: c.role, parts: [{ text: c.parts[0].text }] });
+      merged.push({ role: c.role, parts: [...c.parts] });
     }
   }
 
@@ -637,8 +722,13 @@ export function transformOpenAIToAntigravity(
   // Attach active modular prompt injections to the terminal user turn (Depth 0)
   if (userInjectionsText && userInjectionsText.trim()) {
     const lastUserTurn = merged[merged.length - 1];
-    if (lastUserTurn && lastUserTurn.role === 'user' && lastUserTurn.parts?.[0]) {
-      lastUserTurn.parts[0].text = `${lastUserTurn.parts[0].text}\n\n${userInjectionsText.trim()}`;
+    if (lastUserTurn && lastUserTurn.role === 'user' && Array.isArray(lastUserTurn.parts)) {
+      const textPart = lastUserTurn.parts.find((p: any) => typeof p?.text === 'string');
+      if (textPart) {
+        textPart.text = `${textPart.text}\n\n${userInjectionsText.trim()}`;
+      } else {
+        lastUserTurn.parts.push({ text: userInjectionsText.trim() });
+      }
     }
   }
 

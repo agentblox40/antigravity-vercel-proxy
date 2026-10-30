@@ -17,6 +17,7 @@ import { exportCharacterCard } from '../lib/cardExporter';
 import {
   resolveWireModel,
   transformOpenAIToAntigravity,
+  parseDataUri,
   isPenaltySupported,
   isCardExporterModel,
   FALLBACK_MODELS,
@@ -1394,6 +1395,120 @@ An adventurer's guild in the floating city of Aethelgard.
   assert.ok(markdown.includes('- [Article 2 Subtitle](https://example.com/article2)'), 'Newlines in titles must be flattened');
   console.log('  11.4 Grounding metadata formatting & title sanitization passed.');
   console.log('✅ Web Search Grounding Support Suite passed.\n');
+
+  // ==========================================
+  // Test 12: Multimodal Image Data URI Support Suite
+  // ==========================================
+  console.log('Test 12: Multimodal Image Data URI Support Suite');
+
+  const sample1x1Png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  // 12.1 parseDataUri helper tests
+  const parsedPng = parseDataUri(sample1x1Png);
+  assert.ok(parsedPng, 'parseDataUri should parse 1x1 png data URI');
+  assert.strictEqual(parsedPng?.mimeType, 'image/png');
+  assert.strictEqual(parsedPng?.data, 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+  assert.strictEqual(parseDataUri('https://example.com/test.png'), null, 'Non-data URI should return null');
+  assert.strictEqual(parseDataUri('data:invalid'), null, 'Invalid data URI should return null');
+  console.log('  12.1 parseDataUri helper validation passed.');
+
+  // 12.2 Multimodal user message with text and image
+  const resolvedGemini = resolveWireModel('gemini-3.8-flash');
+  const res12Multimodal = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Analyze this image.' },
+            { type: 'image_url', image_url: { url: sample1x1Png } }
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj'
+  );
+  assert.strictEqual(res12Multimodal.request.contents.length, 1);
+  assert.strictEqual(res12Multimodal.request.contents[0].role, 'user');
+  assert.strictEqual(res12Multimodal.request.contents[0].parts.length, 2);
+  assert.strictEqual(res12Multimodal.request.contents[0].parts[0].text, 'Analyze this image.');
+  assert.deepStrictEqual(res12Multimodal.request.contents[0].parts[1].inlineData, {
+    mimeType: 'image/png',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  });
+  assert.deepStrictEqual(res12Multimodal.request.contents[0].parts[1].inline_data, {
+    mime_type: 'image/png',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  });
+  console.log('  12.2 Multimodal user message with text + image passed.');
+
+  // 12.3 Standalone image part (no text)
+  const res12ImageOnly = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: sample1x1Png } }
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj'
+  );
+  assert.strictEqual(res12ImageOnly.request.contents.length, 1);
+  assert.strictEqual(res12ImageOnly.request.contents[0].role, 'user');
+  assert.strictEqual(res12ImageOnly.request.contents[0].parts.length, 1);
+  assert.strictEqual(res12ImageOnly.request.contents[0].parts[0].inlineData.mimeType, 'image/png');
+  console.log('  12.3 Standalone image part (no text) passed.');
+
+  // 12.4 Image-only turn with prompt injections
+  const res12WithInjections = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: sample1x1Png } }
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj',
+    undefined,
+    '[Active Injection Directive]'
+  );
+  assert.strictEqual(res12WithInjections.request.contents.length, 1);
+  assert.strictEqual(res12WithInjections.request.contents[0].role, 'user');
+  assert.strictEqual(res12WithInjections.request.contents[0].parts.length, 2);
+  assert.strictEqual(res12WithInjections.request.contents[0].parts[0].inlineData.mimeType, 'image/png');
+  assert.strictEqual(res12WithInjections.request.contents[0].parts[1].text, '[Active Injection Directive]');
+  console.log('  12.4 Image-only turn with prompt injections passed.');
+
+  // 12.5 Mixed array content (strings and text objects) preservation
+  const res12Mixed = transformOpenAIToAntigravity(
+    {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Hello' },
+            'world',
+            { type: 'text', text: 'from mixed' }
+          ]
+        }
+      ]
+    },
+    resolvedGemini!,
+    'test-proj'
+  );
+  assert.strictEqual(res12Mixed.request.contents.length, 1);
+  assert.strictEqual(res12Mixed.request.contents[0].parts[0].text, 'Hello\nworld\nfrom mixed');
+  console.log('  12.5 Mixed array content preservation passed.');
+  console.log('✅ Multimodal Image Data URI Support Suite passed.\n');
 
   console.log('🎉 ALL STREAMLINED ROLEPLAY CORE TESTS PASSED SUCCESSFULLY!');
 }
