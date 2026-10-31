@@ -4,6 +4,7 @@ import {
   getAccounts,
   pickAccount,
   getAccessToken,
+  getAntigravityHeaders,
   transformOpenAIToAntigravity,
   resolveWireModel,
   isCardExporterModel,
@@ -522,12 +523,7 @@ export async function handleChatCompletions(req: NextRequest) {
         try {
           let res = await fetch(upstreamUrl, {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-              Accept: 'text/event-stream',
-              'User-Agent': 'antigravity/2.22.0 windows/amd64',
-            },
+            headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
             body: JSON.stringify(activeEnvelope),
           });
 
@@ -540,12 +536,7 @@ export async function handleChatCompletions(req: NextRequest) {
             };
             res = await fetch(upstreamUrl, {
               method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-                Accept: 'text/event-stream',
-                'User-Agent': 'antigravity/2.22.0 windows/amd64',
-              },
+              headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
               body: JSON.stringify(activeEnvelope),
             });
           }
@@ -580,12 +571,7 @@ export async function handleChatCompletions(req: NextRequest) {
 
             res = await fetch(upstreamUrl, {
               method: 'POST',
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-                Accept: 'text/event-stream',
-                'User-Agent': 'antigravity/2.22.0 windows/amd64',
-              },
+              headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
               body: JSON.stringify(activeEnvelope),
             });
 

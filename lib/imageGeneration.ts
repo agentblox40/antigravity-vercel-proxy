@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { getAccounts, pickAccount, getAccessToken } from './antigravity';
+import { getAccounts, pickAccount, getAccessToken, getAntigravityHeaders } from './antigravity';
 
 export const ALLOWED_IMAGE_MODEL = 'gemini-3.1-flash-image';
 
@@ -108,10 +108,18 @@ export async function generateSingleImage(prompt: string): Promise<{ mimeType: s
       continue;
     }
 
+    const hash = crypto.createHash('sha256').update('image:' + prompt).digest('hex');
+    const numericPart = parseInt(hash.slice(0, 12), 16);
+    const sessionId = `-${Math.abs(numericPart) || 100000000000}`;
+
     const payload = {
-      project: account.projectId,
+      project: account.projectId || 'aicode-consumers',
+      requestId: 'agent/' + Date.now() + '/' + crypto.randomUUID().slice(0, 8),
+      userAgent: 'antigravity',
+      requestType: 'agent',
       model: ALLOWED_IMAGE_MODEL,
       request: {
+        sessionId,
         contents: [
           {
             role: 'user',
@@ -128,12 +136,7 @@ export async function generateSingleImage(prompt: string): Promise<{ mimeType: s
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-            'User-Agent': 'antigravity/2.22.0 windows/amd64',
-          },
+          headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
           body: JSON.stringify(payload),
         });
 

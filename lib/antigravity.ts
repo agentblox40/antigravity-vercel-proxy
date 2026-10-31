@@ -122,10 +122,7 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
       for (const url of discoveryUrls) {
         try {
           const res = await fetch(url, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'User-Agent': 'antigravity/2.22.0 windows/amd64'
-            }
+            headers: getAntigravityHeaders(accessToken, 'application/json'),
           });
 
           if (res.ok) {
@@ -175,6 +172,32 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
   return FALLBACK_MODELS;
 }
 
+export const ANTIGRAVITY_USER_AGENT = 'antigravity/2.22.0 windows/amd64';
+export const ANTIGRAVITY_API_CLIENT = 'gl-node/20.18.0 gccl/2.22.0';
+
+export function getAntigravityHeaders(accessToken?: string, accept: string = 'text/event-stream'): Record<string, string> {
+  const headers: Record<string, string> = {
+    'User-Agent': ANTIGRAVITY_USER_AGENT,
+    'X-Goog-Api-Client': ANTIGRAVITY_API_CLIENT,
+    'Content-Type': 'application/json',
+    'Accept': accept,
+  };
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+  return headers;
+}
+
+export const BANNED_ACCOUNTS = new Set(['kars86120@gmail.com', 'kars86120']);
+
+export function isBannedAccount(name: string): boolean {
+  const clean = (name || '').toLowerCase().trim();
+  if (!clean) return false;
+  if (BANNED_ACCOUNTS.has(clean)) return true;
+  if (clean.includes('kars86120')) return true;
+  return false;
+}
+
 let cachedAccounts: AccountConfig[] | null = null;
 let nextAccountIdx = 0;
 
@@ -185,6 +208,10 @@ export function getAccounts(): AccountConfig[] {
     const token = (process.env[`ACCOUNT_${i}_REFRESH_TOKEN`] || '').trim();
     if (!token) continue;
     const name = (process.env[`ACCOUNT_${i}_NAME`] || `Account ${i}`).trim();
+    if (isBannedAccount(name)) {
+      console.warn(`[Proxy Security]: Account #${i} (${name}) is banned and has been excluded from the pool.`);
+      continue;
+    }
     const projectId = (process.env[`ACCOUNT_${i}_PROJECT_ID`] || 'aicode-consumers').trim();
     accounts.push({
       id: `acc-${i}`,
@@ -198,16 +225,19 @@ export function getAccounts(): AccountConfig[] {
     });
   }
   if (accounts.length === 0 && process.env.ANTIGRAVITY_REFRESH_TOKEN) {
-    accounts.push({
-      id: 'acc-default',
-      name: 'Default Account',
-      refreshToken: process.env.ANTIGRAVITY_REFRESH_TOKEN.trim(),
-      projectId: process.env.ANTIGRAVITY_PROJECT_ID || 'aicode-consumers',
-      accessToken: null,
-      expiresAt: 0,
-      cooldownUntil: 0,
-      failCount: 0
-    });
+    const defaultName = (process.env.ANTIGRAVITY_ACCOUNT_NAME || 'Default Account').trim();
+    if (!isBannedAccount(defaultName)) {
+      accounts.push({
+        id: 'acc-default',
+        name: defaultName,
+        refreshToken: process.env.ANTIGRAVITY_REFRESH_TOKEN.trim(),
+        projectId: process.env.ANTIGRAVITY_PROJECT_ID || 'aicode-consumers',
+        accessToken: null,
+        expiresAt: 0,
+        cooldownUntil: 0,
+        failCount: 0
+      });
+    }
   }
   cachedAccounts = accounts;
   return accounts;
@@ -224,7 +254,12 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
   });
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'Antigravity-Proxy/1.0.0' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'User-Agent': ANTIGRAVITY_USER_AGENT,
+      'X-Goog-Api-Client': ANTIGRAVITY_API_CLIENT,
+    },
     body: params.toString()
   });
   if (!res.ok) throw new Error(`OAuth refresh failed for ${acc.name}: ${await res.text()}`);
@@ -235,12 +270,13 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
     try {
       const metaRes = await fetch('https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssistMetadata', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${acc.accessToken}`, 'Content-Type': 'application/json', 'User-Agent': 'antigravity/2.22.0 windows/amd64' },
+        headers: getAntigravityHeaders(acc.accessToken, 'application/json'),
         body: JSON.stringify({ metadata: { ideType: 'VSCODE', ideVersion: '1.96.0' } })
       });
       if (metaRes.ok) {
         const meta: any = await metaRes.json();
-        if (meta.project) acc.projectId = meta.project;
+        const discovered = meta.project || meta.cloudaicompanionProject || meta.projectId;
+        if (discovered) acc.projectId = discovered;
       }
     } catch {}
     if (!acc.projectId) acc.projectId = 'aicode-consumers';
@@ -559,6 +595,7 @@ export function transformOpenAIToAntigravity(
   systemInjectionsText?: string,
   options?: {
     chatId?: string | null;
+    sessionId?: string | null;
     unclampedContext?: boolean;
     clampedContext?: boolean;
   }
@@ -833,16 +870,33 @@ export function transformOpenAIToAntigravity(
   // Deterministic sessionId per chat session + system prompt for upstream prefix KV-cache reuse (90% cached token discount).
   // Combining chatId and userSystemText ensures consecutive turns in the same chat reuse the warm KV cache,
   // while any change to the system prompt or character persona automatically rotates the sessionId.
-  const explicitSessionSeed = options?.chatId ?? body.chatId ?? body.chat_id ?? body.sessionId ?? body.session_id ?? '';
+  const explicitSessionSeed = options?.sessionId ?? options?.chatId ?? body?.sessionId ?? body?.session_id ?? body?.chatId ?? body?.chat_id ?? '';
+  const trimmedExplicit = String(explicitSessionSeed || '').trim();
   const systemSeed = userSystemText.trim();
-  const combinedSeed = [String(explicitSessionSeed).trim(), systemSeed].filter(Boolean).join('::');
+  const combinedSeed = [trimmedExplicit, systemSeed].filter(Boolean).join('::');
   let sessionId: string;
   if (combinedSeed) {
     const hash = crypto.createHash('sha256').update(combinedSeed).digest('hex');
     const numericPart = parseInt(hash.slice(0, 12), 16);
     sessionId = `-${Math.abs(numericPart) || 100000000000}`;
   } else {
-    sessionId = `-${Date.now()}`;
+    // Conversation-anchored opening user turn fallback
+    let openingUserText = '';
+    const firstUser = messages.find((m: any) => m && m.role === 'user');
+    if (firstUser) {
+      if (typeof firstUser.content === 'string') {
+        openingUserText = firstUser.content.trim();
+      } else if (Array.isArray(firstUser.content)) {
+        openingUserText = firstUser.content
+          .map((p: any) => (typeof p === 'string' ? p : p?.text || ''))
+          .join(' ')
+          .trim();
+      }
+    }
+    const fallbackSeed = openingUserText || 'antigravity-default-session';
+    const hash = crypto.createHash('sha256').update(`conv:${fallbackSeed}`).digest('hex');
+    const numericPart = parseInt(hash.slice(0, 12), 16);
+    sessionId = `-${Math.abs(numericPart) || 100000000000}`;
   }
 
   const isSearch = isWebSearchRequested(body, body.model, resolved);
@@ -865,7 +919,7 @@ export function transformOpenAIToAntigravity(
   }
 
   return {
-    project: projectId,
+    project: projectId || 'aicode-consumers',
     requestId: 'agent/' + Date.now() + '/' + crypto.randomUUID().slice(0, 8),
     userAgent: 'antigravity',
     requestType: 'agent',
