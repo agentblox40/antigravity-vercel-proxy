@@ -171,16 +171,16 @@ ACCOUNT_2_NAME=manishflamingopharma@gmail.com
 ACCOUNT_2_REFRESH_TOKEN=<second-google-refresh-token>
 ACCOUNT_2_PROJECT_ID=trusty-arch-pc9s2
 
-ACCOUNT_3_NAME=kars86120@gmail.com
+ACCOUNT_3_NAME=dsnow3600@gmail.com
 ACCOUNT_3_REFRESH_TOKEN=<third-google-refresh-token>
 
-ACCOUNT_4_NAME=dsnow3600@gmail.com
+ACCOUNT_4_NAME=kirtiraikwar600@gmail.com
 ACCOUNT_4_REFRESH_TOKEN=<fourth-google-refresh-token>
 
-ACCOUNT_5_NAME=kirtiraikwar600@gmail.com
+ACCOUNT_5_NAME=yashv0961@gmail.com
 ACCOUNT_5_REFRESH_TOKEN=<fifth-google-refresh-token>
 
-ACCOUNT_6_NAME=yashv0961@gmail.com
+ACCOUNT_6_NAME=kars60928@gmail.com
 ACCOUNT_6_REFRESH_TOKEN=<sixth-google-refresh-token>
 ```
 

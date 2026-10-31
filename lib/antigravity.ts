@@ -181,10 +181,9 @@ let nextAccountIdx = 0;
 export function getAccounts(): AccountConfig[] {
   if (cachedAccounts && cachedAccounts.length > 0) return cachedAccounts;
   const accounts: AccountConfig[] = [];
-  let i = 1;
-  while (true) {
+  for (let i = 1; i <= 20; i++) {
     const token = (process.env[`ACCOUNT_${i}_REFRESH_TOKEN`] || '').trim();
-    if (!token) break;
+    if (!token) continue;
     const name = (process.env[`ACCOUNT_${i}_NAME`] || `Account ${i}`).trim();
     const projectId = (process.env[`ACCOUNT_${i}_PROJECT_ID`] || 'aicode-consumers').trim();
     accounts.push({
@@ -197,7 +196,6 @@ export function getAccounts(): AccountConfig[] {
       cooldownUntil: 0,
       failCount: 0
     });
-    i++;
   }
   if (accounts.length === 0 && process.env.ANTIGRAVITY_REFRESH_TOKEN) {
     accounts.push({
