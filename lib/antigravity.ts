@@ -425,7 +425,7 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 24576 };
   }
   if (clean === 'gemini-3.8-flash-max' || clean === 'gemini-3.8-flash:max' || clean === 'gemini-3.8-flash-xhigh') {
-    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 65536 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 65535 };
   }
   if (clean === 'gemini-3.8-flash-medium' || clean === 'gemini-3.8-flash:medium' || clean === 'gemini-3.8-flash:med' || clean === 'gemini-3.8-flash-mid') {
     return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 8192 };
@@ -445,7 +445,7 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 24576 };
   }
   if (clean === 'gemini-3.7-flash-max' || clean === 'gemini-3.7-flash:max' || clean === 'gemini-3.7-flash-xhigh') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 65536 };
+    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 65535 };
   }
   if (clean === 'gemini-3.7-flash-medium' || clean === 'gemini-3.7-flash:medium' || clean === 'gemini-3.7-flash:med') {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
@@ -959,13 +959,18 @@ export function transformOpenAIToAntigravity(
   } else if (body.thinking?.budget_tokens) {
     thinkingBudget = body.thinking.budget_tokens;
   } else if (modelClean.includes(':max') || modelClean.includes('-max') || body.reasoning_effort === 'max') {
-    thinkingBudget = 65536;
+    thinkingBudget = 65535;
   } else if (modelClean.includes(':high') || modelClean.includes('-high') || body.reasoning_effort === 'high') {
     thinkingBudget = 24576;
   } else if (modelClean.includes(':medium') || modelClean.includes('-medium') || body.reasoning_effort === 'medium') {
     thinkingBudget = 8192;
   } else if (modelClean.includes(':low') || modelClean.includes('-low') || body.reasoning_effort === 'low') {
     thinkingBudget = 2048;
+  }
+
+  // Google CloudCode PA strictly enforces thinking_budget in range [-1, 65535]
+  if (thinkingBudget > 65535) {
+    thinkingBudget = 65535;
   }
 
   const clientMaxTokens = typeof body.max_tokens === 'number' && body.max_tokens > 0 
