@@ -55,12 +55,12 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'argon-low', name: 'Argon Low (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '2K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Low (2K) thinking.' },
   { id: 'argon-medium', name: 'Argon Medium (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '8K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Medium (8K) thinking.' },
   { id: 'argon-high', name: 'Argon High (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '24K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with High (24K) thinking.' },
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', tier: 'Fast', badge: 'Next-Gen', thinking: 'Auto / 8K', context: '1M Context', desc: 'Google next-gen flagship multimodal reasoning model. Ultra-fast, adaptive, and expressive.' },
-  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget for complex character lore and narrative branching on Gemini 3.8.' },
-  { id: 'gemini-3.8-flash-max', name: 'Gemini 3.8 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom (64k tokens) for extreme world simulation.' },
-  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Med)', tier: 'Reasoning', badge: 'Med Thinking', thinking: '8K Tokens', context: '1M Context', desc: 'Balanced cognitive depth with rapid response turnaround on Gemini 3.8.' },
-  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', tier: 'Reasoning', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Fast, lightweight thinking for quick conversational banter on Gemini 3.8.' },
-  { id: 'gemini-3.8-flash-fast', name: 'Gemini 3.8 Flash (Fast)', tier: 'Fast', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation for fast conversational loops.' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', tier: 'Fast', badge: 'Next-Gen', thinking: 'Auto / 8K', context: '1M Context', desc: 'Google next-gen flagship unified multimodal reasoning model with native audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget with native audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-max', name: 'Gemini 3.8 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom (64k tokens) for extreme world simulation with native audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Med)', tier: 'Reasoning', badge: 'Med Thinking', thinking: '8K Tokens', context: '1M Context', desc: 'Balanced cognitive depth with rapid turnaround and native audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', tier: 'Reasoning', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Fast, lightweight thinking with native audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-fast', name: 'Gemini 3.8 Flash (Fast)', tier: 'Fast', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation with native audio, video, image, and document understanding.' },
   { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', tier: 'Fast', badge: 'Standard', thinking: 'Auto / 8K', context: '1M Context', desc: 'Flagship multimodal reasoning model. Fast, articulate, and expressive.' },
   { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget for complex character lore and narrative branching.' },
   { id: 'gemini-3.7-flash-max', name: 'Gemini 3.7 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom for extreme multi-character and world simulation.' },
@@ -80,8 +80,10 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'claude-sonnet-4-6-fast', name: 'Claude Sonnet 4.6 (Fast)', tier: 'Claude', badge: 'Fast (0 Thinking)', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low token consumption Claude Sonnet 4.6 for long roleplay sessions.' },
   { id: 'gpt-4o', name: 'GPT-4o (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Maps directly to Gemini 3.7 Flash for Janitor AI / SillyTavern default settings.' },
   { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Legacy OpenAI default client alias mapped to Gemini 3.7 Flash.' },
-  { id: 'gemini-3.8-flash-search', name: 'Gemini 3.8 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash flagship model with native Google Search grounding.' },
-  { id: 'gemini-3.8-flash-web', name: 'Gemini 3.8 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash with native web search grounding.' },
+  { id: 'gemini-3.8-flash-search', name: 'Gemini 3.8 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash flagship model with native Google Search grounding, audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-high-search', name: 'Gemini 3.8 Flash High (Search)', tier: 'Search', badge: 'Search Grounded', thinking: '24K Tokens', context: '1M Context', desc: 'Gemini 3.8 Flash High reasoning model with native Google Search grounding, audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-high-web', name: 'Gemini 3.8 Flash High (Web)', tier: 'Search', badge: 'Search Grounded', thinking: '24K Tokens', context: '1M Context', desc: 'Gemini 3.8 Flash High with native web search grounding, audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-web', name: 'Gemini 3.8 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash with native web search grounding, audio, video, image, and document understanding.' },
   { id: 'gemini-3.7-flash-search', name: 'Gemini 3.7 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash flagship model with native Google Search grounding.' },
   { id: 'gemini-3.7-flash-web', name: 'Gemini 3.7 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash with native web search grounding.' },
   { id: 'gemini-3.1-pro-search', name: 'Gemini 3.1 Pro (Search)', tier: 'Pro Agent', badge: 'Search Grounded', thinking: '32K Tokens', context: '1M Context', desc: 'Gemini 3.1 Pro agent engine with native Google Search grounding.' },
@@ -346,7 +348,21 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   if (!modelId || !modelId.trim()) {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
   }
-  const clean = modelId.trim().toLowerCase();
+  let clean = modelId.trim().toLowerCase();
+
+  // Normalize common client prefix typos (e.g. gemin- -> gemini-)
+  if (clean.startsWith('gemin-')) {
+    clean = 'gemini-' + clean.slice(6);
+  }
+
+  // Strip redundant multimodal suffixes: Gemini 3.8 models natively understand audio, video, image,
+  // and documents within the unified model without requiring separate fragmented endpoints.
+  for (const suffix of ['-vision', ':vision', '-multimodal', ':multimodal', '-omni', ':omni', '-audio', ':audio', '-video', ':video']) {
+    if (clean.endsWith(suffix)) {
+      clean = clean.slice(0, -suffix.length);
+      break;
+    }
+  }
 
   // Search suffix detection (:search, -search, :web, -web)
   let isWebSearch = false;
@@ -363,6 +379,14 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
   } else if (baseClean.endsWith('-web')) {
     isWebSearch = true;
     baseClean = baseClean.slice(0, -4);
+  }
+
+  // Strip multimodal suffixes from baseClean as well (handles patterns like gemini-3.8-flash-vision-search)
+  for (const suffix of ['-vision', ':vision', '-multimodal', ':multimodal', '-omni', ':omni', '-audio', ':audio', '-video', ':video']) {
+    if (baseClean.endsWith(suffix)) {
+      baseClean = baseClean.slice(0, -suffix.length);
+      break;
+    }
   }
 
   // If search suffix was stripped, resolve the base model with isWebSearch: true
@@ -586,6 +610,146 @@ export function parseDataUri(uri: string): { mimeType: string; data: string } | 
   };
 }
 
+/**
+ * Normalizes any format/extension shorthand into an IANA standard MIME type.
+ * Maps formats for audio, video, image, and document files.
+ */
+export function normalizeMimeType(formatOrMime?: string, defaultType: string = 'application/octet-stream'): string {
+  if (!formatOrMime || typeof formatOrMime !== 'string') return defaultType;
+  const clean = formatOrMime.toLowerCase().trim();
+  if (clean.includes('/')) return clean;
+
+  const MIME_MAP: Record<string, string> = {
+    // Audio
+    mp3: 'audio/mp3',
+    wav: 'audio/wav',
+    wave: 'audio/wav',
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    opus: 'audio/opus',
+    aac: 'audio/aac',
+    m4a: 'audio/m4a',
+    flac: 'audio/flac',
+    webm: 'audio/webm',
+    weba: 'audio/webm',
+    mp4a: 'audio/mp4',
+    aiff: 'audio/aiff',
+    aif: 'audio/aiff',
+
+    // Video
+    mp4: 'video/mp4',
+    mpeg: 'video/mpeg',
+    mpg: 'video/mpeg',
+    mov: 'video/quicktime',
+    quicktime: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    wmv: 'video/x-ms-wmv',
+    mkv: 'video/x-matroska',
+    '3gp': 'video/3gpp',
+    '3gpp': 'video/3gpp',
+    flv: 'video/x-flv',
+
+    // Image
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    bmp: 'image/bmp',
+    tiff: 'image/tiff',
+    tif: 'image/tiff',
+    svg: 'image/svg+xml',
+    ico: 'image/x-icon',
+    heic: 'image/heic',
+    heif: 'image/heif',
+
+    // Document & Text
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    csv: 'text/csv',
+    json: 'application/json',
+    xml: 'application/xml',
+    html: 'text/html',
+    htm: 'text/html',
+    md: 'text/markdown',
+  };
+
+  return MIME_MAP[clean] || `application/${clean}`;
+}
+
+/**
+ * Universal multimodal parser extracting { mimeType, data } from any media part:
+ * - OpenAI input_audio ({ type: 'input_audio', input_audio: { data, format } })
+ * - OpenAI audio_url ({ type: 'audio_url', audio_url: { url } })
+ * - OpenAI video_url ({ type: 'video_url', video_url: { url } })
+ * - OpenAI image_url ({ type: 'image_url', image_url: { url } })
+ * - Anthropic source ({ source: { type: 'base64', media_type, data } })
+ * - Gemini Native inlineData / inline_data ({ inlineData: { mimeType, data } })
+ * - Generic media payload objects (video, audio, document, file, media)
+ * - Base64 data URIs
+ */
+export function extractMultimodalInlineData(part: any): { mimeType: string; data: string } | null {
+  if (!part || typeof part !== 'object') return null;
+
+  // 1. Direct inlineData / inline_data (Gemini wire pass-through)
+  const inline = part.inlineData || part.inline_data;
+  if (inline && typeof inline.data === 'string') {
+    const rawData = inline.data.replace(/\s+/g, '');
+    if (rawData) {
+      const mimeType = normalizeMimeType(inline.mimeType || inline.mime_type, 'application/octet-stream');
+      return { mimeType, data: rawData };
+    }
+  }
+
+  // 2. Anthropic source format: { type: 'image' | 'audio' | 'video' | 'document', source: { type: 'base64', media_type, data } }
+  if (part.source?.type === 'base64' && typeof part.source?.data === 'string') {
+    const rawData = part.source.data.replace(/\s+/g, '');
+    if (rawData) {
+      const mimeType = normalizeMimeType(part.source.media_type || part.source.mediaType, 'application/octet-stream');
+      return { mimeType, data: rawData };
+    }
+  }
+
+  // 3. OpenAI input_audio: { type: 'input_audio', input_audio: { data, format } }
+  const inputAudio = part.input_audio || part.audio;
+  if (inputAudio && typeof inputAudio.data === 'string') {
+    const rawData = inputAudio.data.replace(/\s+/g, '');
+    if (rawData) {
+      const mimeType = normalizeMimeType(inputAudio.format || inputAudio.mime_type || inputAudio.mimeType, 'audio/mp3');
+      return { mimeType, data: rawData };
+    }
+  }
+
+  // 4. Video / Document / File / Media payload objects
+  const mediaObj = part.video || part.document || part.file || part.media;
+  if (mediaObj && typeof mediaObj.data === 'string') {
+    const rawData = mediaObj.data.replace(/\s+/g, '');
+    if (rawData) {
+      const defaultMime = part.type === 'video' ? 'video/mp4' : part.type === 'document' ? 'application/pdf' : 'application/octet-stream';
+      const mimeType = normalizeMimeType(mediaObj.format || mediaObj.mime_type || mediaObj.mimeType, defaultMime);
+      return { mimeType, data: rawData };
+    }
+  }
+
+  // 5. URL-based media (data URIs): image_url, audio_url, video_url, file_url, document_url
+  const rawUrl =
+    (typeof part.image_url === 'string' ? part.image_url : part.image_url?.url) ||
+    (typeof part.audio_url === 'string' ? part.audio_url : part.audio_url?.url) ||
+    (typeof part.video_url === 'string' ? part.video_url : part.video_url?.url) ||
+    (typeof part.file_url === 'string' ? part.file_url : part.file_url?.url) ||
+    (typeof part.document_url === 'string' ? part.document_url : part.document_url?.url) ||
+    (typeof part.url === 'string' ? part.url : undefined);
+
+  if (typeof rawUrl === 'string') {
+    const parsed = parseDataUri(rawUrl);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 export function transformOpenAIToAntigravity(
   body: any,
   resolved: { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean },
@@ -673,38 +837,16 @@ export function transformOpenAIToAntigravity(
           continue;
         }
 
-        // 2. Multimodal image part
-        const isImage = part.type === 'image_url' || part.type === 'image';
-        if (isImage) {
-          // Anthropic base64 format: { type: 'image', source: { type: 'base64', media_type: 'image/png', data: '...' } }
-          if (part.source?.type === 'base64' && typeof part.source?.data === 'string') {
-            const rawData = part.source.data.replace(/\s+/g, '');
-            if (rawData) {
-              const mimeType = (part.source.media_type || 'image/png').toLowerCase();
-              parts.push({
-                inlineData: { mimeType, data: rawData },
-              });
-              continue;
-            }
-          }
-
-          // OpenAI format: { type: 'image_url', image_url: { url: '...' } } or { url: '...' } or image_url: '...'
-          const rawUrl = typeof part.image_url === 'string'
-            ? part.image_url
-            : (part.image_url?.url || part.url);
-
-          if (typeof rawUrl === 'string') {
-            const parsed = parseDataUri(rawUrl);
-            if (parsed) {
-              // Convert to Google CloudCode PA / Gemini wire format (strictly camelCase inlineData)
-              parts.push({
-                inlineData: {
-                  mimeType: parsed.mimeType,
-                  data: parsed.data,
-                },
-              });
-            }
-          }
+        // 2. Multimodal media part (Audio, Video, Images, PDF Documents)
+        const media = extractMultimodalInlineData(part);
+        if (media) {
+          parts.push({
+            inlineData: {
+              mimeType: media.mimeType,
+              data: media.data,
+            },
+          });
+          continue;
         }
       }
     }
