@@ -61,42 +61,11 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Med)', tier: 'Reasoning', badge: 'Med Thinking', thinking: '8K Tokens', context: '1M Context', desc: 'Balanced cognitive depth with rapid turnaround and native audio, video, image, and document understanding.' },
   { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', tier: 'Reasoning', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Fast, lightweight thinking with native audio, video, image, and document understanding.' },
   { id: 'gemini-3.8-flash-fast', name: 'Gemini 3.8 Flash (Fast)', tier: 'Fast', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation with native audio, video, image, and document understanding.' },
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', tier: 'Fast', badge: 'Standard', thinking: 'Auto / 8K', context: '1M Context', desc: 'Flagship multimodal reasoning model. Fast, articulate, and expressive.' },
-  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High)', tier: 'Reasoning', badge: 'High Thinking', thinking: '24K Tokens', context: '1M Context', desc: 'Deep cognitive reasoning budget for complex character lore and narrative branching.' },
-  { id: 'gemini-3.7-flash-max', name: 'Gemini 3.7 Flash (Max)', tier: 'Reasoning', badge: 'Max Thinking', thinking: '64K Tokens', context: '1M Context', desc: 'Maximum thinking headroom for extreme multi-character and world simulation.' },
-  { id: 'gemini-3.7-flash-medium', name: 'Gemini 3.7 Flash (Med)', tier: 'Reasoning', badge: 'Med Thinking', thinking: '8K Tokens', context: '1M Context', desc: 'Balanced cognitive depth with rapid response turnaround.' },
-  { id: 'gemini-3.7-flash-low', name: 'Gemini 3.7 Flash (Low)', tier: 'Reasoning', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Fast, lightweight thinking for quick conversational banter.' },
-  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', tier: 'Pro Agent', badge: 'Deep Logic', thinking: '32K Tokens', context: '1M Context', desc: 'Heavyweight creative writing, world-building, and long-range coherence.' },
-  { id: 'gemini-pro-agent', name: 'Gemini 3.1 Pro Agent', tier: 'Pro Agent', badge: 'Agent Core', thinking: '32K Tokens', context: '1M Context', desc: 'Google Antigravity native Pro Agent engine.' },
-  { id: 'gemini-3.1-pro-low', name: 'Gemini 3.1 Pro (Low)', tier: 'Pro Agent', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Snappy lightweight reasoning budget (2k tokens) on Gemini 3.1 Pro for quick turnarounds.' },
-  { id: 'gemini-3.1-pro-fast', name: 'Gemini 3.1 Pro (Fast)', tier: 'Pro Agent', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation for fast conversational loops on Gemini 3.1 Pro.' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', tier: 'Flash', badge: 'Lightweight', thinking: 'None', context: '1M Context', desc: 'Instantaneous response speed with full 1M context support.' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', tier: 'Flash', badge: 'Legacy High-Q', thinking: 'None', context: '1M Context', desc: 'Ultra-stable high-throughput flash architecture.' },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
-  { id: 'claude-opus-4-6-low', name: 'Claude Opus 4.6 (Low)', tier: 'Claude', badge: 'Low Thinking (2K)', thinking: '2K Tokens', context: '1M Context', desc: 'Snappy lightweight reasoning budget (2k tokens) on Claude Opus 4.6 to save quota.' },
-  { id: 'claude-opus-4-6-fast', name: 'Claude Opus 4.6 (Fast)', tier: 'Claude', badge: 'Fast (0 Thinking)', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low token consumption Claude Opus 4.6 for long roleplay sessions.' },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tier: 'Claude', badge: 'Claude Sonnet', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Sonnet with reasoning capabilities.' },
-  { id: 'claude-sonnet-4-6-low', name: 'Claude Sonnet 4.6 (Low)', tier: 'Claude', badge: 'Low Thinking (2K)', thinking: '2K Tokens', context: '1M Context', desc: 'Snappy lightweight reasoning budget (2k tokens) on Claude Sonnet 4.6 to save quota.' },
-  { id: 'claude-sonnet-4-6-fast', name: 'Claude Sonnet 4.6 (Fast)', tier: 'Claude', badge: 'Fast (0 Thinking)', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low token consumption Claude Sonnet 4.6 for long roleplay sessions.' },
-  { id: 'gpt-4o', name: 'GPT-4o (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Maps directly to Gemini 3.7 Flash for Janitor AI / SillyTavern default settings.' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo (Compatibility Alias)', tier: 'Alias', badge: 'Auto-Route', thinking: 'Auto', context: '1M Context', desc: 'Legacy OpenAI default client alias mapped to Gemini 3.7 Flash.' },
   { id: 'gemini-3.8-flash-search', name: 'Gemini 3.8 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash flagship model with native Google Search grounding, audio, video, image, and document understanding.' },
   { id: 'gemini-3.8-flash-high-search', name: 'Gemini 3.8 Flash High (Search)', tier: 'Search', badge: 'Search Grounded', thinking: '24K Tokens', context: '1M Context', desc: 'Gemini 3.8 Flash High reasoning model with native Google Search grounding, audio, video, image, and document understanding.' },
-  { id: 'gemini-3.8-flash-high-web', name: 'Gemini 3.8 Flash High (Web)', tier: 'Search', badge: 'Search Grounded', thinking: '24K Tokens', context: '1M Context', desc: 'Gemini 3.8 Flash High with native web search grounding, audio, video, image, and document understanding.' },
-  { id: 'gemini-3.8-flash-web', name: 'Gemini 3.8 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash with native web search grounding, audio, video, image, and document understanding.' },
-  { id: 'gemini-3.7-flash-search', name: 'Gemini 3.7 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash flagship model with native Google Search grounding.' },
-  { id: 'gemini-3.7-flash-web', name: 'Gemini 3.7 Flash (Web)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash with native web search grounding.' },
-  { id: 'gemini-3.1-pro-search', name: 'Gemini 3.1 Pro (Search)', tier: 'Pro Agent', badge: 'Search Grounded', thinking: '32K Tokens', context: '1M Context', desc: 'Gemini 3.1 Pro agent engine with native Google Search grounding.' },
-  { id: 'gemini-3.1-pro-web', name: 'Gemini 3.1 Pro (Web)', tier: 'Pro Agent', badge: 'Search Grounded', thinking: '32K Tokens', context: '1M Context', desc: 'Gemini 3.1 Pro agent engine with native web search grounding.' },
-  ...OPENCODE_MODELS.map(m => ({
-    id: m.id,
-    name: m.name,
-    tier: m.tier,
-    badge: m.badge,
-    thinking: m.thinking,
-    context: m.context,
-    desc: m.desc,
-  }))
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tier: 'Claude', badge: 'Claude Sonnet', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Sonnet with reasoning capabilities.' },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
+  { id: 'opus-4.6-search', name: 'Claude Opus 4.6 (Search)', tier: 'Search', badge: 'Search Grounded', thinking: '6.5K Tokens', context: '1M Context', desc: 'Claude Opus 4.6 flagship reasoning model with native Google Search grounding.' },
 ];
 export const ANTIGRAVITY_MODELS = FALLBACK_MODELS;
 
@@ -190,13 +159,12 @@ export function getAntigravityHeaders(accessToken?: string, accept: string = 'te
   return headers;
 }
 
-export const BANNED_ACCOUNTS = new Set(['kars86120@gmail.com', 'kars86120']);
+export const BANNED_ACCOUNTS = new Set<string>();
 
 export function isBannedAccount(name: string): boolean {
   const clean = (name || '').toLowerCase().trim();
   if (!clean) return false;
   if (BANNED_ACCOUNTS.has(clean)) return true;
-  if (clean.includes('kars86120')) return true;
   return false;
 }
 
@@ -437,27 +405,27 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 0 };
   }
 
-  // 2. Gemini 3.7 Flash variants
-  if (clean === 'gemini-3.7-flash' || clean === 'gemini-3.7-flash-tiered') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
+  // 2. Gemini 3.7 Flash variants (transparent fallback to Gemini 3.8 Flash tiers)
+  if (clean === 'gemini-3.7-flash-max' || clean === 'gemini-3.7-flash:max' || clean === 'gemini-3.7-flash-xhigh') {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 65535 };
   }
   if (clean === 'gemini-3.7-flash-high' || clean === 'gemini-3.7-flash:high') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 24576 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 24576 };
   }
-  if (clean === 'gemini-3.7-flash-max' || clean === 'gemini-3.7-flash:max' || clean === 'gemini-3.7-flash-xhigh') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 65535 };
-  }
-  if (clean === 'gemini-3.7-flash-medium' || clean === 'gemini-3.7-flash:medium' || clean === 'gemini-3.7-flash:med') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
+  if (
+    clean === 'gemini-3.7-flash' || clean === 'gemini-3.7-flash-tiered' ||
+    clean === 'gemini-3.7-flash-medium' || clean === 'gemini-3.7-flash:medium' || clean === 'gemini-3.7-flash:med'
+  ) {
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 8192 };
   }
   if (clean === 'gemini-3.7-flash-low' || clean === 'gemini-3.7-flash:low') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 2048 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 2048 };
   }
   if (clean === 'gemini-3.7-flash:off' || clean === 'gemini-3.7-flash:fast' || clean === 'gemini-3.7-flash-off' || clean === 'gemini-3.7-flash-fast') {
-    return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 0 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 0 };
   }
 
-  // 2. Gemini 3.1 Pro variants
+  // 2. Gemini 3.1 Pro variants (fallback to 3.8 Flash High / Low / Fast)
   if (
     clean === 'gemini-3.1-pro-fast' ||
     clean === 'gemini-3.1-pro:off' ||
@@ -466,18 +434,18 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     clean === 'gemini-3.1-pro:no-think' ||
     clean === 'gemini-3.1-pro:fast'
   ) {
-    return { wireModel: 'gemini-3.1-pro-preview', defaultThinkingBudget: 0 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 0 };
   }
   if (clean === 'gemini-3.1-pro-low' || clean === 'gemini-3.1-pro:low') {
-    return { wireModel: 'gemini-3.1-pro-preview', defaultThinkingBudget: 2048 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 2048 };
   }
   if (clean === 'gemini-3.1-pro' || clean === 'gemini-pro-agent' || clean === 'gemini-3.1-pro-thinking' || clean === 'gemini-3.1-pro-preview') {
-    return { wireModel: 'gemini-pro-agent', defaultThinkingBudget: 32768 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 24576 };
   }
 
-  // 3. Gemini 3.5 Flash / Fast variants (0 thinking)
+  // 3. Gemini 3.5 Flash / Fast variants (fallback to 3.8 Flash 0 thinking)
   if (clean === 'gemini-3.5-flash' || clean === 'gemini-2.5-flash' || clean === 'gemini-3-flash-agent') {
-    return { wireModel: 'gemini-3-flash-agent', defaultThinkingBudget: 0 };
+    return { wireModel: 'gemini-3.8-flash-tiered', defaultThinkingBudget: 0 };
   }
 
   // 4. Claude Models
