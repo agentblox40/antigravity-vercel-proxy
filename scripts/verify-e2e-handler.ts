@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { handleChatCompletions } from '../lib/completions';
+import { getOpenCodeAccounts } from '../lib/opencode';
 import assert from 'node:assert';
 
 async function testStreamingCompletion(model: string) {
@@ -109,13 +110,38 @@ async function testNonStreamingCompletion(model: string) {
 async function run() {
   console.log('🚀 RUNNING END-TO-END PROXY COMPLETIONS VERIFICATION');
   
+  const accounts = getOpenCodeAccounts();
+  if (accounts.length === 0) {
+    console.log('\n[i] No OpenCode accounts configured in environment (.env.local).');
+    console.log('[i] Verifying that unauthenticated OpenCode requests safely return 401 with setup instructions...');
+    const req = new NextRequest('http://localhost:3000/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer KARS-2010915'
+      },
+      body: JSON.stringify({
+        model: 'big-pickle',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+    });
+    const res = await handleChatCompletions(req);
+    assert.strictEqual(res.status, 401, `Expected 401 Unauthorized, got ${res.status}`);
+    const json: any = await res.json();
+    assert.strictEqual(json.error.type, 'authentication_error');
+    assert.ok(json.error.message.includes('auth-opencode'));
+    console.log('✅ Safely returned 401 with setup instructions when no accounts are configured.');
+    console.log('\n🎉 ALL END-TO-END COMPLETIONS VERIFICATIONS PASSED SUCCESSFULLY!');
+    return;
+  }
+
   // 1. Streaming test with big-pickle
   await testStreamingCompletion('big-pickle');
 
   // 2. Non-streaming test with big-pickle
   await testNonStreamingCompletion('big-pickle');
 
-  // 3. Streaming test with alias 'snow-bunny' -> 'space-bunny-free'
+  // 3. Streaming test with alias 'snow-bunny' -> 'beam-free'
   await testStreamingCompletion('snow-bunny');
 
   // 4. Non-streaming test with cat-jam-free

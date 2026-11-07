@@ -86,7 +86,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, space-bunny-free, space-bunny-free-fast, cat-jam-free, cat-jam-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, mimo-v2.5-free, mimo-v2.5-free-fast, longcat-2.5-preview-free, longcat-2.5-preview-free-fast, step-5-preview-free, step-5-preview-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, nemotron-3-ultra-free, nemotron-3-ultra-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, beam-free, beam-free-fast, flint-40b-free, flint-40b-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, nemotron-3.5-super-vl-free, nemotron-3.5-super-vl-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, deepseek-v4.1-flash-free, deepseek-v4.1-flash-free-fast, glm-5.3-flash-free, glm-5.3-flash-free-fast, iceman-free, iceman-free-fast, inkling-2-small-free, inkling-2-small-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -125,24 +125,32 @@ export async function handleChatCompletions(req: NextRequest) {
             'claude-sonnet-4-6-fast',
             'big-pickle',
             'big-pickle-fast',
-            'space-bunny-free',
-            'space-bunny-free-fast',
-            'cat-jam-free',
-            'cat-jam-free-fast',
+            'beam-free',
+            'beam-free-fast',
+            'flint-40b-free',
+            'flint-40b-free-fast',
             'mimo-v2.6-flash-free',
             'mimo-v2.6-flash-free-fast',
-            'mimo-v2.5-free',
-            'mimo-v2.5-free-fast',
-            'longcat-2.5-preview-free',
-            'longcat-2.5-preview-free-fast',
-            'step-5-preview-free',
-            'step-5-preview-free-fast',
+            'nemotron-3.5-super-vl-free',
+            'nemotron-3.5-super-vl-free-fast',
             'nemotron-3.5-lightning-free',
             'nemotron-3.5-lightning-free-fast',
+            'deepseek-v4.1-flash-free',
+            'deepseek-v4.1-flash-free-fast',
+            'glm-5.3-flash-free',
+            'glm-5.3-flash-free-fast',
+            'iceman-free',
+            'iceman-free-fast',
+            'inkling-2-small-free',
+            'inkling-2-small-free-fast',
+            'mimo-v2.5-free',
+            'space-bunny-free',
+            'snow-bunny',
+            'cat-jam-free',
+            'longcat-2.5-preview-free',
+            'step-5-preview-free',
             'nemotron-3-ultra-free',
-            'nemotron-3-ultra-free-fast',
-            'ling-3.0-flash-fin-free',
-            'ling-3.0-flash-fin-free-fast'
+            'ling-3.0-flash-fin-free'
           ]
         }
       },
@@ -297,9 +305,13 @@ export async function handleChatCompletions(req: NextRequest) {
     if (systemInjectionsText && systemInjectionsText.trim()) {
       const firstSys = preparedMessages.find(m => m.role === 'system');
       if (firstSys) {
-        firstSys.content = typeof firstSys.content === 'string'
-          ? `${firstSys.content}\n\n${systemInjectionsText.trim()}`
-          : systemInjectionsText.trim();
+        if (typeof firstSys.content === 'string') {
+          firstSys.content = `${firstSys.content}\n\n${systemInjectionsText.trim()}`;
+        } else if (Array.isArray(firstSys.content)) {
+          firstSys.content = [...firstSys.content, { type: 'text', text: systemInjectionsText.trim() }];
+        } else {
+          firstSys.content = systemInjectionsText.trim();
+        }
       } else {
         preparedMessages.unshift({ role: 'system', content: systemInjectionsText.trim() });
       }

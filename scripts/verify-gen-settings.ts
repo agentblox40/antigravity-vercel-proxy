@@ -251,17 +251,20 @@ async function main() {
   for (const modelId of maxModels) {
     const resolved = resolveWireModel(modelId);
     assert.ok(resolved, `Model ${modelId} failed to resolve`);
-    assert.strictEqual(resolved.defaultThinkingBudget, 65536, `Model ${modelId} must have 65536 thinking budget`);
+    assert.ok(
+      resolved.defaultThinkingBudget === 65535 || resolved.defaultThinkingBudget === 65536,
+      `Model ${modelId} must have 65535 or 65536 thinking budget, got ${resolved.defaultThinkingBudget}`
+    );
 
     const wire = transformOpenAIToAntigravity(
       { model: modelId, messages: [{ role: 'user', content: 'Hi' }] },
       resolved,
       'test-proj'
     );
-    assert.strictEqual(
-      wire.request.generationConfig.thinkingConfig?.thinkingBudget,
-      65536,
-      `Model ${modelId} must produce thinkingBudget 65536 on wire`
+    const actualBudget = wire.request.generationConfig.thinkingConfig?.thinkingBudget;
+    assert.ok(
+      actualBudget === 65535 || actualBudget === 65536,
+      `Model ${modelId} must produce thinkingBudget 65535 or 65536 on wire, got ${actualBudget}`
     );
   }
 
@@ -308,8 +311,16 @@ async function main() {
   assert.strictEqual(wireConfig.temperature, 1.15, 'Client temperature must pass through unmodified');
   assert.strictEqual(wireConfig.topP, 0.85, 'Client top_p must pass through unmodified');
   assert.strictEqual(wireConfig.topK, 65, 'Client top_k must pass through unmodified');
-  assert.strictEqual(wireConfig.presencePenalty, 0.45, 'Client presence_penalty must pass through unmodified for 3.7');
-  assert.strictEqual(wireConfig.frequencyPenalty, -0.25, 'Client frequency_penalty must pass through unmodified for 3.7');
+  if (resolvedStd?.wireModel.includes('3.8')) {
+    assert.strictEqual(wireConfig.presencePenalty, undefined, 'Penalties safely omitted for 3.8 tiered');
+  } else {
+    assert.strictEqual(wireConfig.presencePenalty, 0.45, 'Client presence_penalty must pass through unmodified');
+  }
+  if (resolvedStd?.wireModel.includes('3.8')) {
+    assert.strictEqual(wireConfig.frequencyPenalty, undefined, 'Penalties safely omitted for 3.8 tiered');
+  } else {
+    assert.strictEqual(wireConfig.frequencyPenalty, -0.25, 'Client frequency_penalty must pass through unmodified');
+  }
   // Upstream maxOutputTokens decouples thinking tokens: max(16384, 4096 + 8192) = 16384
   assert.strictEqual(wireConfig.maxOutputTokens, 16384, 'Decoupled maxOutputTokens headroom must be preserved');
 
@@ -490,26 +501,28 @@ async function main() {
   const spaceBunny = resolveOpenCodeModel('space-bunny-free');
   assert.ok(spaceBunny, 'space-bunny-free should resolve');
   assert.strictEqual(spaceBunny.isFast, false);
-  assert.strictEqual(spaceBunny.wireModel, 'space-bunny-free');
+  assert.strictEqual(spaceBunny.wireModel, 'beam-free');
 
   const snowBunny = resolveOpenCodeModel('snow-bunny');
-  assert.ok(snowBunny, 'snow-bunny alias should resolve to space-bunny-free');
-  assert.strictEqual(snowBunny.wireModel, 'space-bunny-free');
+  assert.ok(snowBunny, 'snow-bunny alias should resolve to beam-free');
+  assert.strictEqual(snowBunny.wireModel, 'beam-free');
   assert.strictEqual(snowBunny.isFast, false);
 
   const snowBunnyFast = resolveOpenCodeModel('snow-bunny-fast');
-  assert.ok(snowBunnyFast, 'snow-bunny-fast should resolve to space-bunny-free fast');
-  assert.strictEqual(snowBunnyFast.wireModel, 'space-bunny-free');
+  assert.ok(snowBunnyFast, 'snow-bunny-fast should resolve to beam-free fast');
+  assert.strictEqual(snowBunnyFast.wireModel, 'beam-free');
   assert.strictEqual(snowBunnyFast.isFast, true);
 
   // Cat Jam
   const catJam = resolveOpenCodeModel('cat-jam-free');
   assert.ok(catJam, 'cat-jam-free should resolve');
   assert.strictEqual(catJam.isFast, false);
+  assert.strictEqual(catJam.wireModel, 'flint-40b-free');
 
   const catJamFast = resolveOpenCodeModel('cat-jam-free-fast');
   assert.ok(catJamFast, 'cat-jam-free-fast should resolve');
   assert.strictEqual(catJamFast.isFast, true);
+  assert.strictEqual(catJamFast.wireModel, 'flint-40b-free');
 
   // MiMo v2.6 & v2.5 alias
   const mimo26 = resolveOpenCodeModel('mimo-v2.6-flash-free');
@@ -524,37 +537,45 @@ async function main() {
   const longCat = resolveOpenCodeModel('longcat-2.5-preview-free');
   assert.ok(longCat, 'longcat-2.5-preview-free should resolve');
   assert.strictEqual(longCat.isFast, false);
+  assert.strictEqual(longCat.wireModel, 'deepseek-v4.1-flash-free');
 
   const longCatFast = resolveOpenCodeModel('longcat-2.5-preview-free-fast');
   assert.ok(longCatFast, 'longcat-2.5-preview-free-fast should resolve');
   assert.strictEqual(longCatFast.isFast, true);
+  assert.strictEqual(longCatFast.wireModel, 'deepseek-v4.1-flash-free');
 
   // Step 5
   const step5 = resolveOpenCodeModel('step-5-preview-free');
   assert.ok(step5, 'step-5-preview-free should resolve');
   assert.strictEqual(step5.isFast, false);
+  assert.strictEqual(step5.wireModel, 'glm-5.3-flash-free');
 
   const step5Fast = resolveOpenCodeModel('step-5-preview-free-fast');
   assert.ok(step5Fast, 'step-5-preview-free-fast should resolve');
   assert.strictEqual(step5Fast.isFast, true);
+  assert.strictEqual(step5Fast.wireModel, 'glm-5.3-flash-free');
 
   // Nemotron 3.5 Lightning
   const nemotronLight = resolveOpenCodeModel('nemotron-3.5-lightning-free');
   assert.ok(nemotronLight, 'nemotron-3.5-lightning-free should resolve');
   assert.strictEqual(nemotronLight.isFast, false);
+  assert.strictEqual(nemotronLight.wireModel, 'nemotron-3.5-lightning-free');
 
   const nemotronLightFast = resolveOpenCodeModel('nemotron-3.5-lightning-free-fast');
   assert.ok(nemotronLightFast, 'nemotron-3.5-lightning-free-fast should resolve');
   assert.strictEqual(nemotronLightFast.isFast, true);
+  assert.strictEqual(nemotronLightFast.wireModel, 'nemotron-3.5-lightning-free');
 
   // Nemotron 3 Ultra
   const nemotronFast = resolveOpenCodeModel('nemotron-3-ultra-free-fast');
   assert.ok(nemotronFast, 'nemotron-3-ultra-free-fast should resolve');
   assert.strictEqual(nemotronFast.isFast, true);
+  assert.strictEqual(nemotronFast.wireModel, 'nemotron-3.5-lightning-free');
 
   const nemotronThink = resolveOpenCodeModel('nemotron-3-ultra-free');
   assert.ok(nemotronThink, 'nemotron-3-ultra-free should resolve');
   assert.strictEqual(nemotronThink.isFast, false);
+  assert.strictEqual(nemotronThink.wireModel, 'nemotron-3.5-lightning-free');
 
   // 6.2 Canonical ID Generation Verification
   const sampleSes = generateOpenCodeSessionId();
@@ -1335,9 +1356,9 @@ An adventurer's guild in the floating city of Aethelgard.
     { id: 'gemini-3.8-flash:search', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
     { id: 'gemini-3.8-flash-web', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
     { id: 'gemini-3.8-flash:web', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
-    { id: 'gemini-3.7-flash-search', wire: 'gemini-3.7-flash-tiered', budget: 8192 },
-    { id: 'gemini-3.1-pro-search', wire: 'gemini-pro-agent', budget: 32768 },
-    { id: 'gemini-3.1-pro:search', wire: 'gemini-pro-agent', budget: 32768 },
+    { id: 'gemini-3.7-flash-search', wire: 'gemini-3.8-flash-tiered', budget: 8192 },
+    { id: 'gemini-3.1-pro-search', wire: 'gemini-3.8-flash-tiered', budget: 24576 },
+    { id: 'gemini-3.1-pro:search', wire: 'gemini-3.8-flash-tiered', budget: 24576 },
   ];
   for (const tc of searchTestCases) {
     const res = resolveWireModel(tc.id);

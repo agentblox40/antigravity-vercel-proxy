@@ -3045,10 +3045,10 @@ export default function AntigravityControlCenter() {
               <div style={{ marginTop: 24 }}>
                 <div style={{ marginBottom: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px', color: colors.textMain }}>
-                    OpenCode Free Rotating Guest Pool ({opencodeAccounts.length} Accounts)
+                    OpenCode Authenticated Accounts Pool ({opencodeAccounts.length} Accounts)
                   </h3>
                   <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>
-                    Dedicated 16-guest session pool for OpenCode free reasoning models with automatic round-robin rotation and 20s cooldown failover.
+                    Dedicated OAuth 2.0 multi-account pool for OpenCode free reasoning models with automatic token refresh, token rotation, and 429 failover.
                   </p>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>

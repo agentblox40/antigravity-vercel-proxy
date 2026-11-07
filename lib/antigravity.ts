@@ -63,11 +63,27 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'gemini-3.8-flash-fast', name: 'Gemini 3.8 Flash (Fast)', tier: 'Fast', badge: 'Zero Thinking', thinking: 'None', context: '1M Context', desc: 'Zero-thinking ultra-low latency generation with native audio, video, image, and document understanding.' },
   { id: 'gemini-3.8-flash-search', name: 'Gemini 3.8 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash flagship model with native Google Search grounding, audio, video, image, and document understanding.' },
   { id: 'gemini-3.8-flash-high-search', name: 'Gemini 3.8 Flash High (Search)', tier: 'Search', badge: 'Search Grounded', thinking: '24K Tokens', context: '1M Context', desc: 'Gemini 3.8 Flash High reasoning model with native Google Search grounding, audio, video, image, and document understanding.' },
+  { id: 'gemini-3.8-flash-web', name: 'Gemini 3.8 Flash (Web)', tier: 'Search', badge: 'Web Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.8 Flash flagship model with native Google Web grounding.' },
+  { id: 'gemini-3.7-flash-search', name: 'Gemini 3.7 Flash (Search)', tier: 'Search', badge: 'Search Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash model with native Google Search grounding.' },
+  { id: 'gemini-3.7-flash-web', name: 'Gemini 3.7 Flash (Web)', tier: 'Search', badge: 'Web Grounded', thinking: 'Auto / 8K', context: '1M Context', desc: 'Gemini 3.7 Flash model with native Google Web grounding.' },
+  { id: 'gemini-3.1-pro-search', name: 'Gemini 3.1 Pro (Search)', tier: 'Pro Agent', badge: 'Search Grounded', thinking: 'Auto / 32K', context: '1M Context', desc: 'Gemini 3.1 Pro reasoning agent with native Google Search grounding.' },
+  { id: 'gemini-3.1-pro-web', name: 'Gemini 3.1 Pro (Web)', tier: 'Pro Agent', badge: 'Web Grounded', thinking: 'Auto / 32K', context: '1M Context', desc: 'Gemini 3.1 Pro reasoning agent with native Google Web grounding.' },
   { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tier: 'Claude', badge: 'Claude Sonnet', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Sonnet with reasoning capabilities.' },
   { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
   { id: 'opus-4.6-search', name: 'Claude Opus 4.6 (Search)', tier: 'Search', badge: 'Search Grounded', thinking: '6.5K Tokens', context: '1M Context', desc: 'Claude Opus 4.6 flagship reasoning model with native Google Search grounding.' },
 ];
-export const ANTIGRAVITY_MODELS = FALLBACK_MODELS;
+export const OPENCODE_MODEL_SPECS: ModelSpec[] = OPENCODE_MODELS.map((m) => ({
+  id: m.id,
+  name: m.name,
+  tier: m.tier,
+  badge: m.badge,
+  thinking: m.thinking,
+  context: m.context,
+  desc: m.desc,
+}));
+
+export const ALL_MODELS: ModelSpec[] = [...FALLBACK_MODELS, ...OPENCODE_MODEL_SPECS];
+export const ANTIGRAVITY_MODELS = ALL_MODELS;
 
 let cachedLiveModels: ModelSpec[] | null = null;
 let lastLiveModelsFetch = 0;
@@ -120,8 +136,8 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
                 });
               }
 
-              // Combine with standard reasoning aliases
-              for (const fallback of FALLBACK_MODELS) {
+              // Combine with standard reasoning aliases and OpenCode models
+              for (const fallback of ALL_MODELS) {
                 if (!seen.has(fallback.id)) {
                   liveList.push(fallback);
                   seen.add(fallback.id);
@@ -138,9 +154,9 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
     }
   } catch {}
 
-  cachedLiveModels = FALLBACK_MODELS;
+  cachedLiveModels = ALL_MODELS;
   lastLiveModelsFetch = now;
-  return FALLBACK_MODELS;
+  return ALL_MODELS;
 }
 
 export const ANTIGRAVITY_USER_AGENT = 'antigravity/2.22.0 windows/amd64';

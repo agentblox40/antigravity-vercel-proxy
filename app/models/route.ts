@@ -59,6 +59,8 @@ export async function GET(req: NextRequest) {
           ? 'opencode'
           : m.tier === 'Utility'
           ? 'utility'
+          : m.id.startsWith('claude') || m.id.startsWith('opus')
+          ? 'anthropic'
           : 'google-antigravity',
         permission: [],
         root: m.id,
