@@ -234,11 +234,20 @@ async function main() {
       console.log(`OPENCODE_ACCOUNT_${targetAccountIndex}_ORG_ID=${orgId}`);
     }
 
-    try {
-      updateEnvFile(envPath, targetAccountIndex, email, refresh_token, orgId);
-      console.log(`\n[✓] Automatically written to .env.local!`);
-    } catch (writeErr) {
-      console.warn('[!] Failed to update .env.local automatically:', writeErr.message);
+    const envPaths = [
+      path.resolve(process.cwd(), '.env.local'),
+      path.resolve('c:/Users/yashv/antigravity-proxies/prototype-1-nextjs/.env.local'),
+      path.resolve('c:/Users/yashv/antigravity-proxies/antigravity-openai-proxy/.env.local'),
+    ];
+    for (const p of new Set(envPaths)) {
+      try {
+        if (fs.existsSync(path.dirname(p))) {
+          updateEnvFile(p, targetAccountIndex, email, refresh_token, orgId);
+          console.log(`[✓] Written to ${p}`);
+        }
+      } catch (writeErr) {
+        console.warn(`[!] Failed to update ${p}:`, writeErr.message);
+      }
     }
 
     console.log('\n------------------------------------------------------');

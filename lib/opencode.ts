@@ -651,26 +651,32 @@ export async function getOpenCodeAccessToken(account: OpenCodeAccount, fetchFn =
 
         // Persist rotated token to .env.local if file exists on local filesystem
         try {
-          const envPath = path.resolve(process.cwd(), '.env.local');
-          if (fs.existsSync(envPath)) {
-            const rawEnv = fs.readFileSync(envPath, 'utf8').replace(/\r\n/g, '\n');
-            let updatedEnv = rawEnv;
-            if (slotMatch) {
-              const regex = new RegExp(`^OPENCODE_ACCOUNT_${slotMatch[1]}_REFRESH_TOKEN=.*$`, 'm');
-              if (regex.test(rawEnv)) {
-                updatedEnv = rawEnv.replace(regex, `OPENCODE_ACCOUNT_${slotMatch[1]}_REFRESH_TOKEN=${data.refresh_token}`);
+          const envPaths = [
+            path.resolve(process.cwd(), '.env.local'),
+            path.resolve('c:/Users/yashv/antigravity-proxies/prototype-1-nextjs/.env.local'),
+            path.resolve('c:/Users/yashv/antigravity-proxies/antigravity-openai-proxy/.env.local'),
+          ];
+          for (const envPath of new Set(envPaths)) {
+            if (fs.existsSync(envPath)) {
+              const rawEnv = fs.readFileSync(envPath, 'utf8').replace(/\r\n/g, '\n');
+              let updatedEnv = rawEnv;
+              if (slotMatch) {
+                const regex = new RegExp(`^OPENCODE_ACCOUNT_${slotMatch[1]}_REFRESH_TOKEN=.*$`, 'm');
+                if (regex.test(rawEnv)) {
+                  updatedEnv = rawEnv.replace(regex, `OPENCODE_ACCOUNT_${slotMatch[1]}_REFRESH_TOKEN=${data.refresh_token}`);
+                } else {
+                  updatedEnv = rawEnv + `\nOPENCODE_ACCOUNT_${slotMatch[1]}_REFRESH_TOKEN=${data.refresh_token}\n`;
+                }
               } else {
-                updatedEnv = rawEnv + `\nOPENCODE_ACCOUNT_${slotMatch[1]}_REFRESH_TOKEN=${data.refresh_token}\n`;
+                const regex = /^OPENCODE_REFRESH_TOKEN=.*$/m;
+                if (regex.test(rawEnv)) {
+                  updatedEnv = rawEnv.replace(regex, `OPENCODE_REFRESH_TOKEN=${data.refresh_token}`);
+                } else {
+                  updatedEnv = rawEnv + `\nOPENCODE_REFRESH_TOKEN=${data.refresh_token}\n`;
+                }
               }
-            } else {
-              const regex = /^OPENCODE_REFRESH_TOKEN=.*$/m;
-              if (regex.test(rawEnv)) {
-                updatedEnv = rawEnv.replace(regex, `OPENCODE_REFRESH_TOKEN=${data.refresh_token}`);
-              } else {
-                updatedEnv = rawEnv + `\nOPENCODE_REFRESH_TOKEN=${data.refresh_token}\n`;
-              }
+              fs.writeFileSync(envPath, updatedEnv.trim() + '\n', 'utf8');
             }
-            fs.writeFileSync(envPath, updatedEnv.trim() + '\n', 'utf8');
           }
         } catch (_) {}
       }
