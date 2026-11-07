@@ -3,6 +3,7 @@ import http from 'node:http';
 import readline from 'node:readline';
 import { exec } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const MASK = 'antigravity-proxy-v1';
 const MASKED_CLIENT_ID = [80,94,67,88,87,66,87,70,95,68,76,20,65,95,27,21,17,94,5,88,15,92,28,91,86,30,2,4,12,70,74,24,6,6,0,20,22,71,30,5,6,90,68,90,2,2,79,23,25,4,10,3,23,29,0,31,21,72,3,66,4,28,23,6,9,6,4,24,29,90,26,66,29];
@@ -36,7 +37,7 @@ authUrl.searchParams.set('scope', SCOPES);
 authUrl.searchParams.set('access_type', 'offline');
 authUrl.searchParams.set('prompt', 'consent');
 
-const targetAccountIndex = process.argv[2] || '3';
+const targetAccountIndex = process.argv[2] || '8';
 
 console.log('\n======================================================');
 console.log(`  Google Antigravity OAuth Account Provisioner (Account #${targetAccountIndex})`);
@@ -134,23 +135,34 @@ async function handleCode(authCode) {
       console.log(`# ACCOUNT_${targetAccountIndex}_PROJECT_ID: (Auto-discovered on first request)`);
     }
 
-    try {
-      const envPath = '.env.local';
-      if (fs.existsSync(envPath)) {
-        let envContent = fs.readFileSync(envPath, 'utf8');
-        const snippet = `\n# Account ${targetAccountIndex} (${userEmail})\nACCOUNT_${targetAccountIndex}_NAME=${userEmail}\nACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}\n${projectId ? `ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}\n` : ''}`;
-        if (envContent.includes(`ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=`)) {
-          const lines = envContent.split('\n').filter(l => !l.startsWith(`ACCOUNT_${targetAccountIndex}_`) && !l.includes(`# Account ${targetAccountIndex} `));
-          lines.push('', `# Account ${targetAccountIndex} (${userEmail})`, `ACCOUNT_${targetAccountIndex}_NAME=${userEmail}`, `ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}`);
-          if (projectId) lines.push(`ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}`);
-          fs.writeFileSync(envPath, lines.join('\n').trim() + '\n', 'utf8');
-          console.log(`\n[✓] Successfully updated Account #${targetAccountIndex} (${userEmail}) in .env.local!`);
-        } else {
-          fs.appendFileSync(envPath, snippet, 'utf8');
-          console.log(`\n[✓] Automatically appended Account #${targetAccountIndex} to .env.local!`);
+    const envPaths = [
+      path.resolve(process.cwd(), '.env.local'),
+      path.resolve('c:/Users/yashv/antigravity-proxies/prototype-1-nextjs/.env.local'),
+      path.resolve('c:/Users/yashv/antigravity-proxies/antigravity-openai-proxy/.env.local'),
+    ];
+
+    for (const envPath of new Set(envPaths)) {
+      try {
+        if (fs.existsSync(path.dirname(envPath))) {
+          let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+          const snippet = `\n# Account ${targetAccountIndex} (${userEmail}) [Dedicated Cohort: Argon & Claude 5.5]\nACCOUNT_${targetAccountIndex}_NAME=${userEmail}\nACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}\n${projectId ? `ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}\n` : ''}DEDICATED_COHORT_ACCOUNT=ACCOUNT_${targetAccountIndex}\nDEDICATED_COHORT_EMAIL=${userEmail}\n`;
+          if (envContent.includes(`ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=`)) {
+            const lines = envContent.split('\n').filter(l => !l.startsWith(`ACCOUNT_${targetAccountIndex}_`) && !l.includes(`# Account ${targetAccountIndex} `) && !l.startsWith('DEDICATED_COHORT_'));
+            lines.push('', `# Account ${targetAccountIndex} (${userEmail}) [Dedicated Cohort: Argon & Claude 5.5]`, `ACCOUNT_${targetAccountIndex}_NAME=${userEmail}`, `ACCOUNT_${targetAccountIndex}_REFRESH_TOKEN=${refreshToken}`);
+            if (projectId) lines.push(`ACCOUNT_${targetAccountIndex}_PROJECT_ID=${projectId}`);
+            lines.push(`DEDICATED_COHORT_ACCOUNT=ACCOUNT_${targetAccountIndex}`);
+            lines.push(`DEDICATED_COHORT_EMAIL=${userEmail}`);
+            fs.writeFileSync(envPath, lines.join('\n').trim() + '\n', 'utf8');
+            console.log(`\n[✓] Successfully updated Account #${targetAccountIndex} (${userEmail}) in ${envPath}!`);
+          } else {
+            fs.appendFileSync(envPath, snippet, 'utf8');
+            console.log(`\n[✓] Automatically appended Account #${targetAccountIndex} to ${envPath}!`);
+          }
         }
+      } catch (writeErr) {
+        console.warn(`[!] Failed to update ${envPath}:`, writeErr.message);
       }
-    } catch (_) {}
+    }
 
     console.log('\n------------------------------------------------------');
     console.log('Next step: Go to Vercel -> Settings -> Environment Variables,');

@@ -413,22 +413,27 @@ export async function handleChatCompletions(req: NextRequest) {
   const allAccounts = getAccounts();
   const isClaudeModel = resolved.wireModel.includes('claude');
   // Filter out any accounts where Claude 4.6 is deprecated when serving Claude requests so they fail over cleanly to active accounts.
-  let accounts = isClaudeModel
+  let accounts = (isClaudeModel && !resolved.isDedicatedCohort)
     ? allAccounts.filter(a => !a.claudeDeprecated)
     : allAccounts;
 
-  // Strictly pin models with targetAccount (e.g. argon-low, argon-medium, argon-high -> kars60928@gmail.com)
-  // so they ONLY route through the experimental cohort account and never fail over to standard accounts.
-  if (resolved.targetAccount) {
-    const targetLower = resolved.targetAccount.toLowerCase();
+  // Strictly pin models with targetAccount or isDedicatedCohort (e.g. gemini-4-argon, claude-opus-5-5, claude-sonnet-5-5)
+  // so they ONLY route through the designated account and never leak/failover to standard pool accounts.
+  if (resolved.targetAccount || resolved.isDedicatedCohort) {
+    const rawTarget = resolved.targetAccount || process.env.DEDICATED_COHORT_ACCOUNT || process.env.DEDICATED_COHORT_EMAIL || 'acc-8';
+    const targetLower = rawTarget.toLowerCase().trim();
     const pinnedAccounts = accounts.filter(
-      a => a.name.toLowerCase() === targetLower || a.id.toLowerCase() === targetLower
+      a => a.name.toLowerCase() === targetLower ||
+           a.id.toLowerCase() === targetLower ||
+           (targetLower.startsWith('account_') && a.id.toLowerCase() === targetLower.replace('account_', 'acc-')) ||
+           a.id.toLowerCase() === 'acc-8' ||
+           (process.env.DEDICATED_COHORT_EMAIL && a.name.toLowerCase() === process.env.DEDICATED_COHORT_EMAIL.toLowerCase().trim())
     );
     if (pinnedAccounts.length === 0) {
       return NextResponse.json(
         {
           error: {
-            message: `[Dedicated Account Missing]: Model '${requestedModel}' is pinned exclusively to account '${resolved.targetAccount}' (gemini-3.8-flash-exp-a), which is not configured in environment variables.`,
+            message: `[Dedicated Account Required]: Model '${requestedModel}' is exclusively available on the new dedicated account (Slot #8), which is not yet linked or configured in environment variables. Run 'npm run auth-account 8' to authorize this account.`,
             type: 'configuration_error',
             code: 503
           }

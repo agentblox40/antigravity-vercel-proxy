@@ -71,6 +71,12 @@ export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', tier: 'Claude', badge: 'Claude Sonnet', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Sonnet with reasoning capabilities.' },
   { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', tier: 'Claude', badge: 'Claude Opus', thinking: 'Extended', context: '1M Context', desc: 'Anthropic Claude Opus running over Antigravity Cloud Code bridge.' },
   { id: 'opus-4.6-search', name: 'Claude Opus 4.6 (Search)', tier: 'Search', badge: 'Search Grounded', thinking: '6.5K Tokens', context: '1M Context', desc: 'Claude Opus 4.6 flagship reasoning model with native Google Search grounding.' },
+  { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Experimental Flagship)', tier: 'Argon / Gemini 4', badge: 'Gemini 4 Flagship', thinking: '16K Tokens', context: '1M Context', desc: 'Google next-generation Gemini 4 Argon preview model with deep reasoning and native multimodality.' },
+  { id: 'gemini-4-argon-low', name: 'Gemini 4 Argon (Low)', tier: 'Argon / Gemini 4', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Google next-generation Gemini 4 Argon preview model with snappy 2K reasoning budget.' },
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5 (Thinking)', tier: 'Claude 5.5', badge: 'Claude Opus 5.5', thinking: '16K Tokens', context: '1M Context', desc: 'Anthropic flagship Claude Opus 5.5 deep reasoning model.' },
+  { id: 'claude-opus-5-5-low', name: 'Claude Opus 5.5 (Low)', tier: 'Claude 5.5', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Anthropic flagship Claude Opus 5.5 deep reasoning model with snappy 2K reasoning budget.' },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5 (Thinking)', tier: 'Claude 5.5', badge: 'Claude Sonnet 5.5', thinking: '16K Tokens', context: '1M Context', desc: 'Anthropic ultra-capable Claude Sonnet 5.5 model for high-speed coding and roleplay.' },
+  { id: 'claude-sonnet-5-5-low', name: 'Claude Sonnet 5.5 (Low)', tier: 'Claude 5.5', badge: 'Snappy Thinking', thinking: '2K Tokens', context: '1M Context', desc: 'Anthropic ultra-capable Claude Sonnet 5.5 model with snappy 2K reasoning budget.' },
 ];
 export const OPENCODE_MODEL_SPECS: ModelSpec[] = OPENCODE_MODELS.map((m) => ({
   id: m.id,
@@ -159,8 +165,8 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
   return ALL_MODELS;
 }
 
-export const ANTIGRAVITY_USER_AGENT = 'antigravity/2.22.0 windows/amd64';
-export const ANTIGRAVITY_API_CLIENT = 'gl-node/20.18.0 gccl/2.22.0';
+export const ANTIGRAVITY_USER_AGENT = 'antigravity/2.29.0 windows/amd64';
+export const ANTIGRAVITY_API_CLIENT = 'gl-node/20.18.0 gccl/2.29.0';
 
 export function getAntigravityHeaders(accessToken?: string, accept: string = 'text/event-stream'): Record<string, string> {
   const headers: Record<string, string> = {
@@ -175,12 +181,19 @@ export function getAntigravityHeaders(accessToken?: string, accept: string = 'te
   return headers;
 }
 
-export const BANNED_ACCOUNTS = new Set<string>();
+export const BANNED_ACCOUNTS = new Set<string>([
+  'yashv3050@gmail.com',
+  'yashv3050',
+  'manishflamingopharma@gmail.com',
+  'manishflamingopharma',
+  'manishflamingo'
+]);
 
 export function isBannedAccount(name: string): boolean {
   const clean = (name || '').toLowerCase().trim();
   if (!clean) return false;
   if (BANNED_ACCOUNTS.has(clean)) return true;
+  if (clean.includes('yashv3050') || clean.includes('manishflamingo')) return true;
   return false;
 }
 
@@ -254,10 +267,10 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
   acc.expiresAt = now + ((data.expires_in || 3600) * 1000);
   if (!acc.projectId) {
     try {
-      const metaRes = await fetch('https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssistMetadata', {
+      const metaRes = await fetch('https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist', {
         method: 'POST',
         headers: getAntigravityHeaders(acc.accessToken, 'application/json'),
-        body: JSON.stringify({ metadata: { ideType: 'VSCODE', ideVersion: '1.96.0' } })
+        body: JSON.stringify({ metadata: { ideType: 'ANTIGRAVITY', ideVersion: '2.29.0' } })
       });
       if (metaRes.ok) {
         const meta: any = await metaRes.json();
@@ -266,6 +279,18 @@ export async function getAccessToken(acc: AccountConfig): Promise<string> {
       }
     } catch {}
     if (!acc.projectId) acc.projectId = 'aicode-consumers';
+
+    // Auto-onboard account on daily-cloudcode-pa if new
+    try {
+      await fetch('https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser', {
+        method: 'POST',
+        headers: getAntigravityHeaders(acc.accessToken, 'application/json'),
+        body: JSON.stringify({
+          tierId: 'free-tier',
+          metadata: { ideType: 'ANTIGRAVITY', ideVersion: '2.29.0' }
+        })
+      });
+    } catch {}
   }
   return acc.accessToken!;
 }
@@ -328,7 +353,7 @@ export function isCardExporterModel(modelId?: string): boolean {
 }
 
 // Strictly resolve requested model ID to Google Antigravity wire model without silent fallbacks
-export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean } | null {
+export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean; isDedicatedCohort?: boolean } | null {
   if (!modelId || !modelId.trim()) {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
   }
@@ -384,21 +409,70 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     }
   }
 
-  // 0. Argon Experimental Cohort (Dedicated Account #7: kars60928@gmail.com -> gemini-3.8-flash-exp-a)
-  if (clean === 'argon-low' || clean === 'argon:low') {
-    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 2048, targetAccount: 'kars60928@gmail.com' };
+  // 0. Dedicated Cohort Models (Argon & Claude 5.5)
+  if (
+    clean === 'gemini-4-argon' ||
+    clean === 'gemini-4' ||
+    clean === 'argon' ||
+    clean === 'argon-tiered' ||
+    clean === 'argon-high' ||
+    clean === 'argon-max' ||
+    clean === 'argon-medium' ||
+    clean === 'argon-low' ||
+    clean === 'argon-fast' ||
+    clean === 'gemini-4-argon-low' ||
+    clean === 'gemini-4-argon-fast' ||
+    clean === 'gemini-4-argon-high' ||
+    clean === 'gemini-4-argon-max' ||
+    clean === 'gemini-4-low' ||
+    clean === 'gemini-4-fast'
+  ) {
+    const isLow = clean.includes('low') || clean === 'gemini-4-argon-low' || clean === 'argon-low' || clean === 'gemini-4-low';
+    const isFast = clean.includes('fast');
+    const isMax = clean.includes('max');
+    const budget = isFast ? 0 : isLow ? 2048 : isMax ? 65535 : (clean.includes('high') ? 24576 : 16384);
+    const wireModel = (isLow || isFast) ? 'gemini-3.8-flash-low' : 'gemini-3.8-flash-high';
+    return { wireModel, defaultThinkingBudget: budget, targetAccount: 'acc-8', isDedicatedCohort: true };
   }
-  if (clean === 'argon-medium' || clean === 'argon:medium' || clean === 'argon:med' || clean === 'argon-med' || clean === 'argon') {
-    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 8192, targetAccount: 'kars60928@gmail.com' };
+  if (
+    clean === 'claude-opus-5-5' ||
+    clean === 'claude-opus-5.5' ||
+    clean === 'opus-5.5' ||
+    clean === 'opus-5-5' ||
+    clean === 'claude-opus-5-5-thinking' ||
+    clean === 'opus-5.5-thinking' ||
+    clean === 'claude-opus-5-5-low' ||
+    clean === 'claude-opus-5.5-low' ||
+    clean === 'opus-5.5-low' ||
+    clean === 'opus-5-5-low' ||
+    clean === 'claude-opus-5-5-fast' ||
+    clean === 'opus-5.5-fast'
+  ) {
+    const isLow = clean.includes('low');
+    const isFast = clean.includes('fast');
+    const budget = isFast ? 0 : isLow ? 2048 : 16384;
+    const wireModel = isLow ? 'claude-opus-5-5-low' : (isFast ? 'claude-opus-5-5-low' : 'claude-opus-5-5-high');
+    return { wireModel, defaultThinkingBudget: budget, targetAccount: 'acc-8', isDedicatedCohort: true };
   }
-  if (clean === 'argon-high' || clean === 'argon:high') {
-    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 24576, targetAccount: 'kars60928@gmail.com' };
-  }
-  if (clean === 'argon-max' || clean === 'argon:max') {
-    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 65536, targetAccount: 'kars60928@gmail.com' };
-  }
-  if (clean === 'argon-fast' || clean === 'argon:fast' || clean === 'argon-off' || clean === 'argon:off') {
-    return { wireModel: 'gemini-3.8-flash-high', defaultThinkingBudget: 0, targetAccount: 'kars60928@gmail.com' };
+  if (
+    clean === 'claude-sonnet-5-5' ||
+    clean === 'claude-sonnet-5.5' ||
+    clean === 'sonnet-5.5' ||
+    clean === 'sonnet-5-5' ||
+    clean === 'claude-sonnet-5-5-thinking' ||
+    clean === 'sonnet-5.5-thinking' ||
+    clean === 'claude-sonnet-5-5-low' ||
+    clean === 'claude-sonnet-5.5-low' ||
+    clean === 'sonnet-5.5-low' ||
+    clean === 'sonnet-5-5-low' ||
+    clean === 'claude-sonnet-5-5-fast' ||
+    clean === 'sonnet-5.5-fast'
+  ) {
+    const isLow = clean.includes('low');
+    const isFast = clean.includes('fast');
+    const budget = isFast ? 0 : isLow ? 2048 : 16384;
+    const wireModel = isLow ? 'claude-sonnet-5-5-low' : (isFast ? 'claude-sonnet-5-5-low' : 'claude-sonnet-5-5-high');
+    return { wireModel, defaultThinkingBudget: budget, targetAccount: 'acc-8', isDedicatedCohort: true };
   }
 
   // 1. Gemini 3.8 Flash variants (maps to upstream gemini-3.8-flash-tiered)
