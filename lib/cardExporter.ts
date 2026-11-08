@@ -108,23 +108,48 @@ function detectUntriggeredLoreKeywords(
     }
   }
 
-  // Filter out any candidate that ALREADY has a dedicated lorebook entry in loreEntries
+  // Filter out any candidate that ALREADY has a dedicated lorebook entry or inline >NPCs profile
   const triggeredTitlesLower = loreEntries.map(e => e.title.toLowerCase());
   const triggeredHeadersLower = loreEntries.map(e => e.content.split('\n')[0].toLowerCase());
+  const allLoreTextLower = loreEntries.map(e => e.content.toLowerCase()).join('\n\n');
 
-  const untriggered: string[] = [];
+  // Extract inline NPC names already defined under >NPCs in descriptionText (e.g. "Azerrad: Male, Vampire...")
+  const definedNpcNamesLower: string[] = [];
+  const npcBlockMatch = descriptionText.match(/>?NPCs?\s*\n([\s\S]*?)(?=\n>[A-Z]|\n#{1,4}\s|$)/i);
+  if (npcBlockMatch && npcBlockMatch[1]) {
+    const npcLines = npcBlockMatch[1].split('\n');
+    for (const line of npcLines) {
+      const m = line.match(/^\s*[-*•]?\s*([A-Z][a-zA-Z0-9_\-'’\s]{1,35}?)\s*(?::|\|)/);
+      if (m && m[1]) definedNpcNamesLower.push(m[1].trim().toLowerCase());
+    }
+  }
+
+  const rawUntriggered: string[] = [];
   for (const cand of candidates) {
     const cLower = cand.toLowerCase();
+    const firstWord = cLower.split(/\s+/)[0];
     if (characterName && (cLower === characterName.toLowerCase() || cLower.startsWith(characterName.toLowerCase() + ' '))) {
       continue;
     }
-    const alreadyTriggered =
-      triggeredTitlesLower.some(t => t.includes(cLower) || cLower.includes(t.replace(/^class:\s*/, ''))) ||
-      triggeredHeadersLower.some(h => h.startsWith(cLower) || h.includes(`${cLower} |`) || h.includes(`${cLower} —`));
-    if (!alreadyTriggered) {
-      untriggered.push(cand);
+    const alreadyInLoreTitles =
+      triggeredTitlesLower.some(t => t.includes(cLower) || cLower.includes(t.replace(/^class:\s*/, '')) || (firstWord.length >= 4 && t.startsWith(firstWord + ' ')));
+    const alreadyInLoreHeaders =
+      triggeredHeadersLower.some(h => h.startsWith(cLower) || h.includes(`${cLower} |`) || h.includes(`${cLower} —`) || (firstWord.length >= 4 && h.startsWith(firstWord + ' ')));
+    const alreadyInInlineNpcs =
+      definedNpcNamesLower.some(n => n === cLower || cLower.startsWith(n + ' ') || n.startsWith(cLower + ' '));
+    const alreadyDefinedInLoreBody =
+      allLoreTextLower.includes(`\n${cLower} |`) || allLoreTextLower.startsWith(`${cLower} |`);
+
+    if (!alreadyInLoreTitles && !alreadyInLoreHeaders && !alreadyInInlineNpcs && !alreadyDefinedInLoreBody) {
+      rawUntriggered.push(cand);
     }
   }
+
+  // Deduplicate short-name vs full-name pairs (e.g. "Serenya" + "Serenya Ravencourt" -> keep "Serenya Ravencourt")
+  const untriggered = rawUntriggered.filter(item => {
+    const itemLower = item.toLowerCase();
+    return !rawUntriggered.some(other => other !== item && other.toLowerCase().startsWith(itemLower + ' '));
+  });
 
   return untriggered;
 }
@@ -392,9 +417,10 @@ export function exportCharacterCard(
     finalDescription = strippedFallback.replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  // Always strip any stray opening/closing <...'s Persona> XML wrapper tags from finalDescription
+  // Always strip any stray opening/closing <...'s Persona> or standalone <CharName> XML wrapper tags from finalDescription
   finalDescription = finalDescription
     .replace(/<\/?[^<>\/\n]{2,50}?['\u2019]s\s+Persona>/gi, '')
+    .replace(escapedCharName ? new RegExp(`(?:^|\\n)\\s*<\\/?${escapedCharName}>\\s*(?=\\n|$)`, 'gi') : /$^/, '\n')
     .trim();
 
   // 4. Extract Multi-System Messages (Preserving distinct jailbreaks & system prompt instructions)
@@ -541,7 +567,7 @@ export function exportCharacterCard(
   }
   if (trueLoreEntries.length > 0) {
     const loreContent = trueLoreEntries.map(e => `• ${e.title}:\n${e.content}`).join('\n\n');
-    charDefLines.push(`\n[World Lore & Knowledge]\n${loreContent}`);
+    charDefLines.push(`\n[World Lore & NPCs (Injected Lorebook)]\n${loreContent}`);
   }
   studioBlocks.push(charDefLines.join('\n'));
 

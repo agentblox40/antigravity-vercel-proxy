@@ -1039,34 +1039,58 @@ export function extractPostPersonaLoreEntries(rawSystemText: string): PostPerson
   }
 
   const personaCharName = closeMatch[1].trim();
+  const escapedPersonaChar = personaCharName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const closeIdx = closeMatch.index;
   const afterCloseIdx = closeIdx + closeMatch[0].length;
 
-  // Strip any opening <Char's Persona> tag from the core persona text
+  // Strip any opening <Char's Persona> tag and standalone <CharName> tag from the core persona text
   let corePersonaText = normalized.slice(0, closeIdx);
   corePersonaText = corePersonaText
     .replace(/<(?:[^<>\/\n]{2,50}?)['\u2019]s\s+Persona>\s*/gi, '')
+    .replace(new RegExp(`(?:^|\\n)\\s*<\\/?${escapedPersonaChar}>\\s*(?=\\n|$)`, 'gi'), '\n')
     .trim();
 
   const afterClose = normalized.slice(afterCloseIdx);
 
-  // Locate the boundary where Scenario / UserPersona / Examples / System Instructions begin
-  const boundaryPatterns = [
-    /<(?:Scenario|scenario|world|setting|UserPersona|user_persona|user_profile|example_dialogs|mes_example|first_mes|system_prompt|system_instructions)\b/i,
-    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Scenario|World Setting|Initial Greeting|First Message|Example Dialogues?)(?::\s*|\s*\n)/i,
-    /(?:^|\n)\s*\[(?:Scenario|Setting|User's Persona|User Persona|User Definition|First Message|Greeting)\b/i,
+  // Extract and remove known non-lore XML/bracket blocks (<UserPersona>, <Scenario>, etc.)
+  // Important: Janitor AI places <UserPersona>...</UserPersona> immediately after </Char's Persona>
+  // and BEFORE the 35,000+ chars of injected Lorebook entries, followed by <Scenario>...</Scenario>.
+  const extractedNonLoreBlocks: string[] = [];
+  const nonLoreBlockPatterns = [
+    /<(UserPersona|user_persona|user_profile|user_description)\b[^>]*>[\s\S]*?<\/\1>/gi,
+    /\[(?:User's Persona|User Persona|User Definition)\s*:[\s\S]*?\]/gi,
+    /<(Scenario|scenario|world_setting|example_dialogs|mes_example|example_dialogue|first_mes|first_message|greeting|starter|system_prompt|system_instructions|jailbreak)\b[^>]*>[\s\S]*?<\/\1>/gi,
   ];
 
-  let boundaryIdx = afterClose.length;
+  let cleanedAfterClose = afterClose;
+  for (const pat of nonLoreBlockPatterns) {
+    cleanedAfterClose = cleanedAfterClose.replace(pat, (match) => {
+      extractedNonLoreBlocks.push(match.trim());
+      return '\n\n';
+    });
+  }
+
+  // Locate any remaining unclosed or Markdown boundary (e.g., ### Scenario, [Scenario: ...])
+  const boundaryPatterns = [
+    /<(?:Scenario|scenario|world_setting|example_dialogs|mes_example|first_mes|system_prompt|system_instructions)\b/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Scenario|World Setting|Initial Greeting|First Message|Example Dialogues?)(?::\s*|\s*\n)/i,
+    /(?:^|\n)\s*\[(?:Scenario|Setting|First Message|Greeting)\b/i,
+  ];
+
+  let boundaryIdx = cleanedAfterClose.length;
   for (const bp of boundaryPatterns) {
-    const m = afterClose.match(bp);
+    const m = cleanedAfterClose.match(bp);
     if (m && m.index !== undefined && m.index < boundaryIdx) {
       boundaryIdx = m.index;
     }
   }
 
-  const postPersonaRaw = afterClose.slice(0, boundaryIdx).trim();
-  const remainingAfterLore = afterClose.slice(boundaryIdx).trim();
+  const postPersonaRaw = cleanedAfterClose.slice(0, boundaryIdx).trim();
+  const trailingAfterBoundary = cleanedAfterClose.slice(boundaryIdx).trim();
+  if (trailingAfterBoundary) {
+    extractedNonLoreBlocks.push(trailingAfterBoundary);
+  }
+  const remainingAfterLore = extractedNonLoreBlocks.join('\n\n').trim();
 
   if (!postPersonaRaw) {
     return {

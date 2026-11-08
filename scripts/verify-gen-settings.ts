@@ -1271,8 +1271,9 @@ An adventurer's guild in the floating city of Aethelgard.
   assert.ok(studioBoxMatch[1].includes('Selene greets Kars with respect'), 'Studio box must resolve {{char}} and {{user}} macros');
   console.log('  10.3.2 Edge Cases (Header overrides, assistant greeting fallback, multi-char lists, multi-word names, macros) passed.');
 
-  // 10.3.3 Janitor AI <Arisyn's Persona> + Untagged Post-Persona Lorebook + Untriggered Keyword Scanner Test
+  // 10.3.3 Janitor AI <Arisyn's Persona> + <UserPersona> + Untagged Post-Persona Lorebook + Untriggered Keyword Scanner Test
   const arisynSystemPrompt = `<Arisyn's Persona>
+<Arisyn>
 Short lithe build, flared hips, medium breasts, straight hip-length blonde hair, deep crimson eyes.
 Classes: Blood Magic Studies, Weapon Formation & Constructs, Celestial Studies & Astral Lore, Spellcraft & Magical Formation, and Alchemy, along with the mandatory classes.
 
@@ -1294,6 +1295,11 @@ General: "Is something the matter? You're staring."
 
 >NPCs
 Azerrad: Male, Vampire, 429y/o, High Noble, Patriarch of House Bordeaux.The arranged marriage scheme is meant to pull her out of her shell, even if nothing romantic blooms between her & Kars.</Arisyn's Persona>
+<UserPersona>
+5' 8
+Atheletic
+Lean Muscular
+</UserPersona>
 Defiant—won't yield, even at cost to her safety. Haunted—carries her parents' deaths, Haven's disappearance.
 
 Relationships: Haven—sister, missing.
@@ -1345,27 +1351,34 @@ Routes: Starting points for Kars. Arisyn and Kars's initial relationship varies 
 
   // 1. Character Name must be Arisyn (never Azerrad despite Azerrad appearing 7x in greeting)
   assert.strictEqual(arisynCard.data.name, 'Arisyn', 'Character name must be Arisyn from </Arisyn\'s Persona>, never Azerrad');
-  // 2. User Name must be Kars (never "NOT a perfect fighter" from "{{user}} is NOT a perfect fighter")
+  // 2. User Name must be Kars (never "NOT a perfect fighter" from "{{user}} is NOT a perfect fighter") and UserPersona extracted
   assert.ok(arisynExport.includes('**User Name**: **Kars**'), 'User name must be inferred as Kars and reject "NOT a perfect fighter"');
   assert.ok(!arisynExport.includes('NOT a perfect fighter\n> 📊'), 'Must never set User Name to "NOT a perfect fighter"');
-  // 3. Description must NOT contain </Arisyn's Persona> or any post-persona lorebook text
+  assert.ok(arisynCard.data.extensions.user_persona.includes('Atheletic'), 'UserPersona before lorebook must be extracted');
+  // 3. Description must NOT contain </Arisyn's Persona>, <Arisyn>, or any post-persona lorebook text
   assert.ok(!arisynCard.data.description.includes("</Arisyn's Persona>"), 'Closing persona tag must be stripped');
+  assert.ok(!arisynCard.data.description.includes('<Arisyn>'), 'Standalone <Arisyn> tag must be stripped');
   assert.ok(!arisynCard.data.description.includes('Solwyn Starborne'), 'Post-persona lorebook must not leak into description');
   // 4. Personality must be Arisyn's >Personality, NOT the Ash-magic girl's lorebook
   assert.ok(arisynCard.data.personality.includes('Aloof & Restrained'), 'Personality must be extracted from >Personality inside Arisyn card');
   assert.ok(!arisynCard.data.personality.includes('Solwyn Starborne'), 'Lorebook must not be mistaken for Personality & Traits');
   // 5. Dialogue examples extracted from >Dialogue Examples
   assert.ok(arisynCard.data.mes_example.includes('Is something the matter?'), 'Dialogue examples must be extracted from >Dialogue Examples');
-  // 6. Lorebook entries must be extracted (7 distinct entries: Ash-magic girl, Solwyn, Vincent, Team Redwake, Main Hall, Academic Administration, Celestial Arts)
+  // 6. Lorebook entries must be extracted even when <UserPersona> sits immediately after </Arisyn's Persona>
   assert.ok(arisynCard.data.character_book, 'character_book must be populated from post-persona lore region');
   assert.strictEqual(arisynCard.data.character_book.entries.length, 7, `Expected 7 lore entries, got ${arisynCard.data.character_book.entries.length}`);
   assert.ok(arisynExport.includes('📚 **Injected Lore Entries**: 7 active entries'), 'Header must report 7 active lore entries');
-  // 7. Untriggered Lorebook Keywords section must detect missing NPCs and classes
-  assert.ok(arisynExport.includes('### 🔑 Untriggered Lorebook Keywords (1-Shot Trigger Prompt)'), 'Must include Untriggered Lorebook Keywords prompt');
-  assert.ok(arisynExport.includes('Serenya'), 'Untriggered keywords must include Serenya');
-  assert.ok(arisynExport.includes('Haelen'), 'Untriggered keywords must include Haelen');
-  assert.ok(arisynExport.includes('Blood Magic Studies'), 'Untriggered keywords must include Blood Magic Studies');
-  assert.ok(arisynExport.includes('Asher Moonveil'), 'Untriggered keywords must include Asher Moonveil');
+  assert.ok(arisynExport.includes('[World Lore & NPCs (Injected Lorebook)]'), 'Google AI Studio box must include [World Lore & NPCs (Injected Lorebook)]');
+  // 7. Untriggered Lorebook Keywords section must detect missing NPCs and classes while excluding already-defined Vincent & Azerrad
+  const untriggeredBoxMatch = arisynExport.match(/### 🔑 Untriggered Lorebook Keywords[\s\S]*?```text\n([\s\S]*?)\n```/);
+  assert.ok(untriggeredBoxMatch && untriggeredBoxMatch[1], 'Must include Untriggered Lorebook Keywords prompt');
+  const untriggeredText = untriggeredBoxMatch![1];
+  assert.ok(untriggeredText.includes('Serenya'), 'Untriggered keywords must include Serenya');
+  assert.ok(untriggeredText.includes('Haelen'), 'Untriggered keywords must include Haelen');
+  assert.ok(untriggeredText.includes('Blood Magic Studies'), 'Untriggered keywords must include Blood Magic Studies');
+  assert.ok(untriggeredText.includes('Asher Moonveil'), 'Untriggered keywords must include Asher Moonveil');
+  assert.ok(!untriggeredText.includes('Vincent'), 'Vincent is already in lorebook and must not be listed as untriggered');
+  assert.ok(!untriggeredText.includes('Azerrad'), 'Azerrad is already defined in >NPCs and must not be listed as untriggered');
   console.log('  10.3.3 Janitor AI <Arisyn\'s Persona> split, Lorebook parser, Kars inference & Untriggered Keyword Scanner passed.');
 
   // 10.4 E2E handleChatCompletions interception (streaming, default streaming when omitted, and non-streaming)
