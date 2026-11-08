@@ -90,6 +90,51 @@ export interface ExtractedUserInfo {
   userPersona: string;
 }
 
+const INVALID_USER_NAME_WORDS = new Set([
+  'not', 'no', 'never', 'none', 'null', 'undefined', 'true', 'false', 'yes', 'ok', 'okay',
+  'user', 'users', "user's", 'persona', 'profile', 'description', 'character', 'char', 'bot',
+  'ai', 'assistant', 'model', 'system', 'scenario', 'setting', 'world', 'lore', 'info',
+  'note', 'notes', 'rules', 'guidelines', 'instructions', 'directive', 'directives', 'ooc',
+  'fighter', 'warrior', 'mage', 'student', 'duelist', 'perfect', 'normal', 'average', 'ordinary',
+  'human', 'vampire', 'elf', 'demon', 'noble', 'commoner', 'boy', 'girl', 'man', 'woman',
+  'person', 'stranger', 'adventurer', 'hero', 'villain', 'master', 'servant', 'knight',
+  'unknown', 'someone', 'anyone', 'nobody', 'everyone', 'player', 'roleplay', 'author'
+]);
+
+export function isValidUserName(candidate: string, excludeCharName?: string): boolean {
+  if (!candidate) return false;
+  const clean = candidate.replace(/^[\[\(\*\"\'\s]+|[\]\)\*\"\'\s.,:;!?]+$/g, '').trim();
+  if (clean.length < 2 || clean.length > 35) return false;
+  if (!/^[A-Z]/.test(clean)) return false;
+
+  const lower = clean.toLowerCase();
+  if (STOP_WORDS.has(lower) || INVALID_USER_NAME_WORDS.has(lower)) return false;
+  if (excludeCharName && lower === excludeCharName.toLowerCase()) return false;
+
+  const words = clean.split(/\s+/);
+  if (words.length > 4) return false;
+
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const wLower = w.toLowerCase().replace(/['’]s$/i, '');
+    if (INVALID_USER_NAME_WORDS.has(wLower)) return false;
+    // Reject all-caps words of 2+ letters like "NOT", "NEVER", "OOC"
+    if (w.length >= 2 && w === w.toUpperCase() && /^[A-Z]+$/.test(w)) {
+      return false;
+    }
+    // Every word in a name (except connectors like '&') must start with an uppercase letter
+    if (w !== '&' && !/^[A-Z]/.test(w)) {
+      return false;
+    }
+    // First or single word cannot be a stopword
+    if ((i === 0 || words.length === 1) && STOP_WORDS.has(wLower)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function extractUserInfo(
   systemPrompt: string = '',
   messages?: any[],
@@ -97,6 +142,15 @@ export function extractUserInfo(
 ): ExtractedUserInfo {
   const cleanPrompt = systemPrompt ? systemPrompt.replace(/\r\n/g, '\n') : '';
   const safeMessages = Array.isArray(messages) ? messages.filter(Boolean) : [];
+
+  // Detect primary character name from <...'s Persona> tag if present so we don't confuse it with user
+  let primaryBotTag = '';
+  if (cleanPrompt) {
+    const botTagMatch = cleanPrompt.match(/<\/?([^<>\/\n]{2,40}?)['\u2019]s\s+Persona>/i);
+    if (botTagMatch && botTagMatch[1]) {
+      primaryBotTag = botTagMatch[1].trim();
+    }
+  }
 
   // Helper for headers (supports Web API Headers, mock objects with .get, and plain Record objects)
   const getHeader = (key: string): string | null => {
@@ -125,9 +179,11 @@ export function extractUserInfo(
 
   // 1. Check explicit XML user tags in system prompt
   if (cleanPrompt) {
-    const xmlPersonaMatch = cleanPrompt.match(/<user_persona(?:\s+name=["']([^"']+)["'])?>([\s\S]*?)<\/user_persona>/i);
+    const xmlPersonaMatch = cleanPrompt.match(/<(?:user_persona|UserPersona)(?:\s+name=["']([^"']+)["'])?>([\s\S]*?)<\/(?:user_persona|UserPersona)>/i);
     if (xmlPersonaMatch) {
-      if (xmlPersonaMatch[1] && !userName) userName = xmlPersonaMatch[1].trim();
+      if (xmlPersonaMatch[1] && !userName && isValidUserName(xmlPersonaMatch[1].trim(), primaryBotTag)) {
+        userName = xmlPersonaMatch[1].trim();
+      }
       if (xmlPersonaMatch[2]) userPersona = xmlPersonaMatch[2].trim();
     }
     if (!userPersona) {
@@ -138,14 +194,14 @@ export function extractUserInfo(
     }
     if (!userName) {
       const xmlNameMatch = cleanPrompt.match(/<user_name>([^<]+)<\/user_name>/i);
-      if (xmlNameMatch && xmlNameMatch[1]) {
+      if (xmlNameMatch && xmlNameMatch[1] && isValidUserName(xmlNameMatch[1].trim(), primaryBotTag)) {
         userName = xmlNameMatch[1].trim();
       }
     }
   }
 
   // 2. Bracket and markdown patterns for user persona in prompt
-  const sectionBoundaryLookahead = '(?=(?:\\n\\s*#{1,4}\\s+|\\n\\s*\\[(?:Character|Scenario|Appearance|Description|Setting|World|Personality|Traits|First Message|Greeting|Starter|Examples?|Rules?|System Instructions?|User)|\\n\\s*<(?:char|character|scenario|personality|traits|first_mes|greeting|starter|mes_example|example_dialogue|dialogue|system_prompt|system_directive|role_and_identity|guidelines|rules|jailbreak|user_persona|user)|$))';
+  const sectionBoundaryLookahead = '(?=(?:\\n\\s*#{1,4}\\s+|\\n\\s*\\[(?:Character|Scenario|Appearance|Description|Setting|World|Personality|Traits|First Message|Greeting|Starter|Examples?|Rules?|System Instructions?|User)|\\n\\s*<(?:char|character|scenario|personality|traits|first_mes|greeting|starter|mes_example|example_dialogue|dialogue|system_prompt|system_directive|role_and_identity|guidelines|rules|jailbreak|user_persona|UserPersona|user)|$))';
 
   if (cleanPrompt && !userPersona) {
     const userPersonaPatterns = [
@@ -165,19 +221,19 @@ export function extractUserInfo(
     }
   }
 
-  // 3. Extract user name from key-value or template declarations
+  // 3. Extract user name from key-value or template declarations (strict case-validated)
   if (cleanPrompt && !userName) {
     const namePatterns = [
       /(?:^|\n)\s*(?:User's Name|User Name|{{user}}'s Name)\s*:\s*([^\n\r,\]]+)/i,
-      /\{\{user\}\}\s*(?:=|:|is named|is)\s*(?:a\s+|an\s+|the\s+)?([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\b/i,
-      /\[(?:User's Persona|User Persona|User)\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\s*(?:[-:\n\r,]|\]|$)/i,
-      /(?:^|\n)\s*(?:User|{{user}})\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\b/i,
+      /\{\{user\}\}\s*(?:=|:|is named)\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2})\b/,
+      /\[(?:User's Persona|User Persona|User)\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2})\s*(?:[-:\n\r,]|\]|$)/,
+      /(?:^|\n)\s*(?:User|{{user}})\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2})\b/,
     ];
     for (const np of namePatterns) {
       const match = cleanPrompt.match(np);
       if (match && match[1] && match[1].trim()) {
         const candidate = match[1].trim();
-        if (!STOP_WORDS.has(candidate.toLowerCase()) && !/^(?:user|user's|persona)$/i.test(candidate)) {
+        if (isValidUserName(candidate, primaryBotTag)) {
           userName = candidate;
           break;
         }
@@ -195,20 +251,21 @@ export function extractUserInfo(
         if (!text) continue;
 
         // Speaker prefix: "Kars: ..." or "John Doe: ..."
-        const spkMatch = text.match(/^([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3}):\s+/);
+        const spkMatch = text.match(/^([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2}):\s+/);
         if (spkMatch && spkMatch[1]) {
           const spk = spkMatch[1].trim();
-          if (!STOP_WORDS.has(spk.toLowerCase()) && !/^(?:user|user's)$/i.test(spk)) {
+          if (isValidUserName(spk, primaryBotTag)) {
             userName = spk;
             break;
           }
         }
 
         // Action prefix: "*Kars looks around...*" or "*John Doe draws weapon...*"
-        const actMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\s+[a-z]+\b/);
-        if (actMatch && actMatch[1]) {
+        const actMatch = text.match(/^\*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2})\s+([a-z]+)\b/);
+        if (actMatch && actMatch[1] && actMatch[2]) {
           const act = actMatch[1].trim();
-          if (!STOP_WORDS.has(act.toLowerCase()) && !/^(?:user|user's)$/i.test(act)) {
+          const verb = actMatch[2].toLowerCase();
+          if (isValidUserName(act, primaryBotTag) && ACTION_VERBS.has(verb)) {
             userName = act;
             break;
           }
@@ -219,13 +276,35 @@ export function extractUserInfo(
 
   // 5. If userPersona is present, check if it specifies a name
   if (userPersona && !userName) {
-    const personaNameMatch = userPersona.match(/(?:^|\n)\s*(?:Name|Full Name)\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\b/i);
-    if (personaNameMatch && personaNameMatch[1]) {
+    const personaNameMatch = userPersona.match(/(?:^|\n)\s*(?:Name|Full Name)\s*:\s*([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2})\b/);
+    if (personaNameMatch && personaNameMatch[1] && isValidUserName(personaNameMatch[1].trim(), primaryBotTag)) {
       userName = personaNameMatch[1].trim();
     } else {
-      const prefixMatch = userPersona.match(/^([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,3})\s*(?:[-:\n\r,]|is\b|was\b|a\b|an\b|the\b)/);
-      if (prefixMatch && prefixMatch[1] && !STOP_WORDS.has(prefixMatch[1].toLowerCase()) && !/^(?:user|user's)$/i.test(prefixMatch[1])) {
+      const prefixMatch = userPersona.match(/^([A-Z][a-zA-Z0-9_\-']*(?:\s+[A-Z][a-zA-Z0-9_\-']*){0,2})\s*(?:[-:\n\r,]|is\b|was\b)/);
+      if (prefixMatch && prefixMatch[1] && isValidUserName(prefixMatch[1].trim(), primaryBotTag)) {
         userName = prefixMatch[1].trim();
+      }
+    }
+  }
+
+  // 5.5 Infer substituted {{user}} name from Scenario / Persona relationship cues (e.g. Janitor AI replacing {{user}} with Kars)
+  if (!userName && cleanPrompt) {
+    const scenarioInferencePatterns = [
+      /(?:Routes:\s*)?Starting points for\s+([A-Z][a-zA-Z0-9_\-]{1,20})\b/,
+      /(?:arranged engagement with|engaged to|betrothed to)\s+([A-Z][a-zA-Z0-9_\-]{1,20})\b/,
+      /between\s+(?:her|him|them)\s+(?:&|and)\s+([A-Z][a-zA-Z0-9_\-]{1,20})\b/,
+      ...(primaryBotTag
+        ? [
+            new RegExp(`\\b${primaryBotTag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s+(?:&|and)\\s+([A-Z][a-zA-Z0-9_\\-]{1,20})(?:['’]s|\\b)`),
+            new RegExp(`\\b([A-Z][a-zA-Z0-9_\\-]{1,20})\\s+(?:&|and)\\s+${primaryBotTag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}(?:['’]s|\\b)`),
+          ]
+        : []),
+    ];
+    for (const sip of scenarioInferencePatterns) {
+      const match = cleanPrompt.match(sip);
+      if (match && match[1] && isValidUserName(match[1].trim(), primaryBotTag)) {
+        userName = match[1].trim();
+        break;
       }
     }
   }
@@ -234,7 +313,7 @@ export function extractUserInfo(
   if (userName && !userPersona && cleanPrompt) {
     const escaped = userName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const specificRegex = new RegExp(
-      `(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:${escaped}'s\\s+(?:Persona|Description|Appearance|Profile)|${escaped}\\s*:\\s*)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)(?=(?:\\n\\s*#{1,4}|\\n\\s*\\[|$))`,
+      `(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:<${escaped}['’]s\\s+Persona>|${escaped}'s\\s+(?:Persona|Description|Appearance|Profile)|${escaped}\\s*:\\s*)(?::\\s*|\\s*\\n)?\\s*([\\s\\S]*?)(?=(?:<\\/${escaped}['’]s\\s+Persona>|\\n\\s*#{1,4}|\\n\\s*\\[|\\n\\s*<Scenario>|$))`,
       'i'
     );
     const specMatch = cleanPrompt.match(specificRegex);
@@ -287,6 +366,8 @@ export function extractCharacterName(systemPrompt: string, messages?: any[], hea
       /<char(?:_name)?\s*>(.*?)<\/char(?:_name)?>/i,
       /<char_persona\s+name=["']([^"']+)["']/i,
       /<(?:bot_name|character_name)\s*>([^<]+)<\/(?:bot_name|character_name)>/i,
+      // Janitor AI XML Persona tags: <Arisyn's Persona> or </Arisyn's Persona>
+      /<\/?(?!User\b|{{user}}\b)([A-Z][a-zA-Z0-9_\-'’\s&]{1,40}?)['\u2019]s\s+(?:Persona|Description|Profile|Character)>/i,
       /\[(?:Character|Char)\s*:\s*([^\n\r\[\]\(\);:,]{1,40})\]/i,
       /\[(?:Character|Char)\("([^"]+)"\)\]/i,
       /(?:^|\n)\s*(?:\*\*|#{1,4}\s*)?(?:Character Name|Char Name|Character)(?:\*\*|\s*):+\s*([^\n\r\[\]\(\);:,]{1,40})/i,
@@ -933,6 +1014,165 @@ export function stitchLosslessHistory(
   return incomingMessages;
 }
 
+export interface PostPersonaLoreResult {
+  hasClosingPersonaTag: boolean;
+  personaCharName: string;
+  corePersonaText: string;
+  postPersonaRaw: string;
+  remainingAfterLore: string;
+  entries: InjectedLoreEntry[];
+}
+
+export function extractPostPersonaLoreEntries(rawSystemText: string): PostPersonaLoreResult {
+  const normalized = (rawSystemText || '').replace(/\r\n/g, '\n');
+  const closeMatch = normalized.match(/<\/([^<>\/\n]{2,50}?)['\u2019]s\s+Persona>/i);
+
+  if (!closeMatch || closeMatch.index === undefined) {
+    return {
+      hasClosingPersonaTag: false,
+      personaCharName: '',
+      corePersonaText: normalized,
+      postPersonaRaw: '',
+      remainingAfterLore: '',
+      entries: []
+    };
+  }
+
+  const personaCharName = closeMatch[1].trim();
+  const closeIdx = closeMatch.index;
+  const afterCloseIdx = closeIdx + closeMatch[0].length;
+
+  // Strip any opening <Char's Persona> tag from the core persona text
+  let corePersonaText = normalized.slice(0, closeIdx);
+  corePersonaText = corePersonaText
+    .replace(/<(?:[^<>\/\n]{2,50}?)['\u2019]s\s+Persona>\s*/gi, '')
+    .trim();
+
+  const afterClose = normalized.slice(afterCloseIdx);
+
+  // Locate the boundary where Scenario / UserPersona / Examples / System Instructions begin
+  const boundaryPatterns = [
+    /<(?:Scenario|scenario|world|setting|UserPersona|user_persona|user_profile|example_dialogs|mes_example|first_mes|system_prompt|system_instructions)\b/i,
+    /(?:^|\n)\s*(?:#{1,4}\s*)?(?:Scenario|World Setting|Initial Greeting|First Message|Example Dialogues?)(?::\s*|\s*\n)/i,
+    /(?:^|\n)\s*\[(?:Scenario|Setting|User's Persona|User Persona|User Definition|First Message|Greeting)\b/i,
+  ];
+
+  let boundaryIdx = afterClose.length;
+  for (const bp of boundaryPatterns) {
+    const m = afterClose.match(bp);
+    if (m && m.index !== undefined && m.index < boundaryIdx) {
+      boundaryIdx = m.index;
+    }
+  }
+
+  const postPersonaRaw = afterClose.slice(0, boundaryIdx).trim();
+  const remainingAfterLore = afterClose.slice(boundaryIdx).trim();
+
+  if (!postPersonaRaw) {
+    return {
+      hasClosingPersonaTag: true,
+      personaCharName,
+      corePersonaText,
+      postPersonaRaw: '',
+      remainingAfterLore,
+      entries: []
+    };
+  }
+
+  // Split postPersonaRaw into discrete Lorebook entries
+  const paragraphs = postPersonaRaw.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  const rawChunks: string[][] = [];
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    const nextP = i + 1 < paragraphs.length ? paragraphs[i + 1] : '';
+
+    if (rawChunks.length === 0) {
+      rawChunks.push([p]);
+      continue;
+    }
+
+    // 1. Multi-paragraph Character Profile Header: "Solwyn Starborne | Astral Elf..." followed by "Appearance: ..."
+    const isCharSheetHeader =
+      /^[A-Z][a-zA-Z0-9_\-'’\s]{1,45}\s+\|\s+[^\n]+$/.test(p) &&
+      /^(?:Appearance|Scent|Attire|Background|Personality|Reputation|Housing|Species|Age|Role)\s*:/i.test(nextP);
+
+    // 2. Standalone Team / Group / Faction Header: "Team Redwake"
+    const isGroupHeader = /^(?:Team|House|Council|Order|Clan|Guild|Faction)\s+[A-Z][a-zA-Z0-9_\-'’\s]{1,40}$/.test(p);
+
+    // 3. Em-Dash Location / Landmark Entry: "Main Hall — The academy's daily heart..."
+    const isLocationEntry = /^[A-Z][a-zA-Z0-9_\-'’\s\/()&]{2,55}\s+—\s+\S/.test(p);
+
+    // 4. Class / Course Block: "Celestial Arts & Astral Lore\nInstructor: Solwyn Starborne..."
+    const isClassEntry = /^[A-Z][a-zA-Z0-9_\-'’\s:&]{3,60}\nInstructor\s*:/i.test(p);
+
+    // 5. Department / Office Colon Block: "Academic Administration: Controls admissions..."
+    const isDepartmentEntry = /^[A-Z][a-zA-Z0-9_\-'’\s&]{4,45}:\s+(?:Controls|Manages|Oversees|Handles|Located|Serves)\b/.test(p);
+
+    // 6. Explicit Markdown / Possessive Lore Header
+    const isExplicitHeader = /^(?:#{1,4}\s+[^\n]+|[A-Z][a-zA-Z0-9_\-'’\s]{2,35}['\u2019]s\s+(?:Persona|Personality|Profile|Lore)\b)/.test(p);
+
+    if (isCharSheetHeader || isGroupHeader || isLocationEntry || isClassEntry || isDepartmentEntry || isExplicitHeader) {
+      rawChunks.push([p]);
+    } else {
+      rawChunks[rawChunks.length - 1].push(p);
+    }
+  }
+
+  const entries: InjectedLoreEntry[] = [];
+  for (let idx = 0; idx < rawChunks.length; idx++) {
+    const content = rawChunks[idx].join('\n\n').trim();
+    if (!content || content.length < 5) continue;
+
+    const firstLine = content.split('\n')[0].trim();
+    const secondLine = (content.split('\n')[1] || '').trim();
+    let title = `Lore Entry #${idx + 1}`;
+    let category: InjectedLoreEntry['category'] = 'lore';
+
+    if (firstLine.includes(' | ')) {
+      title = firstLine.split(' | ')[0].trim();
+    } else if (firstLine.includes(' — ')) {
+      title = firstLine.split(' — ')[0].trim();
+      category = 'world_info';
+    } else if (/^Instructor\s*:/i.test(secondLine)) {
+      title = `Class: ${firstLine}`;
+      category = 'world_info';
+    } else if (/^([A-Z][a-zA-Z0-9_\-'’\s&]{4,45}):\s+(?:Controls|Manages|Oversees|Handles|Located|Serves)\b/.test(firstLine)) {
+      title = firstLine.split(':')[0].trim();
+      category = 'world_info';
+    } else if (firstLine.length <= 50 && !/[.;!?]$/.test(firstLine)) {
+      title = firstLine.replace(/^[#\-\*\[\]\s]+|[#\]\s:]+$/g, '').trim();
+    } else {
+      // Orphaned character profile (e.g. first lore entry whose header was omitted or stripped)
+      const magicMatch = content.match(/Magic\s*\(([^)]+)\)/i);
+      const relMatch = content.match(/Relationships\s*:\s*([A-Z][a-zA-Z0-9_\-]+)/);
+      if (magicMatch && relMatch) {
+        title = `Character Lore (${magicMatch[1].trim()} Magic • ${relMatch[1].trim()}'s Sister)`;
+      } else if (magicMatch) {
+        title = `Character Lore (${magicMatch[1].trim()} Magic)`;
+      } else {
+        title = firstLine.replace(/^[#\-\*\[\]\s]+/, '').slice(0, 40).trim();
+      }
+    }
+
+    entries.push({
+      title,
+      category,
+      content,
+      tokens: Math.max(1, Math.floor(content.length / 4))
+    });
+  }
+
+  return {
+    hasClosingPersonaTag: true,
+    personaCharName,
+    corePersonaText,
+    postPersonaRaw,
+    remainingAfterLore,
+    entries
+  };
+}
+
 // Extract all dynamic Lorebook, World Info, Memory, and Context injections from Lorebary / Janitor AI
 export function extractInjectedLore(
   messages: any[],
@@ -940,6 +1180,17 @@ export function extractInjectedLore(
 ): InjectedLoreEntry[] {
   const entries: InjectedLoreEntry[] = [];
   const seenContent = new Set<string>();
+
+  // 0. Check for Janitor AI post-</...'s Persona> concatenated Lorebook entries
+  if (rawSystemText) {
+    const postPersona = extractPostPersonaLoreEntries(rawSystemText);
+    for (const entry of postPersona.entries) {
+      if (entry.content && !seenContent.has(entry.content)) {
+        seenContent.add(entry.content);
+        entries.push(entry);
+      }
+    }
+  }
 
   const msgContents = (messages || []).map(m => (typeof m?.content === 'string' ? m.content : (Array.isArray(m?.content) ? m.content.map((p: any) => p?.text || '').join('\n') : '')));
   const fullText = [rawSystemText || '', ...msgContents].join('\n\n');

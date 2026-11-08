@@ -1271,6 +1271,103 @@ An adventurer's guild in the floating city of Aethelgard.
   assert.ok(studioBoxMatch[1].includes('Selene greets Kars with respect'), 'Studio box must resolve {{char}} and {{user}} macros');
   console.log('  10.3.2 Edge Cases (Header overrides, assistant greeting fallback, multi-char lists, multi-word names, macros) passed.');
 
+  // 10.3.3 Janitor AI <Arisyn's Persona> + Untagged Post-Persona Lorebook + Untriggered Keyword Scanner Test
+  const arisynSystemPrompt = `<Arisyn's Persona>
+Short lithe build, flared hips, medium breasts, straight hip-length blonde hair, deep crimson eyes.
+Classes: Blood Magic Studies, Weapon Formation & Constructs, Celestial Studies & Astral Lore, Spellcraft & Magical Formation, and Alchemy, along with the mandatory classes.
+
+>Backstory
+Born in the kingdom of Duskveil to House Bordeaux, rival noble house of House Ravencourt. Met Serenya Ravencourt, igniting intense rivalry. Threw herself into constant duels in the Duel Greens.
+
+>Personality
+- Aloof & Restrained: Not emotionless, just subtle.
+- Competitive & Ambitious: Aims to become a Divine Harbinger.
+
+>Relationships
+- Serenya: Once her rival and only comfort in the Academy.
+- Vincent: Persistent pest.
+- Haelen: Her favorite professor/instructor and main combat mentor.
+- Azerrad Bordeaux: Her father.
+
+>Dialogue Examples
+General: "Is something the matter? You're staring."
+
+>NPCs
+Azerrad: Male, Vampire, 429y/o, High Noble, Patriarch of House Bordeaux.The arranged marriage scheme is meant to pull her out of her shell, even if nothing romantic blooms between her & Kars.</Arisyn's Persona>
+Defiant—won't yield, even at cost to her safety. Haunted—carries her parents' deaths, Haven's disappearance.
+
+Relationships: Haven—sister, missing.
+
+Magic (Ash): Ash Assault—exhales choking ash.
+
+Solwyn Starborne | Astral Elf, Female, 1734 | Professor (Celestial Arts & Astral Lore), First Council Member of Council of Nine
+
+Appearance: 175 cm. Dark skin, slim build. Long white hair.
+
+Personality: Wise, dignified, Workaholic.
+
+Vincent Dravencrest | Vampire, Male, 23 | 3rd year, Noble, Combat mage
+
+Appearance: 187 cm, lean-muscular.
+
+Team Redwake
+
+Dax Karsan | Vampire, Male, 22 | 3rd year, Lesser Noble, Combat mage | Loud, cocky.
+
+Alaric Morcant | Vampire, Male, 23 | 3rd year, Lesser Noble, Combat mage | Eager, fearless.
+
+Main Hall — The academy’s daily heart, the Main Hall is a vast vaulted chamber of pale stone.
+
+Academic Administration: Controls admissions, schedules, exams, grades, student records.
+
+Celestial Arts & Astral Lore
+Instructor: Solwyn Starborne
+Location: Astral Spire
+Notable students: Asher Moonveil, Beatrice Moonveil, Cyrene Starbound
+
+<Scenario>
+{{user}} is NOT a perfect fighter.
+Arisyn's father announced her arranged engagement with Kars in front of hundreds of students.
+Routes: Starting points for Kars. Arisyn and Kars's initial relationship varies per Route.
+</Scenario>`;
+
+  const arisynGreeting = `\`Route - Announcement of Theatrical Proportions\`\n\n*Azerrad strides down the aisle.* *Azerrad beams.* *Azerrad chuckles.* *Azerrad snorts.* *Azerrad straightens.* *Azerrad's voice booms.* *Azerrad calls out to Kars!* *Arisyn watches silently.*`;
+  const arisynMessages = [
+    { role: 'system', content: arisynSystemPrompt },
+    { role: 'assistant', content: arisynGreeting },
+    { role: 'user', content: '*steps forward*' },
+  ];
+
+  const arisynExport = exportCharacterCard(arisynMessages, arisynSystemPrompt, undefined);
+  const arisynJsonMatch = arisynExport.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(arisynJsonMatch && arisynJsonMatch[1], 'Must contain SillyTavern V2 JSON for Arisyn');
+  const arisynCard = JSON.parse(arisynJsonMatch[1]);
+
+  // 1. Character Name must be Arisyn (never Azerrad despite Azerrad appearing 7x in greeting)
+  assert.strictEqual(arisynCard.data.name, 'Arisyn', 'Character name must be Arisyn from </Arisyn\'s Persona>, never Azerrad');
+  // 2. User Name must be Kars (never "NOT a perfect fighter" from "{{user}} is NOT a perfect fighter")
+  assert.ok(arisynExport.includes('**User Name**: **Kars**'), 'User name must be inferred as Kars and reject "NOT a perfect fighter"');
+  assert.ok(!arisynExport.includes('NOT a perfect fighter\n> 📊'), 'Must never set User Name to "NOT a perfect fighter"');
+  // 3. Description must NOT contain </Arisyn's Persona> or any post-persona lorebook text
+  assert.ok(!arisynCard.data.description.includes("</Arisyn's Persona>"), 'Closing persona tag must be stripped');
+  assert.ok(!arisynCard.data.description.includes('Solwyn Starborne'), 'Post-persona lorebook must not leak into description');
+  // 4. Personality must be Arisyn's >Personality, NOT the Ash-magic girl's lorebook
+  assert.ok(arisynCard.data.personality.includes('Aloof & Restrained'), 'Personality must be extracted from >Personality inside Arisyn card');
+  assert.ok(!arisynCard.data.personality.includes('Solwyn Starborne'), 'Lorebook must not be mistaken for Personality & Traits');
+  // 5. Dialogue examples extracted from >Dialogue Examples
+  assert.ok(arisynCard.data.mes_example.includes('Is something the matter?'), 'Dialogue examples must be extracted from >Dialogue Examples');
+  // 6. Lorebook entries must be extracted (7 distinct entries: Ash-magic girl, Solwyn, Vincent, Team Redwake, Main Hall, Academic Administration, Celestial Arts)
+  assert.ok(arisynCard.data.character_book, 'character_book must be populated from post-persona lore region');
+  assert.strictEqual(arisynCard.data.character_book.entries.length, 7, `Expected 7 lore entries, got ${arisynCard.data.character_book.entries.length}`);
+  assert.ok(arisynExport.includes('📚 **Injected Lore Entries**: 7 active entries'), 'Header must report 7 active lore entries');
+  // 7. Untriggered Lorebook Keywords section must detect missing NPCs and classes
+  assert.ok(arisynExport.includes('### 🔑 Untriggered Lorebook Keywords (1-Shot Trigger Prompt)'), 'Must include Untriggered Lorebook Keywords prompt');
+  assert.ok(arisynExport.includes('Serenya'), 'Untriggered keywords must include Serenya');
+  assert.ok(arisynExport.includes('Haelen'), 'Untriggered keywords must include Haelen');
+  assert.ok(arisynExport.includes('Blood Magic Studies'), 'Untriggered keywords must include Blood Magic Studies');
+  assert.ok(arisynExport.includes('Asher Moonveil'), 'Untriggered keywords must include Asher Moonveil');
+  console.log('  10.3.3 Janitor AI <Arisyn\'s Persona> split, Lorebook parser, Kars inference & Untriggered Keyword Scanner passed.');
+
   // 10.4 E2E handleChatCompletions interception (streaming, default streaming when omitted, and non-streaming)
   // Test A: stream: true
   const streamReq = new NextRequest('http://localhost:3000/v1/chat/completions', {

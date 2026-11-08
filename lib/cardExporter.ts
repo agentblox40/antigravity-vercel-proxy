@@ -1,4 +1,10 @@
-import { extractCharacterName, extractUserInfo, extractInjectedLore, InjectedLoreEntry } from './memory';
+import {
+  extractCharacterName,
+  extractUserInfo,
+  extractInjectedLore,
+  extractPostPersonaLoreEntries,
+  InjectedLoreEntry,
+} from './memory';
 
 export interface CharacterCardV2Data {
   name: string;
@@ -22,6 +28,105 @@ export interface CharacterCardV2Spec {
   spec: 'chara_card_v2';
   spec_version: '2.0';
   data: CharacterCardV2Data;
+}
+
+function detectUntriggeredLoreKeywords(
+  descriptionText: string,
+  scenarioText: string,
+  loreEntries: InjectedLoreEntry[],
+  characterName: string,
+  userName: string
+): string[] {
+  const candidates = new Set<string>();
+  const combinedSource = [descriptionText, scenarioText, ...loreEntries.map(e => e.content)].join('\n\n');
+
+  const addCandidate = (raw: string) => {
+    const cleaned = raw
+      .replace(/\([^)]*\)/g, '')
+      .replace(/^[\s\-\*•>]+|[\s.,;:!?'"`]+$/g, '')
+      .trim();
+    if (!cleaned || cleaned.length < 3 || cleaned.length > 45) return;
+    if (/^(?:mandatory classes|and every other student|in sessions divided by year|none|unknown|various|others)$/i.test(cleaned)) return;
+    if (characterName && cleaned.toLowerCase() === characterName.toLowerCase()) return;
+    if (userName && cleaned.toLowerCase() === userName.toLowerCase()) return;
+    candidates.add(cleaned);
+  };
+
+  // 1. Extract Classes from "Classes: A, B, C, and D, along with..."
+  const classesMatch = descriptionText.match(/(?:^|\n)\s*Classes\s*:\s*([^\n]+)/i);
+  if (classesMatch && classesMatch[1]) {
+    const rawList = classesMatch[1]
+      .replace(/,?\s*along with[\s\S]*$/i, '')
+      .split(/,(?:\s+and\s+)?|\s+and\s+/i);
+    for (const item of rawList) addCandidate(item);
+  }
+
+  // 2. Extract Relationships bullet headers: "- Serenya: ..." or "- Haelen: ..."
+  const relBlockMatch = descriptionText.match(/>?Relationships\s*\n([\s\S]*?)(?=\n>[A-Z]|\n#{1,4}\s|$)/i);
+  if (relBlockMatch && relBlockMatch[1]) {
+    const relLines = relBlockMatch[1].split('\n');
+    for (const line of relLines) {
+      const m = line.match(/^\s*[-*•]\s*([A-Z][a-zA-Z0-9_\-'’\s]{1,35}?)\s*:/);
+      if (m && m[1]) addCandidate(m[1]);
+    }
+  }
+
+  // 3. Extract inline "Relationships: Name—desc. Name2—desc." inside lore entries
+  const inlineRelRegex = /Relationships\s*:\s*([^\n]+)/gi;
+  let relMatch;
+  while ((relMatch = inlineRelRegex.exec(combinedSource)) !== null) {
+    const parts = relMatch[1].split(/[.;]/);
+    for (const p of parts) {
+      const nameM = p.trim().match(/^([A-Z][a-zA-Z0-9_\-'’\s]{1,30}?)\s*(?:—|--|-|,)/);
+      if (nameM && nameM[1]) addCandidate(nameM[1]);
+    }
+  }
+
+  // 4. Extract "Notable students: Name1, Name2 (Affinity), ..." from class lore entries
+  const notableRegex = /Notable students\s*:\s*([^\n]+)/gi;
+  let notableMatch;
+  while ((notableMatch = notableRegex.exec(combinedSource)) !== null) {
+    const listStr = notableMatch[1].replace(/,?\s*and every other student[\s\S]*$/i, '');
+    const items = listStr.split(',');
+    for (const item of items) addCandidate(item);
+  }
+
+  // 5. Extract named Houses, Kingdoms, Councils, Ranks, and Arenas from backstory/persona
+  const namedEntityPatterns = [
+    /\b(House\s+[A-Z][a-zA-Z0-9_\-]{2,25})\b/g,
+    /\b(Council\s+of\s+[A-Z][a-zA-Z0-9_\-]{2,25})\b/g,
+    /\b(Divine\s+Harbinger)\b/g,
+    /\b(Headmistress)\b/g,
+    /\b(Duel\s+Greens)\b/g,
+    /\bkingdom\s+of\s+([A-Z][a-zA-Z0-9_\-]{2,25})\b/gi,
+    /\bMet\s+([A-Z][a-zA-Z0-9_\-]+\s+[A-Z][a-zA-Z0-9_\-]+)\b/g,
+  ];
+  for (const pat of namedEntityPatterns) {
+    let m;
+    while ((m = pat.exec(descriptionText)) !== null) {
+      if (m[1]) addCandidate(m[1]);
+    }
+  }
+
+  // Filter out any candidate that ALREADY has a dedicated lorebook entry in loreEntries
+  const triggeredTitlesLower = loreEntries.map(e => e.title.toLowerCase());
+  const triggeredHeadersLower = loreEntries.map(e => e.content.split('\n')[0].toLowerCase());
+
+  const untriggered: string[] = [];
+  for (const cand of candidates) {
+    const cLower = cand.toLowerCase();
+    if (characterName && (cLower === characterName.toLowerCase() || cLower.startsWith(characterName.toLowerCase() + ' '))) {
+      continue;
+    }
+    const alreadyTriggered =
+      triggeredTitlesLower.some(t => t.includes(cLower) || cLower.includes(t.replace(/^class:\s*/, ''))) ||
+      triggeredHeadersLower.some(h => h.startsWith(cLower) || h.includes(`${cLower} |`) || h.includes(`${cLower} —`));
+    if (!alreadyTriggered) {
+      untriggered.push(cand);
+    }
+  }
+
+  return untriggered;
 }
 
 function extractSectionByRegex(text: string, patterns: RegExp[]): string {
@@ -92,6 +197,9 @@ export function exportCharacterCard(
 
   let characterName = (customHeaderName || '').trim();
 
+  // Pre-parse Janitor AI <Char's Persona> ... </Char's Persona> boundary so concatenated lorebooks never pollute character fields
+  const postPersonaSplit = extractPostPersonaLoreEntries(rawSystemText);
+
   // Explicit XML tag check in system prompt
   if (!characterName) {
     const explicitNameMatch = rawSystemText.match(/<(?:char_name|character_name|char|bot_name)\s*>([^<]+)<\/(?:char_name|character_name|char|bot_name)>/i);
@@ -100,6 +208,14 @@ export function exportCharacterCard(
       if (!userName || candidate.toLowerCase() !== userName.toLowerCase()) {
         characterName = candidate;
       }
+    }
+  }
+
+  // Janitor AI <CharName's Persona> / </CharName's Persona> tag takes immediate priority over greeting heuristics
+  if (!characterName && postPersonaSplit.hasClosingPersonaTag && postPersonaSplit.personaCharName) {
+    const candidate = postPersonaSplit.personaCharName;
+    if (!userName || candidate.toLowerCase() !== userName.toLowerCase()) {
+      characterName = candidate;
     }
   }
 
@@ -138,8 +254,13 @@ export function exportCharacterCard(
     characterName = 'Character';
   }
 
+  // Non-lore system text (excludes post-</...'s Persona> concatenated lorebook blocks)
+  const nonLoreSystemText = postPersonaSplit.hasClosingPersonaTag
+    ? `${postPersonaSplit.corePersonaText}\n\n${postPersonaSplit.remainingAfterLore}`.trim()
+    : rawSystemText;
+
   // 2. Extract First Message / Greeting (Prompt declarations take precedence; fallback to earliest assistant message)
-  const sectionBoundary = '(?=(?:\\n\\s*#{1,4}\\s+|\\n\\s*\\[(?:Character|Scenario|Setting|World|Appearance|Description|Personality|Traits|First Message|Greeting|Starter|Examples?|Dialogue|Rules?|System Instructions?|System Directives?|Jailbreak|User)|\\n\\s*<(?:char|character|scenario|personality|traits|first_mes|greeting|starter|mes_example|example_dialogue|dialogue|system_prompt|system_directive|role_and_identity|guidelines|rules|jailbreak|user_persona|user)|$))';
+  const sectionBoundary = '(?=(?:\\n\\s*#{1,4}\\s+|\\n\\s*\\[(?:Character|Scenario|Setting|World|Appearance|Description|Personality|Traits|First Message|Greeting|Starter|Examples?|Dialogue|Rules?|System Instructions?|System Directives?|Jailbreak|User)|\\n\\s*<(?:char|character|scenario|personality|traits|first_mes|greeting|starter|mes_example|example_dialogue|dialogue|system_prompt|system_directive|role_and_identity|guidelines|rules|jailbreak|user_persona|UserPersona|user)|$))';
 
   const firstMesPatterns = [
     /<first_mes>([\s\S]*?)<\/first_mes>/i,
@@ -151,7 +272,7 @@ export function exportCharacterCard(
     /(?:FirstMessage|Greeting)\("([^"]+)"\)/i,
   ];
 
-  let firstMes = extractSectionByRegex(rawSystemText, firstMesPatterns);
+  let firstMes = extractSectionByRegex(nonLoreSystemText, firstMesPatterns);
   if (!firstMes) {
     const firstAssistant = safeMessages.find(m => m.role === 'assistant');
     if (firstAssistant) {
@@ -159,11 +280,19 @@ export function exportCharacterCard(
     }
   }
 
-  // 3. Extract Specific Character Definition Sections (supporting optional colons on markdown headers)
+  // 3. Extract Specific Character Definition Sections (scoped strictly to non-lore character text)
+  const escapedCharName = characterName && characterName !== 'Character'
+    ? characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    : '';
+  const charPrefixPattern = escapedCharName
+    ? `(?:(?:${escapedCharName}['’]s|{{char}}(?:'s)?)\\s+)?`
+    : `(?:{{char}}(?:'s)?\\s+)?`;
+
   const personalityPatterns = [
     /<personality>([\s\S]*?)<\/personality>/i,
     /<traits>([\s\S]*?)<\/traits>/i,
-    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:(?:[A-Z][a-zA-Z0-9_\\-&'\\s]{1,40}['’]s|{{char}}(?:'s)?)\\s+)?(?:Personality|Persona Traits|Traits|Psychological Profile)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
+    /(?:^|\n)\s*>Personality\s*\n+([\s\S]*?)(?=\n\s*>[A-Z]|\n\s*#{1,4}\s|$)/i,
+    new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?${charPrefixPattern}(?:Personality|Persona Traits|Traits|Psychological Profile)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
     /\[(?:Personality|Traits)\s*:\s*([^\]]+)\]/i,
     /Personality\("([^"]+)"\)/i,
   ];
@@ -194,10 +323,12 @@ export function exportCharacterCard(
 
   const examplePatterns = [
     /<mes_example>([\s\S]*?)<\/mes_example>/i,
+    /<example_dialogs>([\s\S]*?)<\/example_dialogs>/i,
     /<example_dialogue>([\s\S]*?)<\/example_dialogue>/i,
     /<dialogue_examples>([\s\S]*?)<\/dialogue_examples>/i,
     /<examples>([\s\S]*?)<\/examples>/i,
     /<dialogue>([\s\S]*?)<\/dialogue>/i,
+    /(?:^|\n)\s*>Dialogue Examples?\s*\n+([\s\S]*?)(?=\n\s*>[A-Z]|\n\s*#{1,4}\s|$)/i,
     /(?:^|\n)\s*(?:<START>|#{1,4}\s*Example Dialogues?)([\s\S]*?)(?:#{1,4}|<END>|$)/i,
     new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?Example Dialogue(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
   ];
@@ -214,23 +345,25 @@ export function exportCharacterCard(
     new RegExp(`(?:^|\\n)\\s*(?:#{1,4}\\s*)?(?:System Instructions?|System Directives?|Jailbreak|Custom Instructions?|Guidelines|Rules)(?::\\s*|\\s*\\n)\\s*([\\s\\S]*?)${sectionBoundary}`, 'i'),
   ];
 
-  const extractedPersonality = extractSectionByRegex(rawSystemText, personalityPatterns);
-  const extractedScenario = extractSectionByRegex(rawSystemText, scenarioPatterns);
-  const extractedDescription = extractSectionByRegex(rawSystemText, descriptionPatterns);
-  const extractedExamples = extractSectionByRegex(rawSystemText, examplePatterns);
-  const extractedSystemPrompt = extractSectionByRegex(rawSystemText, systemPromptPatterns);
+  const extractedPersonality = extractSectionByRegex(nonLoreSystemText, personalityPatterns);
+  const extractedScenario = extractSectionByRegex(nonLoreSystemText, scenarioPatterns);
+  const extractedDescription = postPersonaSplit.hasClosingPersonaTag
+    ? postPersonaSplit.corePersonaText
+    : extractSectionByRegex(nonLoreSystemText, descriptionPatterns);
+  const extractedExamples = extractSectionByRegex(nonLoreSystemText, examplePatterns);
+  const extractedSystemPrompt = extractSectionByRegex(nonLoreSystemText, systemPromptPatterns);
 
   // If description wasn't specifically subdivided, clean out already-extracted tags if present
   let finalDescription = extractedDescription;
   if (!finalDescription) {
-    let strippedFallback = rawSystemText
+    let strippedFallback = nonLoreSystemText
       .replace(/<(?:char_name|character_name|char|bot_name|name)\s*>[\s\S]*?<\/(?:char_name|character_name|char|bot_name|name)>/gi, '')
       .replace(/<(?:personality|traits)>[\s\S]*?<\/(?:personality|traits)>/gi, '')
       .replace(/<(?:scenario|setting|world)>[\s\S]*?<\/(?:scenario|setting|world)>/gi, '')
       .replace(/<(?:first_mes|first_message|greeting|starter)>[\s\S]*?<\/(?:first_mes|first_message|greeting|starter)>/gi, '')
-      .replace(/<(?:mes_example|example_dialogue|dialogue)>[\s\S]*?<\/(?:mes_example|example_dialogue|dialogue)>/gi, '')
+      .replace(/<(?:mes_example|example_dialogs|example_dialogue|dialogue)>[\s\S]*?<\/(?:mes_example|example_dialogs|example_dialogue|dialogue)>/gi, '')
       .replace(/<(?:system_prompt|jailbreak|system_instructions|custom_instructions|system_directive|role_and_identity|guidelines|rules)>[\s\S]*?(?:<\/(?:system_prompt|jailbreak|system_instructions|custom_instructions|system_directive|role_and_identity|guidelines|rules)>|$)/gi, '')
-      .replace(/<(?:user_persona|user_profile|user_description|user_name|user)>[\s\S]*?<\/(?:user_persona|user_profile|user_description|user_name|user)>/gi, '')
+      .replace(/<(?:user_persona|UserPersona|user_profile|user_description|user_name|user)>[\s\S]*?<\/(?:user_persona|UserPersona|user_profile|user_description|user_name|user)>/gi, '')
       .replace(/\[(?:User's Persona|User Persona|User Description|User Profile|User Definition|User Info|User)\s*:\s*[\s\S]*?\]/gi, '')
       .replace(/(?:^|\n)\s*(?:#{1,4}\s*)?(?:User(?:'s)?\s*Persona|User(?:'s)?\s*Description|User(?:'s)?\s*Profile|User(?:'s)?\s*Definition|{{user}}(?:'s)?\s*Persona)(?::\s*|\s*\n)[\s\S]*?(?=(?:\n\s*#{1,4}|\n\s*\[|$))/gi, '')
       .replace(/(?:^|\n)\s*(?:User persona|{{user}}'s persona)\s*:[\s\S]*?(?=(?:\n\s*#{1,4}|\n\s*\[|$))/gi, '')
@@ -258,6 +391,11 @@ export function exportCharacterCard(
 
     finalDescription = strippedFallback.replace(/\n{3,}/g, '\n\n').trim();
   }
+
+  // Always strip any stray opening/closing <...'s Persona> XML wrapper tags from finalDescription
+  finalDescription = finalDescription
+    .replace(/<\/?[^<>\/\n]{2,50}?['\u2019]s\s+Persona>/gi, '')
+    .trim();
 
   // 4. Extract Multi-System Messages (Preserving distinct jailbreaks & system prompt instructions)
   const systemMessages = safeMessages.filter(m => m.role === 'system');
@@ -392,13 +530,13 @@ export function exportCharacterCard(
   if (finalDescription) {
     charDefLines.push(`\n[Persona & Description]\n${finalDescription}`);
   }
-  if (extractedPersonality) {
+  if (extractedPersonality && !finalDescription.includes(extractedPersonality)) {
     charDefLines.push(`\n[Personality & Traits]\n${extractedPersonality}`);
   }
   if (extractedScenario) {
     charDefLines.push(`\n[Scenario & World Setting]\n${extractedScenario}`);
   }
-  if (extractedExamples) {
+  if (extractedExamples && !finalDescription.includes(extractedExamples)) {
     charDefLines.push(`\n[Example Dialogue]\n${extractedExamples}`);
   }
   if (trueLoreEntries.length > 0) {
@@ -459,6 +597,15 @@ export function exportCharacterCard(
   const unifiedStudioInstructions = resolveStudioMacros(rawStudioInstructions);
   const fence = unifiedStudioInstructions.includes('```') ? '````' : '```';
 
+  // Detect any referenced lore keywords (NPCs, classes, houses, rosters) that haven't been triggered yet
+  const untriggeredKeywords = detectUntriggeredLoreKeywords(
+    finalDescription,
+    extractedScenario,
+    trueLoreEntries,
+    characterName,
+    userName
+  );
+
   // 10. Assemble Clean Markdown Output
   const sections: string[] = [];
 
@@ -507,6 +654,15 @@ ${cleanUserPersona ? cleanUserPersona : '*(No user persona provided)*'}`);
   if (trueLoreEntries.length > 0) {
     const loreLines = trueLoreEntries.map((l, i) => `**${i + 1}. ${l.title}** (${l.category.toUpperCase()} • ~${l.tokens} tokens):\n\`\`\`\n${l.content}\n\`\`\``);
     sections.push(`### 📚 Injected Lore & World Info (${trueLoreEntries.length})\n${loreLines.join('\n\n')}`);
+  }
+
+  if (untriggeredKeywords.length > 0) {
+    sections.push(`### 🔑 Untriggered Lorebook Keywords (1-Shot Trigger Prompt)
+*Send the single message below in your chat with \`card-exporter\` selected to trip Janitor AI's keyword scanner and extract the remaining hidden lorebook entries (${untriggeredKeywords.length} detected):*
+
+\`\`\`text
+${untriggeredKeywords.join(', ')}
+\`\`\``);
   }
 
   if (separateSystemInstructions) {
