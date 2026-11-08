@@ -3,17 +3,17 @@
 > **Master Architecture, Protocol Specification & Operational Runbook**  
 > *Project*: `antigravity-vercel-proxy` (`prototype-1-nextjs`)  
 > *Target Deployment*: Vercel Serverless Edge (Next.js 15 App Router)  
-> *Current Version*: `v3.9.0`  
+> *Current Version*: `v4.0.0`  
 > *Live Gateway*: [https://antigravity-vercel-proxy-three.vercel.app](https://antigravity-vercel-proxy-three.vercel.app)  
 
 ---
 
 ## 1. System Overview & Core Philosophy
 
-`antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, Lorebary, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure** and **OpenCode Free Models infrastructure**.
+`antigravity-vercel-proxy` is a high-performance, serverless, OpenAI-compatible proxy gateway bridging client applications (Janitor AI, Lorebary, SillyTavern, LibreChat, OpenClaw, Cline) with **Google Antigravity's internal CloudCode PA infrastructure**, **Gemini 4 Argon Language Server infrastructure**, and **OpenCode Free Models infrastructure**.
 
 ### Key Architectural Pillars (OmniRoute / OpenRouter Standard)
-1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-3.8-flash`, `gemini-3.8-flash-high/max`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.1-pro-low/fast`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-opus-4-6-low/fast`, `claude-sonnet-4-6`, `claude-sonnet-4-6-low/fast`) with `BLOCK_NONE` safety filters across all 5 harm categories.
+1. **Unrestricted Model Access**: Native access to Google's flagship reasoning models (`gemini-4-argon`, `gemini-4-argon-low`, `gemini-4-argon-medium`, `gemini-4-argon-high`, `gemini-3.8-flash`, `gemini-3.8-flash-high/max`, `gemini-3.7-flash`, `gemini-3.1-pro`, `gemini-3.1-pro-low/fast`, `gemini-3.7-flash-high/max`, `claude-opus-4-6-thinking`, `claude-opus-4-6-low/fast`, `claude-sonnet-4-6`, `claude-sonnet-4-6-low/fast`) with `BLOCK_NONE` safety filters across all 5 harm categories.
 2. **Zero-Tampering Pure Pass-Through**: 100% pure message and system prompt translation without synthetic prompt injections or formatting anchors, guaranteeing perfect instruction following and context memory without context rot.
 3. **Modular Injections & Dynamic Cadence Engine**: Centralized dashboard management for toggleable System Notes, OOC rules, and custom style directives with dynamic trigger cadences (`Always`, `🎲 % Chance Probability`, `⏱️ Every N Texts`, `⚡ First Turn Only`) automatically stacked at Depth-0 terminal user turns with 0 copy-paste friction.
 4. **Turn-Accurate Logged Chats Injections**: Turn-level snapshot isolation displaying the exact active directives that fired on each message directly beneath the user's input bubble.
@@ -31,6 +31,7 @@
 16. **Claude Token Optimization & Stateless System Prompt Adherence**: Fast (0 thinking) and Low (2k thinking) tiers across Claude Sonnet 4.6 and Claude Opus 4.6, 100% pure client pass-through dialogue history (opt-in clamping via `x-clamped-context: true`), unconditionally fresh stateless session IDs (`-${Date.now()}`) to force Google CloudCode PA to parse full character system instructions on every turn without stale IDE session contamination, and zero synthetic proxy-side lockouts with clean 20-second Google rate limit buffers and uninhibited account failover.
 17. **Sampling Penalty Safeguarding & Upstream Auto-Recovery**: Proactively omits unsupported `presence_penalty` and `frequency_penalty` fields on models that reject them (`gemini-3.8-flash*`, `argon-*`) to prevent Google CloudCode PA `HTTP 400 Penalty is not enabled for this model` rejections. If an upstream endpoint ever returns a penalty rejection on any model, dynamic runtime auto-recovery immediately strips penalties from `generationConfig` and retries on the same connection, guaranteeing zero account pool exhaustion and zero client disruptions.
 18. **Native Google Search Grounding & Source Parsing**: Dedicated web search models (`gemini-3.8-flash-search`, `gemini-3.8-flash-web`, `gemini-3.7-flash-search`, `gemini-3.7-flash-web`, `gemini-3.1-pro-search`, `gemini-3.1-pro-web`, and `:search`/`:web` suffixes) and request-level search flags (`web_search`, `search`, `grounding`, or tools with `web_search`/`google_search`). Automatically injects `{ googleSearch: {} }` into upstream Google CloudCode PA wire payload, extracts `groundingMetadata` in streaming SSE chunks and non-streaming responses, and appends deduplicated markdown source citations (`\n\n### Sources:\n- [Title](URL)`).
+19. **Gemini 4 Argon & Cohort Bridge Core**: Full native execution of Google's next-generation reasoning flagship (`gemini-4-argon`, `gemini-4-argon-medium`, `gemini-4-argon-low`, `gemini-4-argon-high`) via Antigravity's internal Connect-RPC Cascade engine (`MODEL_PLACEHOLDER_M418`, `M419`, `M417`). Features automatic local Language Server process discovery (PID, port, CSRF token), live weekly Argon quota consumption, clean reasoning extraction (`<think>` blocks separated into `reasoning_content`), full multi-turn character instruction adherence, and seamless SSE streaming and JSON completions.
 
 ---
 

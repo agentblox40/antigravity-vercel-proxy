@@ -29,6 +29,11 @@ import {
   resolveOpenCodeModel,
   executeOpenCodeCompletion,
 } from './opencode';
+import {
+  isArgonBridgeModel,
+  executeArgonCompletion,
+  discoverLanguageServer,
+} from './argonBridge';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -407,6 +412,80 @@ export async function handleChatCompletions(req: NextRequest) {
     } catch (err) {
       resolveOpenCodeDone!();
       throw err;
+    }
+  }
+
+  // ROUTE TO GEMINI 4 ARGON BRIDGE IF MATCHED AND LANGUAGE SERVER AVAILABLE
+  if (isArgonBridgeModel(requestedModel)) {
+    const lsInfo = discoverLanguageServer();
+    if (lsInfo) {
+      const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
+      const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
+      const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj, attachedInjections: rawAttachedInj } = await getActiveInjectionsFormatted(turnCount);
+      const userInjectionsText = bypassInjections ? '' : rawUserInj;
+      const systemInjectionsText = bypassInjections ? '' : rawSysInj;
+      const attachedInjections = bypassInjections ? [] : rawAttachedInj;
+      const injectedLore = extractInjectedLore(messages, rawSystemText);
+
+      let resolveArgonDone: () => void;
+      const argonDonePromise = new Promise<void>(resolve => {
+        resolveArgonDone = resolve;
+      });
+
+      let argonContent = '';
+      let argonThinking = '';
+
+      if (sessionPromise) {
+        const saveTask = async () => {
+          try {
+            const timeoutPromise = new Promise<void>(r => setTimeout(r, 55000));
+            await Promise.race([argonDonePromise, timeoutPromise]);
+            const session = await sessionPromise;
+            if (session && (argonContent || argonThinking)) {
+              await recordTurnsIntoSession(
+                session,
+                messages,
+                argonContent,
+                argonThinking || undefined,
+                injectedLore,
+                attachedInjections
+              );
+            }
+          } catch {}
+        };
+        try {
+          if (typeof after === 'function') {
+            after(saveTask);
+          } else {
+            saveTask().catch(() => {});
+          }
+        } catch {
+          saveTask().catch(() => {});
+        }
+      }
+
+      try {
+        const res = await executeArgonCompletion({
+          body,
+          modelId: requestedModel,
+          userInjectionsText,
+          systemInjectionsText,
+          onFinish: (content, thinking) => {
+            argonContent = content;
+            argonThinking = thinking;
+          },
+          onStreamDone: () => {
+            resolveArgonDone!();
+          }
+        });
+        if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream')) {
+          resolveArgonDone!();
+        }
+        return res;
+      } catch (err) {
+        resolveArgonDone!();
+        throw err;
+      }
     }
   }
 
@@ -979,10 +1058,14 @@ export async function handleChatCompletions(req: NextRequest) {
 
   // If upstream explicitly rejected the model/payload with 400, 404, etc., return the exact upstream error
   if (!allRateLimits && lastErr && lastErr.status !== 429) {
+    const isArgon = resolved.wireModel.includes('argon');
+    const customNotice = (lastErr.status === 404 && isArgon)
+      ? ` Note: Gemini 4 Argon requires an active Antigravity Language Server session. Please ensure Antigravity IDE is running on your host machine.`
+      : '';
     return NextResponse.json(
       {
         error: {
-          message: `[Upstream Error]: Request for model '${requestedModel}' failed with HTTP ${lastErr.status}: ${lastErr.error}`,
+          message: `[Upstream Error]: Request for model '${requestedModel}' failed with HTTP ${lastErr.status}: ${lastErr.error}.${customNotice}`,
           type: 'upstream_error',
           code: lastErr.status,
           model: requestedModel,

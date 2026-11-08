@@ -18,6 +18,7 @@ lib/*.js
 # Misc
 .DS_Store
 *.pem
+scratch/
 
 # Debug
 npm-debug.log*

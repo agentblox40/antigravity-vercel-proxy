@@ -968,24 +968,37 @@ async function main() {
   assert.strictEqual(anthropicSonnet!.wireModel, 'claude-sonnet-4-6');
   assert.strictEqual(anthropicSonnet!.defaultThinkingBudget, 0);
 
-  // 9.9 Argon Experimental Cohort Models (Pinned to kars60928@gmail.com)
+  // 9.9 Argon Experimental Cohort Models (Pinned to Account #8: geminifourargon@gmail.com)
   const argonLow = resolveWireModel('argon-low');
   assert.ok(argonLow, 'argon-low failed to resolve');
-  assert.strictEqual(argonLow!.wireModel, 'gemini-3.8-flash-high');
+  assert.strictEqual(argonLow!.wireModel, 'gemini-4-argon-low');
   assert.strictEqual(argonLow!.defaultThinkingBudget, 2048);
-  assert.strictEqual(argonLow!.targetAccount, 'kars60928@gmail.com');
+  assert.strictEqual(argonLow!.targetAccount, 'acc-8');
 
   const argonMed = resolveWireModel('argon-medium');
   assert.ok(argonMed, 'argon-medium failed to resolve');
-  assert.strictEqual(argonMed!.wireModel, 'gemini-3.8-flash-high');
+  assert.strictEqual(argonMed!.wireModel, 'gemini-4-argon-medium');
   assert.strictEqual(argonMed!.defaultThinkingBudget, 8192);
-  assert.strictEqual(argonMed!.targetAccount, 'kars60928@gmail.com');
+  assert.strictEqual(argonMed!.targetAccount, 'acc-8');
 
   const argonHigh = resolveWireModel('argon-high');
   assert.ok(argonHigh, 'argon-high failed to resolve');
-  assert.strictEqual(argonHigh!.wireModel, 'gemini-3.8-flash-high');
+  assert.strictEqual(argonHigh!.wireModel, 'gemini-4-argon-high');
   assert.strictEqual(argonHigh!.defaultThinkingBudget, 24576);
-  assert.strictEqual(argonHigh!.targetAccount, 'kars60928@gmail.com');
+  assert.strictEqual(argonHigh!.targetAccount, 'acc-8');
+
+  // 9.10 Claude 5.5 Dedicated Cohort Models
+  const opus55Low = resolveWireModel('claude-opus-5-5-low');
+  assert.ok(opus55Low, 'claude-opus-5-5-low failed to resolve');
+  assert.strictEqual(opus55Low!.wireModel, 'claude-opus-5-5-low');
+  assert.strictEqual(opus55Low!.defaultThinkingBudget, 2048);
+  assert.strictEqual(opus55Low!.targetAccount, 'acc-8');
+
+  const sonnet55Med = resolveWireModel('claude-sonnet-5-5-medium');
+  assert.ok(sonnet55Med, 'claude-sonnet-5-5-medium failed to resolve');
+  assert.strictEqual(sonnet55Med!.wireModel, 'claude-sonnet-5-5-medium');
+  assert.strictEqual(sonnet55Med!.defaultThinkingBudget, 8192);
+  assert.strictEqual(sonnet55Med!.targetAccount, 'acc-8');
 
   console.log('✅ Claude Token Optimization & Argon Cohort Pinning Suite passed.\n');
 
