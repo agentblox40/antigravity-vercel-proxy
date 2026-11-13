@@ -52,6 +52,8 @@ export const UNRESTRICTED_SAFETY_SETTINGS = [
 export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'card-exporter', name: 'Card Exporter (Bot Definition & Prompt Extractor)', tier: 'Utility', badge: '0 Quota / Instant', thinking: 'None', context: 'Instant', desc: 'Intercepts generation requests to export character definitions, system prompts, greetings, and SillyTavern V2 JSON without calling upstream models.' },
   { id: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen', tier: 'Google AI Studio', badge: '10-Key Pool', thinking: 'Effort-Controlled', context: '1M Context', desc: 'Google Gemini 4 Hydrogen routed across rotating Google AI Studio API keys with per-key 429 cooldowns and instant failover.' },
+  { id: 'kars-hydrogen', name: 'Kars Hydrogen (Gemini 4 Hydrogen)', tier: 'Kars Pool', badge: 'CloudCode PA', thinking: 'Effort-Controlled', context: '1M Context', desc: 'Gemini 4 Hydrogen routed strictly across kars60928@gmail.com and geminifourargon@gmail.com via CloudCode PA.' },
+  { id: 'kars-argon', name: 'Kars Argon (Gemini 4 Argon)', tier: 'Kars Pool', badge: 'CloudCode PA', thinking: 'Effort-Controlled', context: '1M Context', desc: 'Gemini 4 Argon routed strictly across kars60928@gmail.com and geminifourargon@gmail.com via CloudCode PA.' },
   { id: 'gemini-3.1-flash-image', name: 'Gemini 3.1 Flash Image (Nano Banana 2)', tier: 'Image', badge: 'Native Image', thinking: 'None', context: '4K Context', desc: 'Google native high-resolution image generation model via Antigravity CloudCode PA.' },
   { id: 'argon-low', name: 'Argon Low (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '2K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Low (2K) thinking.' },
   { id: 'argon-medium', name: 'Argon Medium (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '8K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Medium (8K) thinking.' },
@@ -174,12 +176,19 @@ export async function getAntigravityLiveModels(): Promise<ModelSpec[]> {
 }
 
 export const ANTIGRAVITY_USER_AGENT = 'antigravity/2.29.0 windows/amd64';
+export const ANTIGRAVITY_HUB_USER_AGENT = 'antigravity/hub/2.31.2 (aidev_client; os_type=windows; arch=amd64)';
 export const ANTIGRAVITY_API_CLIENT = 'gl-node/20.18.0 gccl/2.29.0';
+export const ANTIGRAVITY_HUB_API_CLIENT = 'gl-node/18.17.1 gd/2.4.0';
 
-export function getAntigravityHeaders(accessToken?: string, accept: string = 'text/event-stream'): Record<string, string> {
+export function getAntigravityHeaders(
+  accessToken?: string,
+  accept: string = 'text/event-stream',
+  wireModel?: string
+): Record<string, string> {
+  const useHubHeaders = Boolean(wireModel && wireModel.toLowerCase().startsWith('gemini-4-'));
   const headers: Record<string, string> = {
-    'User-Agent': ANTIGRAVITY_USER_AGENT,
-    'X-Goog-Api-Client': ANTIGRAVITY_API_CLIENT,
+    'User-Agent': useHubHeaders ? ANTIGRAVITY_HUB_USER_AGENT : ANTIGRAVITY_USER_AGENT,
+    'X-Goog-Api-Client': useHubHeaders ? ANTIGRAVITY_HUB_API_CLIENT : ANTIGRAVITY_API_CLIENT,
     'Content-Type': 'application/json',
     'Accept': accept,
   };
@@ -361,7 +370,15 @@ export function isCardExporterModel(modelId?: string): boolean {
 }
 
 // Strictly resolve requested model ID to Google Antigravity wire model without silent fallbacks
-export function resolveWireModel(modelId?: string): { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean; isDedicatedCohort?: boolean } | null {
+export function resolveWireModel(modelId?: string): {
+  wireModel: string;
+  defaultThinkingBudget: number;
+  targetAccount?: string;
+  targetAccounts?: string[];
+  isWebSearch?: boolean;
+  isDedicatedCohort?: boolean;
+  useThinkingLevel?: boolean;
+} | null {
   if (!modelId || !modelId.trim()) {
     return { wireModel: 'gemini-3.7-flash-tiered', defaultThinkingBudget: 8192 };
   }
@@ -417,7 +434,47 @@ export function resolveWireModel(modelId?: string): { wireModel: string; default
     }
   }
 
-  // 0. Dedicated Cohort Models (Argon, Claude 5.5, GPT-OSS 120B)
+  // 0. Kars Pool (Gemini 4 Hydrogen & Argon strictly pinned to acc-6 + acc-8)
+  if (
+    clean === 'kars-hydrogen' ||
+    clean === 'kars-hydrogen-low' ||
+    clean === 'kars-hydrogen-medium' ||
+    clean === 'kars-hydrogen-high' ||
+    clean === 'kars-hydrogen-xhigh' ||
+    clean === 'kars-hydrogen-extra'
+  ) {
+    const suffix = clean.includes('xhigh') || clean.includes('extra')
+      ? 'xhigh'
+      : clean.includes('high')
+      ? 'high'
+      : clean.includes('low')
+      ? 'low'
+      : 'medium';
+    return {
+      wireModel: `gemini-4-hydrogen-${suffix}`,
+      defaultThinkingBudget: 0,
+      targetAccounts: ['acc-6', 'acc-8', 'kars60928@gmail.com', 'geminifourargon@gmail.com'],
+      isDedicatedCohort: true,
+      useThinkingLevel: true,
+    };
+  }
+  if (
+    clean === 'kars-argon' ||
+    clean === 'kars-argon-low' ||
+    clean === 'kars-argon-medium' ||
+    clean === 'kars-argon-high'
+  ) {
+    const suffix = clean.includes('high') ? 'high' : clean.includes('low') ? 'low' : 'medium';
+    return {
+      wireModel: `gemini-4-argon-${suffix}`,
+      defaultThinkingBudget: 0,
+      targetAccounts: ['acc-6', 'acc-8', 'kars60928@gmail.com', 'geminifourargon@gmail.com'],
+      isDedicatedCohort: true,
+      useThinkingLevel: true,
+    };
+  }
+
+  // 0b. Dedicated Cohort Models (Argon, Claude 5.5, GPT-OSS 120B)
   if (
     clean === 'gemini-4-argon' ||
     clean === 'gemini-4' ||
@@ -677,6 +734,10 @@ export function isPenaltySupported(modelId?: string, wireModel?: string): boolea
     w.includes('3.8') ||
     m.startsWith('argon') ||
     w.startsWith('argon') ||
+    m.includes('hydrogen') ||
+    w.includes('hydrogen') ||
+    m.includes('kars-') ||
+    w.includes('gemini-4-') ||
     m.includes('claude') ||
     w.includes('claude')
   ) {
@@ -846,7 +907,7 @@ export function extractMultimodalInlineData(part: any): { mimeType: string; data
 
 export function transformOpenAIToAntigravity(
   body: any,
-  resolved: { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; isWebSearch?: boolean },
+  resolved: { wireModel: string; defaultThinkingBudget: number; targetAccount?: string; targetAccounts?: string[]; isWebSearch?: boolean; useThinkingLevel?: boolean },
   projectId: string,
   augmentedSystem?: string,
   userInjectionsText?: string,
@@ -1092,7 +1153,49 @@ export function transformOpenAIToAntigravity(
     }
   }
 
-  if (thinkingBudget > 0) {
+  let activeWireModel = resolved.wireModel;
+  const usesThinkingLevel = Boolean(resolved.useThinkingLevel || resolved.wireModel.startsWith('gemini-4-'));
+
+  if (usesThinkingLevel) {
+    const rawEffort =
+      typeof body.thinking_level === 'string'
+        ? body.thinking_level
+        : typeof body.reasoning_effort === 'string'
+        ? body.reasoning_effort
+        : '';
+    const effort = rawEffort.trim().toLowerCase();
+
+    let level: 'low' | 'medium' | 'high' | 'xhigh' | null = null;
+    if (effort === 'off' || effort === 'none' || body.thinking?.type === 'disabled') {
+      level = null;
+    } else if (effort === 'low' || effort === 'minimal') {
+      level = 'low';
+    } else if (effort === 'medium' || effort === 'med') {
+      level = 'medium';
+    } else if (effort === 'high') {
+      level = 'high';
+    } else if (effort === 'xhigh' || effort === 'extra' || effort === 'max') {
+      level = activeWireModel.startsWith('gemini-4-argon') ? 'high' : 'xhigh';
+    } else if (activeWireModel.endsWith('-xhigh')) {
+      level = 'xhigh';
+    } else if (activeWireModel.endsWith('-high')) {
+      level = 'high';
+    } else if (activeWireModel.endsWith('-low')) {
+      level = 'low';
+    } else {
+      level = 'medium';
+    }
+
+    if (level) {
+      if (activeWireModel.startsWith('gemini-4-hydrogen-')) {
+        activeWireModel = `gemini-4-hydrogen-${level}`;
+      } else if (activeWireModel.startsWith('gemini-4-argon-')) {
+        const argonTier = level === 'xhigh' ? 'high' : level;
+        activeWireModel = `gemini-4-argon-${argonTier}`;
+      }
+      generationConfig.thinkingConfig = { thinkingLevel: level, includeThoughts: true };
+    }
+  } else if (thinkingBudget > 0) {
     generationConfig.thinkingConfig = { thinkingBudget, includeThoughts: true };
   }
 
@@ -1163,8 +1266,8 @@ export function transformOpenAIToAntigravity(
     project: projectId || 'aicode-consumers',
     requestId: 'agent/' + Date.now() + '/' + crypto.randomUUID().slice(0, 8),
     userAgent: 'antigravity',
-    requestType: 'agent',
-    model: resolved.wireModel,
+    requestType: usesThinkingLevel ? 'AGENT_REQUEST_TYPE_UNSPECIFIED' : 'agent',
+    model: activeWireModel,
     request: reqObj
   };
 }

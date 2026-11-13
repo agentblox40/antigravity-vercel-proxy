@@ -96,7 +96,7 @@ export async function handleChatCompletions(req: NextRequest) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, gemini-4-hydrogen, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, beam-free, beam-free-fast, flint-40b-free, flint-40b-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, nemotron-3.5-super-vl-free, nemotron-3.5-super-vl-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, deepseek-v4.1-flash-free, deepseek-v4.1-flash-free-fast, glm-5.3-flash-free, glm-5.3-flash-free-fast, iceman-free, iceman-free-fast, inkling-2-small-free, inkling-2-small-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, gemini-4-hydrogen, kars-hydrogen, kars-argon, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, beam-free, beam-free-fast, flint-40b-free, flint-40b-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, nemotron-3.5-super-vl-free, nemotron-3.5-super-vl-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, deepseek-v4.1-flash-free, deepseek-v4.1-flash-free-fast, glm-5.3-flash-free, glm-5.3-flash-free-fast, iceman-free, iceman-free-fast, inkling-2-small-free, inkling-2-small-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
@@ -104,6 +104,8 @@ export async function handleChatCompletions(req: NextRequest) {
           available_models: [
             'card-exporter',
             'gemini-4-hydrogen',
+            'kars-hydrogen',
+            'kars-argon',
             'argon-low',
             'argon-medium',
             'argon-high',
@@ -579,23 +581,31 @@ export async function handleChatCompletions(req: NextRequest) {
     ? allAccounts.filter(a => !a.claudeDeprecated)
     : allAccounts;
 
-  // Strictly pin models with targetAccount or isDedicatedCohort (e.g. gemini-4-argon, claude-opus-5-5, claude-sonnet-5-5)
-  // so they ONLY route through the designated account and never leak/failover to standard pool accounts.
-  if (resolved.targetAccount || resolved.isDedicatedCohort) {
-    const rawTarget = resolved.targetAccount || process.env.DEDICATED_COHORT_ACCOUNT || process.env.DEDICATED_COHORT_EMAIL || 'acc-8';
-    const targetLower = rawTarget.toLowerCase().trim();
-    const pinnedAccounts = accounts.filter(
-      a => a.name.toLowerCase() === targetLower ||
-           a.id.toLowerCase() === targetLower ||
-           (targetLower.startsWith('account_') && a.id.toLowerCase() === targetLower.replace('account_', 'acc-')) ||
-           a.id.toLowerCase() === 'acc-8' ||
-           (process.env.DEDICATED_COHORT_EMAIL && a.name.toLowerCase() === process.env.DEDICATED_COHORT_EMAIL.toLowerCase().trim())
-    );
+  // Strictly pin models with targetAccounts, targetAccount, or isDedicatedCohort
+  // so they ONLY route through the designated account(s) and never leak/failover to standard pool accounts.
+  if (resolved.targetAccounts?.length || resolved.targetAccount || resolved.isDedicatedCohort) {
+    let pinnedAccounts: typeof accounts = [];
+    if (resolved.targetAccounts?.length) {
+      const allowed = new Set(resolved.targetAccounts.map(t => t.toLowerCase().trim()));
+      pinnedAccounts = accounts.filter(
+        a => allowed.has(a.name.toLowerCase()) || allowed.has(a.id.toLowerCase())
+      );
+    } else {
+      const rawTarget = resolved.targetAccount || process.env.DEDICATED_COHORT_ACCOUNT || process.env.DEDICATED_COHORT_EMAIL || 'acc-8';
+      const targetLower = rawTarget.toLowerCase().trim();
+      pinnedAccounts = accounts.filter(
+        a => a.name.toLowerCase() === targetLower ||
+             a.id.toLowerCase() === targetLower ||
+             (targetLower.startsWith('account_') && a.id.toLowerCase() === targetLower.replace('account_', 'acc-')) ||
+             a.id.toLowerCase() === 'acc-8' ||
+             (process.env.DEDICATED_COHORT_EMAIL && a.name.toLowerCase() === process.env.DEDICATED_COHORT_EMAIL.toLowerCase().trim())
+      );
+    }
     if (pinnedAccounts.length === 0) {
       return NextResponse.json(
         {
           error: {
-            message: `[Dedicated Account Required]: Model '${requestedModel}' is exclusively available on the new dedicated account (Slot #8), which is not yet linked or configured in environment variables. Run 'npm run auth-account 8' to authorize this account.`,
+            message: `[Dedicated Account Required]: Model '${requestedModel}' requires dedicated account(s) (${(resolved.targetAccounts || [resolved.targetAccount || 'acc-8']).join(', ')}), which are not configured in environment variables.`,
             type: 'configuration_error',
             code: 503
           }
@@ -702,7 +712,7 @@ export async function handleChatCompletions(req: NextRequest) {
         try {
           let res = await fetch(upstreamUrl, {
             method: 'POST',
-            headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
+            headers: getAntigravityHeaders(accessToken, 'text/event-stream', activeEnvelope.model),
             body: JSON.stringify(activeEnvelope),
           });
 
@@ -715,7 +725,7 @@ export async function handleChatCompletions(req: NextRequest) {
             };
             res = await fetch(upstreamUrl, {
               method: 'POST',
-              headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
+              headers: getAntigravityHeaders(accessToken, 'text/event-stream', activeEnvelope.model),
               body: JSON.stringify(activeEnvelope),
             });
           }
@@ -750,7 +760,7 @@ export async function handleChatCompletions(req: NextRequest) {
 
             res = await fetch(upstreamUrl, {
               method: 'POST',
-              headers: getAntigravityHeaders(accessToken, 'text/event-stream'),
+              headers: getAntigravityHeaders(accessToken, 'text/event-stream', activeEnvelope.model),
               body: JSON.stringify(activeEnvelope),
             });
 
