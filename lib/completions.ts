@@ -34,6 +34,10 @@ import {
   executeArgonCompletion,
   discoverLanguageServer,
 } from './argonBridge';
+import {
+  resolveGeminiStudioModel,
+  executeGeminiStudioCompletion,
+} from './geminiStudio';
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -85,19 +89,21 @@ export async function handleChatCompletions(req: NextRequest) {
   const requestedModel = (body.model || 'gemini-3.7-flash').trim();
   const isCardExport = isCardExporterModel(requestedModel);
   const openCodeResolved = isCardExport ? null : resolveOpenCodeModel(requestedModel);
-  const resolved = isCardExport || openCodeResolved ? null : resolveWireModel(requestedModel);
+  const geminiStudioResolved = isCardExport || openCodeResolved ? null : resolveGeminiStudioModel(requestedModel);
+  const resolved = isCardExport || openCodeResolved || geminiStudioResolved ? null : resolveWireModel(requestedModel);
 
-  if (!isCardExport && !openCodeResolved && !resolved) {
+  if (!isCardExport && !openCodeResolved && !geminiStudioResolved && !resolved) {
     return NextResponse.json(
       {
         error: {
-          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, beam-free, beam-free-fast, flint-40b-free, flint-40b-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, nemotron-3.5-super-vl-free, nemotron-3.5-super-vl-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, deepseek-v4.1-flash-free, deepseek-v4.1-flash-free-fast, glm-5.3-flash-free, glm-5.3-flash-free-fast, iceman-free, iceman-free-fast, inkling-2-small-free, inkling-2-small-free-fast.`,
+          message: `[Model Not Found]: '${requestedModel}' is not a valid or supported model on Antigravity Proxy. Supported models: card-exporter, gemini-4-hydrogen, argon-low, argon-medium, argon-high, gemini-3.8-flash, gemini-3.8-flash-search, gemini-3.8-flash-web, gemini-3.7-flash, gemini-3.7-flash-search, gemini-3.7-flash-web, gemini-3.1-pro, gemini-3.1-pro-search, gemini-3.1-pro-web, gemini-3.1-pro-low, gemini-3.1-pro-fast, claude-sonnet-4-6, claude-sonnet-4-6-low, claude-sonnet-4-6-fast, claude-opus-4-6-thinking, claude-opus-4-6-low, claude-opus-4-6-fast, big-pickle, big-pickle-fast, beam-free, beam-free-fast, flint-40b-free, flint-40b-free-fast, mimo-v2.6-flash-free, mimo-v2.6-flash-free-fast, nemotron-3.5-super-vl-free, nemotron-3.5-super-vl-free-fast, nemotron-3.5-lightning-free, nemotron-3.5-lightning-free-fast, deepseek-v4.1-flash-free, deepseek-v4.1-flash-free-fast, glm-5.3-flash-free, glm-5.3-flash-free-fast, iceman-free, iceman-free-fast, inkling-2-small-free, inkling-2-small-free-fast.`,
           type: 'invalid_request_error',
           param: 'model',
           code: 'model_not_found',
           requested_model: requestedModel,
           available_models: [
             'card-exporter',
+            'gemini-4-hydrogen',
             'argon-low',
             'argon-medium',
             'argon-high',
@@ -411,6 +417,83 @@ export async function handleChatCompletions(req: NextRequest) {
       return res;
     } catch (err) {
       resolveOpenCodeDone!();
+      throw err;
+    }
+  }
+
+  // ROUTE TO GOOGLE AI STUDIO KEY POOL IF MATCHED (e.g. gemini-4-hydrogen)
+  if (geminiStudioResolved) {
+    const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
+    const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
+    const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj, attachedInjections: rawAttachedInj } = await getActiveInjectionsFormatted(turnCount);
+    const userInjectionsText = bypassInjections ? '' : rawUserInj;
+    const systemInjectionsText = bypassInjections ? '' : rawSysInj;
+    const attachedInjections = bypassInjections ? [] : rawAttachedInj;
+    const injectedLore = extractInjectedLore(messages, rawSystemText);
+
+    const clampedHeader = req.headers.get('x-clamped-context') === 'true';
+    const clampedContext = clampedHeader || body.clamped_context === true || body.clampedContext === true;
+
+    let resolveStudioDone: () => void;
+    const studioDonePromise = new Promise<void>(resolve => {
+      resolveStudioDone = resolve;
+    });
+
+    let studioContent = '';
+    let studioThinking = '';
+
+    if (sessionPromise) {
+      const saveTask = async () => {
+        try {
+          const timeoutPromise = new Promise<void>(r => setTimeout(r, 55000));
+          await Promise.race([studioDonePromise, timeoutPromise]);
+          const session = await sessionPromise;
+          if (session && (studioContent || studioThinking)) {
+            await recordTurnsIntoSession(
+              session,
+              messages,
+              studioContent,
+              studioThinking || undefined,
+              injectedLore,
+              attachedInjections
+            );
+          }
+        } catch {}
+      };
+      try {
+        if (typeof after === 'function') {
+          after(saveTask);
+        } else {
+          saveTask().catch(() => {});
+        }
+      } catch {
+        saveTask().catch(() => {});
+      }
+    }
+
+    try {
+      const res = await executeGeminiStudioCompletion({
+        body,
+        modelId: requestedModel,
+        resolved: geminiStudioResolved,
+        userInjectionsText,
+        systemInjectionsText,
+        clampedContext,
+        stream,
+        onFinish: (content, thinking) => {
+          studioContent = content;
+          studioThinking = thinking;
+        },
+        onStreamDone: () => {
+          resolveStudioDone!();
+        },
+      });
+      if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream')) {
+        resolveStudioDone!();
+      }
+      return res;
+    } catch (err) {
+      resolveStudioDone!();
       throw err;
     }
   }

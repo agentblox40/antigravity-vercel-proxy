@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccounts, getAntigravityLiveModels } from '@/lib/antigravity';
 import { getOpenCodeAccounts } from '@/lib/opencode';
+import { getGeminiStudioKeys } from '@/lib/geminiStudio';
 import { getDeploymentTelemetry, CURRENT_VERSION } from '@/lib/version';
 
 export const runtime = 'nodejs';
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
 
   const accounts = getAccounts();
   const openCodeAccounts = getOpenCodeAccounts();
+  const geminiStudioKeys = getGeminiStudioKeys();
   const now = Date.now();
   const models = await getAntigravityLiveModels();
   const deployment = getDeploymentTelemetry();
@@ -61,6 +63,15 @@ export async function GET(req: NextRequest) {
     successCount: acc.successCount,
   }));
 
+  const geminiStudioStatus = geminiStudioKeys.map(k => ({
+    id: k.id,
+    key: k.maskedKey,
+    status: k.cooldownUntil > now ? 'Cooldown' : 'Ready',
+    cooldownRemainingSec: Math.max(0, Math.ceil((k.cooldownUntil - now) / 1000)),
+    failCount: k.failCount,
+    successCount: k.successCount,
+  }));
+
   return NextResponse.json(
     {
       status: 'online',
@@ -69,6 +80,8 @@ export async function GET(req: NextRequest) {
       totalAccounts: accounts.length,
       opencodeAccounts: openCodeStatus,
       totalOpenCodeAccounts: openCodeAccounts.length,
+      geminiStudioKeys: geminiStudioStatus,
+      totalGeminiStudioKeys: geminiStudioKeys.length,
       modelsCount: models.length,
       supportedModels: models,
       version: CURRENT_VERSION,

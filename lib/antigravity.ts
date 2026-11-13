@@ -51,6 +51,7 @@ export const UNRESTRICTED_SAFETY_SETTINGS = [
 
 export const FALLBACK_MODELS: ModelSpec[] = [
   { id: 'card-exporter', name: 'Card Exporter (Bot Definition & Prompt Extractor)', tier: 'Utility', badge: '0 Quota / Instant', thinking: 'None', context: 'Instant', desc: 'Intercepts generation requests to export character definitions, system prompts, greetings, and SillyTavern V2 JSON without calling upstream models.' },
+  { id: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen', tier: 'Google AI Studio', badge: '10-Key Pool', thinking: 'Effort-Controlled', context: '1M Context', desc: 'Google Gemini 4 Hydrogen routed across rotating Google AI Studio API keys with per-key 429 cooldowns and instant failover.' },
   { id: 'gemini-3.1-flash-image', name: 'Gemini 3.1 Flash Image (Nano Banana 2)', tier: 'Image', badge: 'Native Image', thinking: 'None', context: '4K Context', desc: 'Google native high-resolution image generation model via Antigravity CloudCode PA.' },
   { id: 'argon-low', name: 'Argon Low (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '2K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Low (2K) thinking.' },
   { id: 'argon-medium', name: 'Argon Medium (3.8 Flash Exp-A)', tier: 'Experimental', badge: 'Exp-A Exclusive', thinking: '8K Tokens', context: '1M Context', desc: 'Dedicated Account #7 (kars60928) route to experimental gemini-3.8-flash-exp-a with Medium (8K) thinking.' },
