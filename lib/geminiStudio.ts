@@ -27,6 +27,14 @@ const GEMINI_STUDIO_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta
 const REDIS_RR_KEY = 'antigravity:gemini_studio:rr';
 const REDIS_CD_PREFIX = 'antigravity:gemini_studio:cd:';
 
+const GEMINI_STUDIO_OFF_SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'OFF' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'OFF' },
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'OFF' },
+  { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'OFF' },
+];
+
 let cachedEnvSignature = '';
 let cachedKeyPool: GeminiStudioKeyState[] = [];
 let localRoundRobinCursor = 0;
@@ -337,7 +345,7 @@ export async function executeGeminiStudioCompletion(opts: ExecuteGeminiStudioOpt
     contents: transformed.request.contents,
     systemInstruction: transformed.request.systemInstruction,
     generationConfig: { ...transformed.request.generationConfig },
-    safetySettings: transformed.request.safetySettings,
+    safetySettings: GEMINI_STUDIO_OFF_SAFETY_SETTINGS,
   };
 
   if (transformed.request.tools) {
