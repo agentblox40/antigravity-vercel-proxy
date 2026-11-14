@@ -44,6 +44,15 @@ const UPSTREAM_URLS = [
   'https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
 ];
 
+const MAX_429_ACCOUNT_FAILOVERS = 2;
+
+function isGenuineRateLimit429(res: Response, errText: string): boolean {
+  if (res.headers.get('retry-after')) return true;
+  return /retryDelay|RATE_LIMIT_EXCEEDED|QUOTA_EXCEEDED|RESOURCE_EXHAUSTED|MODEL_CAPACITY_EXHAUSTED|No capacity available|quota/i.test(
+    errText
+  );
+}
+
 export function checkAuth(req: NextRequest): boolean {
   const proxyKey = process.env.PROXY_API_KEY;
   if (!proxyKey) return true;
@@ -674,6 +683,8 @@ export async function handleChatCompletions(req: NextRequest) {
     : orderedAccounts;
 
   const attemptLogs: { account: string; status: number; error: string }[] = [];
+  let rateLimitAccountAttempts = 0;
+  let abortPoolRotation = false;
   const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
   const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
   const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj, attachedInjections: rawAttachedInj } = await getActiveInjectionsFormatted(turnCount);
@@ -772,6 +783,15 @@ export async function handleChatCompletions(req: NextRequest) {
           }
 
           if (res.status === 429) {
+            if (!isGenuineRateLimit429(res, errText)) {
+              attemptLogs.push({
+                account: account.name,
+                status: 429,
+                error: `[Aborted Pool Rotation - Suspicious 429 without Retry-After/quota metadata on ${upstreamUrl}]: ${errText.slice(0, 300)}`,
+              });
+              abortPoolRotation = true;
+              break;
+            }
             attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}: ${errText.slice(0, 300)}` });
             continue;
           } else {
@@ -793,6 +813,15 @@ export async function handleChatCompletions(req: NextRequest) {
         const hasRateLimit = attemptLogs.some(l => l.account === account.name && (l.status === 429 || l.status === 503));
         if (hasRateLimit && account.cooldownUntil <= Date.now()) {
           account.cooldownUntil = Date.now() + 20000;
+        }
+        if (abortPoolRotation) {
+          break;
+        }
+        if (hasRateLimit) {
+          rateLimitAccountAttempts++;
+          if (rateLimitAccountAttempts >= MAX_429_ACCOUNT_FAILOVERS) {
+            break;
+          }
         }
         continue;
       }
