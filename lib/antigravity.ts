@@ -203,14 +203,16 @@ export const BANNED_ACCOUNTS = new Set<string>([
   'yashv3050',
   'manishflamingopharma@gmail.com',
   'manishflamingopharma',
-  'manishflamingo'
+  'manishflamingo',
+  'kars60928@gmail.com',
+  'kars60928'
 ]);
 
 export function isBannedAccount(name: string): boolean {
   const clean = (name || '').toLowerCase().trim();
   if (!clean) return false;
   if (BANNED_ACCOUNTS.has(clean)) return true;
-  if (clean.includes('yashv3050') || clean.includes('manishflamingo')) return true;
+  if (clean.includes('yashv3050') || clean.includes('manishflamingo') || clean.includes('kars60928')) return true;
   return false;
 }
 
@@ -453,7 +455,7 @@ export function resolveWireModel(modelId?: string): {
     return {
       wireModel: `gemini-4-hydrogen-${suffix}`,
       defaultThinkingBudget: 0,
-      targetAccounts: ['acc-6', 'acc-8', 'kars60928@gmail.com', 'geminifourargon@gmail.com'],
+      targetAccounts: ['acc-8', 'geminifourargon@gmail.com'],
       isDedicatedCohort: true,
       useThinkingLevel: true,
     };
@@ -468,7 +470,7 @@ export function resolveWireModel(modelId?: string): {
     return {
       wireModel: `gemini-4-argon-${suffix}`,
       defaultThinkingBudget: 0,
-      targetAccounts: ['acc-6', 'acc-8', 'kars60928@gmail.com', 'geminifourargon@gmail.com'],
+      targetAccounts: ['acc-8', 'geminifourargon@gmail.com'],
       isDedicatedCohort: true,
       useThinkingLevel: true,
     };
