@@ -38,6 +38,20 @@ import {
   resolveGeminiStudioModel,
   executeGeminiStudioCompletion,
 } from './geminiStudio';
+import { logUpstreamEvent } from './proxyLogs';
+
+function scheduleUpstreamLog(entry: Parameters<typeof logUpstreamEvent>[0]) {
+  const task = () => logUpstreamEvent(entry).catch(() => {});
+  try {
+    if (typeof after === 'function') {
+      after(task);
+    } else {
+      task();
+    }
+  } catch {
+    task();
+  }
+}
 
 const UPSTREAM_URLS = [
   'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
@@ -783,7 +797,19 @@ export async function handleChatCompletions(req: NextRequest) {
           }
 
           if (res.status === 429) {
+            const retryAfterHeader = res.headers.get('retry-after');
             if (!isGenuineRateLimit429(res, errText)) {
+              scheduleUpstreamLog({
+                provider: 'cloudcode-pa',
+                model: requestedModel,
+                wireModel: activeEnvelope.model,
+                accountOrKey: account.name,
+                status: 429,
+                trapFlagged: true,
+                retryAfterHeader,
+                upstreamUrl,
+                errorSnippet: errText,
+              });
               attemptLogs.push({
                 account: account.name,
                 status: 429,
@@ -792,9 +818,31 @@ export async function handleChatCompletions(req: NextRequest) {
               abortPoolRotation = true;
               break;
             }
+            scheduleUpstreamLog({
+              provider: 'cloudcode-pa',
+              model: requestedModel,
+              wireModel: activeEnvelope.model,
+              accountOrKey: account.name,
+              status: 429,
+              trapFlagged: false,
+              retryAfterHeader,
+              upstreamUrl,
+              errorSnippet: errText,
+            });
             attemptLogs.push({ account: account.name, status: 429, error: `Rate limited on ${upstreamUrl}: ${errText.slice(0, 300)}` });
             continue;
           } else {
+            scheduleUpstreamLog({
+              provider: 'cloudcode-pa',
+              model: requestedModel,
+              wireModel: activeEnvelope.model,
+              accountOrKey: account.name,
+              status: res.status,
+              trapFlagged: false,
+              retryAfterHeader: res.headers.get('retry-after'),
+              upstreamUrl,
+              errorSnippet: errText,
+            });
             attemptLogs.push({ account: account.name, status: res.status, error: errText.slice(0, 300) });
             console.warn(`Upstream ${upstreamUrl} returned ${res.status} for model ${resolved.wireModel}: ${errText}`);
             // If primary daily-cloudcode-pa returned 400 or 404 (not rate limit/503), do not fall back to cloudcode-pa with aicode-consumers (which triggers a false 429)

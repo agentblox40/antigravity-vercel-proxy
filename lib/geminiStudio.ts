@@ -1,11 +1,25 @@
 import crypto from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import {
   transformOpenAIToAntigravity,
   createGroundingCollector,
   recordGroundingMetadata,
   formatGroundingMarkdown,
 } from './antigravity';
+import { logUpstreamEvent } from './proxyLogs';
+
+function scheduleStudioLog(entry: Parameters<typeof logUpstreamEvent>[0]) {
+  const task = () => logUpstreamEvent(entry).catch(() => {});
+  try {
+    if (typeof after === 'function') {
+      after(task);
+    } else {
+      task();
+    }
+  } catch {
+    task();
+  }
+}
 
 export interface GeminiStudioKeyState {
   id: string;
@@ -413,6 +427,17 @@ export async function executeGeminiStudioCompletion(opts: ExecuteGeminiStudioOpt
         keyState.lastError = errText.slice(0, 300);
         const cooldownMs = parseRetryAfterMs(res, errText);
         persistKeyCooldown(keyState, cooldownMs);
+        scheduleStudioLog({
+          provider: 'gemini-studio',
+          model: modelId,
+          wireModel: resolved.wireModel,
+          accountOrKey: keyState.maskedKey,
+          status: 429,
+          trapFlagged: !res.headers.get('retry-after') && !/retryDelay|quota|RATE_LIMIT_EXCEEDED/i.test(errText),
+          retryAfterHeader: res.headers.get('retry-after'),
+          upstreamUrl,
+          errorSnippet: errText,
+        });
         attemptLogs.push({ key: keyState.maskedKey, status: 429, error: errText.slice(0, 300) });
         continue;
       }
@@ -422,6 +447,17 @@ export async function executeGeminiStudioCompletion(opts: ExecuteGeminiStudioOpt
         keyState.failCount++;
         keyState.lastError = errText.slice(0, 300);
         persistKeyCooldown(keyState, 60 * 60 * 1000);
+        scheduleStudioLog({
+          provider: 'gemini-studio',
+          model: modelId,
+          wireModel: resolved.wireModel,
+          accountOrKey: keyState.maskedKey,
+          status: res.status,
+          trapFlagged: false,
+          retryAfterHeader: res.headers.get('retry-after'),
+          upstreamUrl,
+          errorSnippet: errText,
+        });
         attemptLogs.push({ key: keyState.maskedKey, status: res.status, error: errText.slice(0, 300) });
         continue;
       }
@@ -431,6 +467,17 @@ export async function executeGeminiStudioCompletion(opts: ExecuteGeminiStudioOpt
         keyState.failCount++;
         keyState.lastError = errText.slice(0, 300);
         persistKeyCooldown(keyState, 20 * 1000);
+        scheduleStudioLog({
+          provider: 'gemini-studio',
+          model: modelId,
+          wireModel: resolved.wireModel,
+          accountOrKey: keyState.maskedKey,
+          status: res.status,
+          trapFlagged: false,
+          retryAfterHeader: res.headers.get('retry-after'),
+          upstreamUrl,
+          errorSnippet: errText,
+        });
         attemptLogs.push({ key: keyState.maskedKey, status: res.status, error: errText.slice(0, 300) });
         continue;
       }
