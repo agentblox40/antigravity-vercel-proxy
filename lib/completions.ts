@@ -37,6 +37,7 @@ import {
 import {
   resolveGeminiStudioModel,
   executeGeminiStudioCompletion,
+  getGeminiStudioKeys,
 } from './geminiStudio';
 import {
   getLocalOpenAIBaseUrl,
@@ -116,7 +117,10 @@ export async function handleChatCompletions(req: NextRequest) {
   const requestedModel = (body.model || 'gemini-3.7-flash').trim();
   const isCardExport = isCardExporterModel(requestedModel);
   const openCodeResolved = isCardExport ? null : resolveOpenCodeModel(requestedModel);
-  const geminiStudioResolved = isCardExport || openCodeResolved ? null : resolveGeminiStudioModel(requestedModel);
+  const geminiStudioResolved =
+    isCardExport || openCodeResolved || getGeminiStudioKeys().length === 0
+      ? null
+      : resolveGeminiStudioModel(requestedModel);
   const isExplicitLocal = /^local\//i.test(requestedModel);
   const localOpenAIBaseUrl =
     isCardExport || openCodeResolved || geminiStudioResolved ? null : await getLocalOpenAIBaseUrl();

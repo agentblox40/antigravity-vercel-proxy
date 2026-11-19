@@ -67,6 +67,11 @@ function hashApiKey(key: string): string {
  * `GEMINI_API_KEYS` (comma/newline/whitespace-separated) and `GEMINI_API_KEY_1..50`.
  */
 export function getGeminiStudioKeys(): GeminiStudioKeyState[] {
+  // Disabled by default when routing through the local OpenAI bridge;
+  // set ENABLE_GEMINI_STUDIO=true in env to re-enable the AI Studio key pool.
+  if (process.env.ENABLE_GEMINI_STUDIO !== 'true') {
+    return [];
+  }
   const rawKeys: string[] = [];
 
   if (process.env.GEMINI_API_KEYS) {
