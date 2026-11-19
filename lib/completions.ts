@@ -38,6 +38,10 @@ import {
   resolveGeminiStudioModel,
   executeGeminiStudioCompletion,
 } from './geminiStudio';
+import {
+  getLocalOpenAIBaseUrl,
+  executeLocalOpenAICompletion,
+} from './localOpenAI';
 import { logUpstreamEvent } from './proxyLogs';
 
 function scheduleUpstreamLog(entry: Parameters<typeof logUpstreamEvent>[0]) {
@@ -113,9 +117,22 @@ export async function handleChatCompletions(req: NextRequest) {
   const isCardExport = isCardExporterModel(requestedModel);
   const openCodeResolved = isCardExport ? null : resolveOpenCodeModel(requestedModel);
   const geminiStudioResolved = isCardExport || openCodeResolved ? null : resolveGeminiStudioModel(requestedModel);
-  const resolved = isCardExport || openCodeResolved || geminiStudioResolved ? null : resolveWireModel(requestedModel);
+  const isExplicitLocal = /^local\//i.test(requestedModel);
+  const localOpenAIBaseUrl =
+    isCardExport || openCodeResolved || geminiStudioResolved ? null : await getLocalOpenAIBaseUrl();
+  const resolved =
+    isCardExport || openCodeResolved || geminiStudioResolved || isExplicitLocal
+      ? null
+      : resolveWireModel(requestedModel);
 
-  if (!isCardExport && !openCodeResolved && !geminiStudioResolved && !resolved) {
+  const shouldRouteLocalOpenAI =
+    Boolean(localOpenAIBaseUrl) &&
+    !isCardExport &&
+    !openCodeResolved &&
+    !geminiStudioResolved &&
+    (isExplicitLocal || !resolved || getAccounts().length === 0);
+
+  if (!isCardExport && !openCodeResolved && !geminiStudioResolved && !shouldRouteLocalOpenAI && !resolved) {
     return NextResponse.json(
       {
         error: {
@@ -519,6 +536,79 @@ export async function handleChatCompletions(req: NextRequest) {
       return res;
     } catch (err) {
       resolveStudioDone!();
+      throw err;
+    }
+  }
+
+  // ROUTE TO LOCAL OPENAI UPSTREAM BRIDGE IF CONFIGURED (e.g. http://127.0.0.1:2048/v1 via tunnel)
+  if (shouldRouteLocalOpenAI && localOpenAIBaseUrl) {
+    const turnCount = Math.max(1, messages.filter(m => m && m.role === 'user').length);
+    const bypassInjections = body.bypass_injections === true || req.headers.get('x-bypass-injections') === 'true';
+    const { userInjectionsText: rawUserInj, systemInjectionsText: rawSysInj, attachedInjections: rawAttachedInj } = await getActiveInjectionsFormatted(turnCount);
+    const userInjectionsText = bypassInjections ? '' : rawUserInj;
+    const systemInjectionsText = bypassInjections ? '' : rawSysInj;
+    const attachedInjections = bypassInjections ? [] : rawAttachedInj;
+    const injectedLore = extractInjectedLore(messages, rawSystemText);
+
+    let resolveLocalDone: () => void;
+    const localDonePromise = new Promise<void>(resolve => {
+      resolveLocalDone = resolve;
+    });
+
+    let localContent = '';
+    let localThinking = '';
+
+    if (sessionPromise) {
+      const saveTask = async () => {
+        try {
+          const timeoutPromise = new Promise<void>(r => setTimeout(r, 55000));
+          await Promise.race([localDonePromise, timeoutPromise]);
+          const session = await sessionPromise;
+          if (session && (localContent || localThinking)) {
+            await recordTurnsIntoSession(
+              session,
+              messages,
+              localContent,
+              localThinking || undefined,
+              injectedLore,
+              attachedInjections
+            );
+          }
+        } catch {}
+      };
+      try {
+        if (typeof after === 'function') {
+          after(saveTask);
+        } else {
+          saveTask().catch(() => {});
+        }
+      } catch {
+        saveTask().catch(() => {});
+      }
+    }
+
+    try {
+      const res = await executeLocalOpenAICompletion({
+        baseUrl: localOpenAIBaseUrl,
+        body,
+        modelId: requestedModel,
+        userInjectionsText,
+        systemInjectionsText,
+        stream,
+        onFinish: (content, thinking) => {
+          localContent = content;
+          localThinking = thinking;
+        },
+        onStreamDone: () => {
+          resolveLocalDone!();
+        },
+      });
+      if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream')) {
+        resolveLocalDone!();
+      }
+      return res;
+    } catch (err) {
+      resolveLocalDone!();
       throw err;
     }
   }

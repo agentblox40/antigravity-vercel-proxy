@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAntigravityLiveModels } from '@/lib/antigravity';
+import { fetchLocalOpenAIModels } from '@/lib/localOpenAI';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const models = await getAntigravityLiveModels();
+  const [models, localModels] = await Promise.all([
+    getAntigravityLiveModels(),
+    fetchLocalOpenAIModels(),
+  ]);
   if (!models.some((m) => m.id === 'card-exporter')) {
     models.unshift({
       id: 'card-exporter',
@@ -48,24 +52,42 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const combinedData = models.map((m) => ({
+    id: m.id,
+    object: 'model',
+    created: 1710000000,
+    owned_by: m.tier?.includes('OpenCode')
+      ? 'opencode'
+      : m.tier === 'Utility'
+      ? 'utility'
+      : m.id.startsWith('claude') || m.id.startsWith('opus')
+      ? 'anthropic'
+      : 'google-antigravity',
+    permission: [],
+    root: m.id,
+    parent: null,
+  }));
+
+  const existingIds = new Set(combinedData.map((m) => m.id));
+  for (const lm of localModels) {
+    if (lm?.id && !existingIds.has(lm.id)) {
+      existingIds.add(lm.id);
+      combinedData.push({
+        id: lm.id,
+        object: 'model',
+        created: 1710000000,
+        owned_by: lm.owned_by || 'local-openai',
+        permission: [],
+        root: lm.id,
+        parent: null,
+      });
+    }
+  }
+
   return NextResponse.json(
     {
       object: 'list',
-      data: models.map((m) => ({
-        id: m.id,
-        object: 'model',
-        created: 1710000000,
-        owned_by: m.tier?.includes('OpenCode')
-          ? 'opencode'
-          : m.tier === 'Utility'
-          ? 'utility'
-          : m.id.startsWith('claude') || m.id.startsWith('opus')
-          ? 'anthropic'
-          : 'google-antigravity',
-        permission: [],
-        root: m.id,
-        parent: null,
-      })),
+      data: combinedData,
     },
     {
       headers: {

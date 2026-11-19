@@ -220,6 +220,12 @@ let cachedAccounts: AccountConfig[] | null = null;
 let nextAccountIdx = 0;
 
 export function getAccounts(): AccountConfig[] {
+  // Antigravity Google OAuth pool disabled by default to protect accounts;
+  // set ENABLE_ANTIGRAVITY_OAUTH=true in env to re-enable.
+  if (process.env.ENABLE_ANTIGRAVITY_OAUTH !== 'true') {
+    cachedAccounts = [];
+    return [];
+  }
   if (cachedAccounts && cachedAccounts.length > 0) return cachedAccounts;
   const accounts: AccountConfig[] = [];
   for (let i = 1; i <= 20; i++) {
